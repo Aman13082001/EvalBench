@@ -5,7 +5,6 @@ from rich.console import Console
 from rich.table import Table
 from typing import Optional
 
-
 app = typer.Typer(help="EvalBench — Local LLM Evaluation CLI")
 console = Console()
 API_URL = "http://localhost:8000"
@@ -90,6 +89,10 @@ def run(
     )
 
     console.print(table)
+
+    # Add exit code for CI
+    if summary["pass_rate"] < 0.75:
+        raise typer.Exit(code=1)
 
 
 @app.command()

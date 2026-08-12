@@ -1,0 +1,57 @@
+name: EvalBench LLM Quality Gate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    services:
+      ollama:
+        image: ollama/ollama
+        ports:
+          - 11434:11434
+        options: >-
+          --health-cmd "curl -f http://localhost:11434/api/tags || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Ollama
+        run: |
+          for i in {1..30}; do
+            curl -s http://localhost:11434/api/tags && break
+            sleep 2
+          done
+
+      - name: Pull model
+        run: |
+          curl -X POST http://localhost:11434/api/pull -d '{"name": "llama3.1"}'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install EvalBench
+        run: |
+          pip install evalbench
+
+      - name: Run evaluation suite
+        run: |
+          evalbench run suites/ci-suite.yaml --model llama3.1
+        env:
+          EVALBENCH_API_URL: http://localhost:8000
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval-results.json

@@ -1,8 +1,10 @@
 import streamlit as st
 import httpx
 import pandas as pd
+import os
 
-API_URL = "http://localhost:8000"
+API_URL = os.environ.get("EVALBENCH_API_URL", "http://localhost:8000")
+# API_URL = "http://localhost:8000"
 
 
 st.set_page_config(page_title="EvalBench", layout="wide")

@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.git/
+.gitignore
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+mongo_data/
+frontend/Dockerfile
+.github/
+tests/
+suites/
+docs/

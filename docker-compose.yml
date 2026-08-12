@@ -11,6 +11,43 @@ services:
       MONGO_INITDB_DATABASE: evalbench
     volumes:
       - mongo_data:/data/db
+    networks:
+      - evalbench-net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: evalbench-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017
+      - MONGODB_DB=evalbench
+    depends_on:
+      - mongo
+    networks:
+      - evalbench-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: evalbench-frontend
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - EVALBENCH_API_URL=http://api:8000
+    depends_on:
+      - api
+    networks:
+      - evalbench-net
 
 volumes:
   mongo_data:
+
+networks:
+  evalbench-net:
+    driver: bridge

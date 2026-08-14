@@ -2,7 +2,7 @@ import httpx
 
 
 class OllamaClient:
-    def __init__(self, base_url: str = "http://localhost:11434"):
+    def __init__(self, base_url: str = "http://host.docker.internal:11434"):
         self.base_url = base_url
         self.client = httpx.AsyncClient(timeout=120.0)
 

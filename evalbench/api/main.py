@@ -5,12 +5,17 @@ from evalbench.api.routes import router as suites_router
 from evalbench.db.mongo import db
 from evalbench.core.regression import RegressionDetector
 from evalbench.db.schemas import TestRun
+from evalbench.metrics import init_metrics
 
 app = FastAPI(
     title="EvalBench",
     description="Local LLM evaluation and regression testing platform",
     version="0.1.0",
 )
+
+# ── Day 12: Prometheus metrics ──
+init_metrics(app)
+# ────────────────────────────────
 
 app.include_router(suites_router)
 
@@ -75,7 +80,10 @@ async def check_regression(payload: dict):
     current_id = payload.get("current_run_id")
 
     if not baseline_id or not current_id:
-        raise HTTPException(status_code=400, detail="baseline_run_id and current_run_id required")
+        raise HTTPException(
+            status_code=400,
+            detail="baseline_run_id and current_run_id required"
+        )
 
     for rid in [baseline_id, current_id]:
         if not ObjectId.is_valid(rid):
@@ -116,7 +124,10 @@ async def get_regression_history(suite_id: str):
         runs.append(TestRun(**doc))
 
     if len(runs) < 2:
-        return {"comparisons": [], "message": "Need at least 2 runs for regression analysis"}
+        return {
+            "comparisons": [],
+            "message": "Need at least 2 runs for regression analysis"
+        }
 
     detector = RegressionDetector()
     comparisons = detector.compare_runs(runs)
@@ -124,7 +135,11 @@ async def get_regression_history(suite_id: str):
     # Enrich with run IDs
     for i, comp in enumerate(comparisons):
         if i < len(runs) - 1:
-            comp["current_run_id"] = str(runs[i].created_at) if hasattr(runs[i], 'created_at') else "unknown"
+            comp["current_run_id"] = (
+                str(runs[i].created_at)
+                if hasattr(runs[i], "created_at")
+                else "unknown"
+            )
 
     return {
         "suite_id": suite_id,

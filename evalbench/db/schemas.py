@@ -16,6 +16,7 @@ class TestSuite(BaseModel):
     evaluator: str = "exact"
     tests: List[TestCase]
 
+
 class TestResult(BaseModel):
     test_name: str
     prompt: str
@@ -34,4 +35,12 @@ class TestRun(BaseModel):
     model: str
     evaluator: str
     results: list[TestResult]
+    created_at: datetime
+
+
+class User(BaseModel):
+    username: str
+    hashed_password: str
+    api_key: str | None = None
+    role: str = "user"  # admin | user
     created_at: datetime

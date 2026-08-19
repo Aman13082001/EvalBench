@@ -1,8 +1,9 @@
 import yaml
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Depends
 from bson import ObjectId
 from datetime import datetime
 
+from evalbench.api.deps import get_current_user, limiter
 from evalbench.db.mongo import db
 from evalbench.db.schemas import TestSuite
 from evalbench.core.runner import TestRunner
@@ -14,7 +15,12 @@ router = APIRouter(prefix="/suites", tags=["suites"])
 
 
 @router.post("", status_code=201)
-async def create_suite(suite: TestSuite):
+@limiter.limit("20/minute")
+async def create_suite(
+    request: Request,
+    suite: TestSuite,
+    user=Depends(get_current_user),
+):
     doc = suite.model_dump()
     doc["created_at"] = datetime.utcnow()
 
@@ -51,7 +57,12 @@ async def list_ollama_models():
 
 
 @router.post("/security-suite", status_code=201)
-async def create_security_suite(model: str = "llama3.1"):
+@limiter.limit("10/minute")
+async def create_security_suite(
+    request: Request,
+    model: str = "llama3.1",
+    user=Depends(get_current_user),
+):
     """Create a built-in security/adversarial test suite."""
 
     suite = {
@@ -147,7 +158,12 @@ async def export_suite(suite_id: str):
 
 
 @router.post("/import", status_code=201)
-async def import_suite(payload: dict):
+@limiter.limit("20/minute")
+async def import_suite(
+    request: Request,
+    payload: dict,
+    user=Depends(get_current_user),
+):
     try:
         suite = TestSuite(**payload)
     except Exception as e:
@@ -168,7 +184,12 @@ async def import_suite(payload: dict):
 
 
 @router.post("/{suite_id}/run", status_code=201)
-async def run_suite(suite_id: str):
+@limiter.limit("10/minute")
+async def run_suite(
+    request: Request,
+    suite_id: str,
+    user=Depends(get_current_user),
+):
     if not ObjectId.is_valid(suite_id):
         raise HTTPException(
             status_code=400,
@@ -216,9 +237,12 @@ async def run_suite(suite_id: str):
 
 
 @router.post("/{suite_id}/compare", status_code=201)
+@limiter.limit("10/minute")
 async def compare_models(
+    request: Request,
     suite_id: str,
-    payload: dict
+    payload: dict,
+    user=Depends(get_current_user),
 ):
     if not ObjectId.is_valid(suite_id):
         raise HTTPException(

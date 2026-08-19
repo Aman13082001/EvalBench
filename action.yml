@@ -7,18 +7,26 @@ inputs:
     description: "Path to evaluation suite YAML"
     required: true
     default: "evalbench-suite.yaml"
+
   model:
     description: "Ollama model to test"
     required: true
     default: "llama3.1"
+
   threshold:
     description: "Minimum pass rate (0-1)"
     required: true
     default: "0.75"
+
   api-url:
     description: "EvalBench API URL"
     required: true
     default: "http://localhost:8000"
+
+  api-key:
+    description: "API key for authentication"
+    required: false
+    default: "eb_admin_default_key_change_me"
 
 runs:
   using: "composite"
@@ -32,4 +40,4 @@ runs:
       shell: bash
       run: |
         export EVALBENCH_API_URL="${{ inputs.api-url }}"
-        evalbench run ${{ inputs.suite-path }} --model ${{ inputs.model }}
+        evalbench run ${{ inputs.suite-path }} --model ${{ inputs.model }} --api-key ${{ inputs.api-key }}

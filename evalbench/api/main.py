@@ -1,11 +1,19 @@
-from fastapi import FastAPI, HTTPException
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException, Request, Depends
 from bson import ObjectId
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 
 from evalbench.api.routes import router as suites_router
+from evalbench.api.auth_routes import router as auth_router
+from evalbench.api.deps import limiter, get_current_user
+from evalbench.api.auth import get_password_hash
 from evalbench.db.mongo import db
 from evalbench.core.regression import RegressionDetector
 from evalbench.db.schemas import TestRun
 from evalbench.metrics import init_metrics
+
 
 app = FastAPI(
     title="EvalBench",
@@ -13,11 +21,35 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# ── Day 12: Prometheus metrics ──
-init_metrics(app)
-# ────────────────────────────────
 
+# ── Day 13: Rate limiting + Metrics ──
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+init_metrics(app)
+
+
+app.include_router(auth_router)
 app.include_router(suites_router)
+
+
+@app.on_event("startup")
+async def startup():
+    """Create default admin if no users exist."""
+    count = await db.users.count_documents({})
+    if count == 0:
+        await db.users.insert_one({
+            "username": "admin",
+            "hashed_password": get_password_hash("admin"),
+            "api_key": "eb_admin_default_key_change_me",
+            "role": "admin",
+            "created_at": datetime.utcnow(),
+        })
+        print("=" * 50)
+        print("DEFAULT ADMIN CREATED")
+        print("Username: admin")
+        print("Password: admin")
+        print("API Key:  eb_admin_default_key_change_me")
+        print("=" * 50)
 
 
 @app.get("/health")
@@ -27,7 +59,7 @@ async def health():
 
 
 @app.get("/runs/{run_id}")
-async def get_run(run_id: str):
+async def get_run(run_id: str, user=Depends(get_current_user)):
     if not ObjectId.is_valid(run_id):
         raise HTTPException(status_code=400, detail="Invalid run ID format")
 
@@ -40,7 +72,7 @@ async def get_run(run_id: str):
 
 
 @app.get("/runs/{run_id}/summary")
-async def get_run_summary(run_id: str):
+async def get_run_summary(run_id: str, user=Depends(get_current_user)):
     if not ObjectId.is_valid(run_id):
         raise HTTPException(status_code=400, detail="Invalid run ID format")
 
@@ -71,18 +103,19 @@ async def get_run_summary(run_id: str):
 
 
 @app.post("/regression")
-async def check_regression(payload: dict):
-    """
-    Compare two runs for statistical regression.
-    Body: {"baseline_run_id": "...", "current_run_id": "..."}
-    """
+@limiter.limit("10/minute")
+async def check_regression(
+    request: Request,
+    payload: dict,
+    user=Depends(get_current_user),
+):
     baseline_id = payload.get("baseline_run_id")
     current_id = payload.get("current_run_id")
 
     if not baseline_id or not current_id:
         raise HTTPException(
             status_code=400,
-            detail="baseline_run_id and current_run_id required"
+            detail="baseline_run_id and current_run_id required",
         )
 
     for rid in [baseline_id, current_id]:
@@ -113,8 +146,10 @@ async def check_regression(payload: dict):
 
 
 @app.get("/suites/{suite_id}/regression-history")
-async def get_regression_history(suite_id: str):
-    """Compare all runs of a suite against the oldest run"""
+async def get_regression_history(
+    suite_id: str,
+    user=Depends(get_current_user),
+):
     if not ObjectId.is_valid(suite_id):
         raise HTTPException(status_code=400, detail="Invalid suite ID")
 
@@ -126,20 +161,11 @@ async def get_regression_history(suite_id: str):
     if len(runs) < 2:
         return {
             "comparisons": [],
-            "message": "Need at least 2 runs for regression analysis"
+            "message": "Need at least 2 runs for regression analysis",
         }
 
     detector = RegressionDetector()
     comparisons = detector.compare_runs(runs)
-
-    # Enrich with run IDs
-    for i, comp in enumerate(comparisons):
-        if i < len(runs) - 1:
-            comp["current_run_id"] = (
-                str(runs[i].created_at)
-                if hasattr(runs[i], "created_at")
-                else "unknown"
-            )
 
     return {
         "suite_id": suite_id,

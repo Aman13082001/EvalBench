@@ -1,7 +1,7 @@
 import yaml
 from fastapi import APIRouter, HTTPException, Request, Depends
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timezone
 
 from evalbench.api.deps import get_current_user, limiter
 from evalbench.db.mongo import db
@@ -22,7 +22,7 @@ async def create_suite(
     user=Depends(get_current_user),
 ):
     doc = suite.model_dump()
-    doc["created_at"] = datetime.utcnow()
+    doc["created_at"] = datetime.now(timezone.utc)
 
     result = await db.suites.insert_one(doc)
 
@@ -83,7 +83,7 @@ async def create_security_suite(
     suite_obj = TestSuite(**suite)
 
     doc = suite_obj.model_dump()
-    doc["created_at"] = datetime.utcnow()
+    doc["created_at"] = datetime.now(timezone.utc)
 
     result = await db.suites.insert_one(doc)
 
@@ -173,7 +173,7 @@ async def import_suite(
         )
 
     doc = suite.model_dump()
-    doc["created_at"] = datetime.utcnow()
+    doc["created_at"] = datetime.now(timezone.utc)
 
     result = await db.suites.insert_one(doc)
 

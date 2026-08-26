@@ -1,4 +1,7 @@
-from datetime import datetime
+import csv
+import io
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request, Depends
 from bson import ObjectId
@@ -12,38 +15,30 @@ from evalbench.api.auth import get_password_hash
 from evalbench.db.mongo import db
 from evalbench.core.regression import RegressionDetector
 from evalbench.db.schemas import TestRun
-from evalbench.metrics import init_metrics
-
-
-app = FastAPI(
-    title="EvalBench",
-    description="Local LLM evaluation and regression testing platform",
-    version="0.1.0",
+from evalbench.metrics import (
+    init_metrics,
+    regression_detected,
+    regression_pvalue,
+    regression_mean_diff,
 )
 
 
-# ── Day 13: Rate limiting + Metrics ──
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-init_metrics(app)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application startup and shutdown lifecycle."""
 
-
-app.include_router(auth_router)
-app.include_router(suites_router)
-
-
-@app.on_event("startup")
-async def startup():
-    """Create default admin if no users exist."""
+    # Create default admin if no users exist.
     count = await db.users.count_documents({})
+
     if count == 0:
         await db.users.insert_one({
             "username": "admin",
             "hashed_password": get_password_hash("admin"),
             "api_key": "eb_admin_default_key_change_me",
             "role": "admin",
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         })
+
         print("=" * 50)
         print("DEFAULT ADMIN CREATED")
         print("Username: admin")
@@ -51,41 +46,111 @@ async def startup():
         print("API Key:  eb_admin_default_key_change_me")
         print("=" * 50)
 
+    yield
+
+
+app = FastAPI(
+    title="EvalBench",
+    description="Local LLM evaluation and regression testing platform",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+
+# ── Day 13: Rate limiting + Metrics ──
+app.state.limiter = limiter
+app.add_exception_handler(
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler
+)
+
+init_metrics(app)
+
+
+app.include_router(auth_router)
+app.include_router(suites_router)
+
 
 @app.get("/health")
 async def health():
     await db.command("ping")
-    return {"status": "ok", "database": "connected"}
+    return {
+        "status": "ok",
+        "database": "connected"
+    }
 
 
 @app.get("/runs/{run_id}")
-async def get_run(run_id: str, user=Depends(get_current_user)):
+async def get_run(
+    run_id: str,
+    user=Depends(get_current_user)
+):
     if not ObjectId.is_valid(run_id):
-        raise HTTPException(status_code=400, detail="Invalid run ID format")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid run ID format"
+        )
 
-    doc = await db.test_runs.find_one({"_id": ObjectId(run_id)})
+    doc = await db.test_runs.find_one(
+        {"_id": ObjectId(run_id)}
+    )
+
     if not doc:
-        raise HTTPException(status_code=404, detail="Run not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Run not found"
+        )
 
     doc["_id"] = str(doc["_id"])
+
     return doc
 
 
 @app.get("/runs/{run_id}/summary")
-async def get_run_summary(run_id: str, user=Depends(get_current_user)):
+async def get_run_summary(
+    run_id: str,
+    user=Depends(get_current_user)
+):
     if not ObjectId.is_valid(run_id):
-        raise HTTPException(status_code=400, detail="Invalid run ID format")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid run ID format"
+        )
 
-    doc = await db.test_runs.find_one({"_id": ObjectId(run_id)})
+    doc = await db.test_runs.find_one(
+        {"_id": ObjectId(run_id)}
+    )
+
     if not doc:
-        raise HTTPException(status_code=404, detail="Run not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Run not found"
+        )
 
     results = doc.get("results", [])
+
     total = len(results)
-    passed = sum(1 for r in results if r.get("passed"))
-    scores = [r.get("score", 0) for r in results]
-    latencies = [r.get("latency_ms", 0) for r in results]
-    tokens = [r.get("tokens", 0) for r in results]
+
+    passed = sum(
+        1
+        for r in results
+        if r.get("passed")
+    )
+
+    scores = [
+        r.get("score", 0)
+        for r in results
+    ]
+
+    latencies = [
+        r.get("latency_ms", 0)
+        for r in results
+    ]
+
+    tokens = [
+        r.get("tokens", 0)
+        for r in results
+    ]
 
     return {
         "run_id": run_id,
@@ -95,10 +160,151 @@ async def get_run_summary(run_id: str, user=Depends(get_current_user)):
         "total_tests": total,
         "passed": passed,
         "failed": total - passed,
-        "pass_rate": round(passed / total, 4) if total else 0,
-        "avg_score": round(sum(scores) / len(scores), 4) if scores else 0,
-        "avg_latency_ms": round(sum(latencies) / len(latencies), 2) if latencies else 0,
+        "pass_rate": (
+            round(passed / total, 4)
+            if total
+            else 0
+        ),
+        "avg_score": (
+            round(sum(scores) / len(scores), 4)
+            if scores
+            else 0
+        ),
+        "avg_latency_ms": (
+            round(
+                sum(latencies) / len(latencies),
+                2
+            )
+            if latencies
+            else 0
+        ),
         "total_tokens": sum(tokens),
+    }
+
+
+# ── Day 14: Result Export ──
+@app.get("/runs/{run_id}/export")
+async def export_run(
+    run_id: str,
+    format: str = "json",
+    user=Depends(get_current_user),
+):
+    """Export a run as JSON or CSV."""
+
+    if format not in ("json", "csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="Format must be 'json' or 'csv'",
+        )
+
+    if not ObjectId.is_valid(run_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid run ID format",
+        )
+
+    doc = await db.test_runs.find_one(
+        {"_id": ObjectId(run_id)}
+    )
+
+    if not doc:
+        raise HTTPException(
+            status_code=404,
+            detail="Run not found",
+        )
+
+    results = doc.get("results", [])
+
+    # ── JSON format ──
+    if format == "json":
+        export_data = {
+            "run_id": run_id,
+            "suite_id": doc.get("suite_id"),
+            "model": doc.get("model"),
+            "evaluator": doc.get("evaluator"),
+            "created_at": str(
+                doc.get("created_at")
+            ),
+            "results": results,
+        }
+
+        return {
+            "format": "json",
+            "filename": f"run_{run_id}.json",
+            "data": export_data,
+        }
+
+    # ── CSV format ──
+    if not results:
+        raise HTTPException(
+            status_code=400,
+            detail="No results to export",
+        )
+
+    output = io.StringIO()
+
+    writer = csv.DictWriter(
+        output,
+        fieldnames=[
+            "test_name",
+            "prompt",
+            "expected",
+            "actual",
+            "score",
+            "passed",
+            "latency_ms",
+            "tokens",
+            "error",
+        ],
+    )
+
+    writer.writeheader()
+
+    for r in results:
+        writer.writerow({
+            "test_name": r.get(
+                "test_name",
+                ""
+            ),
+            "prompt": r.get(
+                "prompt",
+                ""
+            ),
+            "expected": r.get(
+                "expected",
+                ""
+            ),
+            "actual": r.get(
+                "actual",
+                ""
+            ),
+            "score": r.get(
+                "score",
+                0
+            ),
+            "passed": (
+                "TRUE"
+                if r.get("passed")
+                else "FALSE"
+            ),
+            "latency_ms": r.get(
+                "latency_ms",
+                0
+            ),
+            "tokens": r.get(
+                "tokens",
+                0
+            ),
+            "error": r.get(
+                "error",
+                ""
+            ),
+        })
+
+    return {
+        "format": "csv",
+        "filename": f"run_{run_id}.csv",
+        "content": output.getvalue(),
     }
 
 
@@ -120,18 +326,38 @@ async def check_regression(
 
     for rid in [baseline_id, current_id]:
         if not ObjectId.is_valid(rid):
-            raise HTTPException(status_code=400, detail=f"Invalid run ID: {rid}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid run ID: {rid}"
+            )
 
-    baseline_doc = await db.test_runs.find_one({"_id": ObjectId(baseline_id)})
-    current_doc = await db.test_runs.find_one({"_id": ObjectId(current_id)})
+    baseline_doc = await db.test_runs.find_one(
+        {"_id": ObjectId(baseline_id)}
+    )
+
+    current_doc = await db.test_runs.find_one(
+        {"_id": ObjectId(current_id)}
+    )
 
     if not baseline_doc:
-        raise HTTPException(status_code=404, detail="Baseline run not found")
-    if not current_doc:
-        raise HTTPException(status_code=404, detail="Current run not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Baseline run not found"
+        )
 
-    baseline_doc["_id"] = str(baseline_doc["_id"])
-    current_doc["_id"] = str(current_doc["_id"])
+    if not current_doc:
+        raise HTTPException(
+            status_code=404,
+            detail="Current run not found"
+        )
+
+    baseline_doc["_id"] = str(
+        baseline_doc["_id"]
+    )
+
+    current_doc["_id"] = str(
+        current_doc["_id"]
+    )
 
     baseline = TestRun(**baseline_doc)
     current = TestRun(**current_doc)
@@ -142,30 +368,87 @@ async def check_regression(
     result["baseline_run_id"] = baseline_id
     result["current_run_id"] = current_id
 
+    # ── Emit regression metrics ──
+    regression_detected.labels(
+        model=baseline.model,
+        suite_name=getattr(
+            baseline,
+            'suite_id',
+            'unknown'
+        )[:20],
+    ).set(
+        1 if result.get("regression_detected") else 0
+    )
+
+    if result.get("p_value") is not None:
+        regression_pvalue.labels(
+            model=baseline.model,
+            suite_name=getattr(
+                baseline,
+                'suite_id',
+                'unknown'
+            )[:20],
+        ).set(
+            result["p_value"]
+        )
+
+    if result.get("mean_diff") is not None:
+        regression_mean_diff.labels(
+            model=baseline.model,
+            suite_name=getattr(
+                baseline,
+                'suite_id',
+                'unknown'
+            )[:20],
+        ).set(
+            result["mean_diff"]
+        )
+
     return result
 
 
-@app.get("/suites/{suite_id}/regression-history")
+@app.get(
+    "/suites/{suite_id}/regression-history"
+)
 async def get_regression_history(
     suite_id: str,
     user=Depends(get_current_user),
 ):
     if not ObjectId.is_valid(suite_id):
-        raise HTTPException(status_code=400, detail="Invalid suite ID")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid suite ID",
+        )
 
     runs = []
-    async for doc in db.test_runs.find({"suite_id": suite_id}).sort("created_at", 1).limit(50):
+
+    async for doc in db.test_runs.find(
+        {"suite_id": suite_id}
+    ).sort(
+        "created_at",
+        1
+    ).limit(50):
+
         doc["_id"] = str(doc["_id"])
-        runs.append(TestRun(**doc))
+
+        runs.append(
+            TestRun(**doc)
+        )
 
     if len(runs) < 2:
         return {
             "comparisons": [],
-            "message": "Need at least 2 runs for regression analysis",
+            "message": (
+                "Need at least 2 runs "
+                "for regression analysis"
+            ),
         }
 
     detector = RegressionDetector()
-    comparisons = detector.compare_runs(runs)
+
+    comparisons = detector.compare_runs(
+        runs
+    )
 
     return {
         "suite_id": suite_id,

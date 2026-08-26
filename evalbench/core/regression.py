@@ -2,6 +2,7 @@ import math
 from typing import List
 
 from scipy import stats
+
 from evalbench.db.schemas import TestRun
 
 
@@ -10,7 +11,7 @@ class RegressionDetector:
         self.threshold = threshold
 
     def _safe_float(self, val):
-        """Convert numpy float to Python float, handling nan/inf"""
+        """Convert numpy float to Python float, handling nan/inf."""
         if val is None:
             return None
 
@@ -23,12 +24,14 @@ class RegressionDetector:
 
     def compare(self, baseline: TestRun, current: TestRun) -> dict:
         baseline_scores = [
-            r.score for r in baseline.results
+            r.score
+            for r in baseline.results
             if r.score is not None
         ]
 
         current_scores = [
-            r.score for r in current.results
+            r.score
+            for r in current.results
             if r.score is not None
         ]
 
@@ -53,12 +56,14 @@ class RegressionDetector:
                 "mean_diff": self._safe_float(
                     (
                         sum(current_scores) / len(current_scores)
-                        if current_scores else 0
+                        if current_scores
+                        else 0
                     )
                     -
                     (
                         sum(baseline_scores) / len(baseline_scores)
-                        if baseline_scores else 0
+                        if baseline_scores
+                        else 0
                     )
                 ),
                 "t_statistic": None,
@@ -67,15 +72,63 @@ class RegressionDetector:
                 "test_count": len(baseline_scores),
             }
 
-        # Paired t-test
-        t_stat, p_value = stats.ttest_rel(
-            baseline_scores,
-            current_scores
-        )
-
         baseline_mean = sum(baseline_scores) / len(baseline_scores)
         current_mean = sum(current_scores) / len(current_scores)
         mean_diff = current_mean - baseline_mean
+
+        # Paired differences
+        differences = [
+            current - baseline
+            for baseline, current in zip(
+                baseline_scores,
+                current_scores,
+            )
+        ]
+
+        # If every test changed by exactly the same amount,
+        # scipy's paired t-test cannot calculate variance.
+        # In that case, use the mean difference directly.
+        differences_identical = all(
+            math.isclose(
+                diff,
+                differences[0],
+                rel_tol=1e-9,
+                abs_tol=1e-9,
+            )
+            for diff in differences
+        )
+
+        if differences_identical:
+            if mean_diff < -0.05:
+                regression_detected = True
+                significant = True
+                reason = (
+                    "Consistent score decrease across all tests"
+                )
+            else:
+                regression_detected = False
+                significant = False
+                reason = (
+                    "No significant score decrease"
+                )
+
+            return {
+                "regression_detected": regression_detected,
+                "baseline_mean": self._safe_float(baseline_mean),
+                "current_mean": self._safe_float(current_mean),
+                "mean_diff": self._safe_float(mean_diff),
+                "t_statistic": None,
+                "p_value": 0.0 if significant else None,
+                "significant": significant,
+                "test_count": len(baseline_scores),
+                "reason": reason,
+            }
+
+        # Normal case: paired t-test
+        t_stat, p_value = stats.ttest_rel(
+            baseline_scores,
+            current_scores,
+        )
 
         t_stat_safe = self._safe_float(t_stat)
         p_value_safe = self._safe_float(p_value)
@@ -83,13 +136,18 @@ class RegressionDetector:
 
         if t_stat_safe is None or p_value_safe is None:
             regression_detected = False
-            reason = "Identical scores — no variance to measure"
+            significant = False
+            reason = "Unable to determine statistical significance"
         else:
-            regression_detected = bool(
-                (mean_diff_safe < -0.05)
-                and
-                (p_value_safe < self.threshold)
+            significant = bool(
+                p_value_safe < self.threshold
             )
+
+            regression_detected = bool(
+                mean_diff_safe < -0.05
+                and significant
+            )
+
             reason = None
 
         return {
@@ -99,24 +157,33 @@ class RegressionDetector:
             "mean_diff": mean_diff_safe,
             "t_statistic": t_stat_safe,
             "p_value": p_value_safe,
-            "significant": (
-                bool(p_value_safe < self.threshold)
-                if p_value_safe is not None
-                else False
-            ),
+            "significant": significant,
             "test_count": len(baseline_scores),
             "reason": reason,
         }
 
     def compare_runs(self, runs: List[TestRun]) -> List[dict]:
+        """
+        Compare each run against the immediately previous run.
+
+        Example:
+            run1 -> run2
+            run2 -> run3
+        """
         if len(runs) < 2:
             return []
 
-        baseline = runs[-1]
         comparisons = []
 
-        for current in runs[:-1][::-1]:
-            comp = self.compare(baseline, current)
-            comparisons.append(comp)
+        for i in range(1, len(runs)):
+            baseline = runs[i - 1]
+            current = runs[i]
+
+            comparison = self.compare(
+                baseline,
+                current,
+            )
+
+            comparisons.append(comparison)
 
         return comparisons

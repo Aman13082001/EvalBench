@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 from typing import Optional
 
+
 app = typer.Typer(help="EvalBench — Local LLM Evaluation CLI")
 console = Console()
 API_URL = os.getenv("EVALBENCH_API_URL", "http://localhost:8000")
@@ -29,6 +30,7 @@ def _save_auth(data):
 
 def _get_headers(api_key: Optional[str] = None):
     headers = {}
+
     if api_key:
         headers["X-API-Key"] = api_key
         return headers
@@ -47,6 +49,7 @@ def _get_headers(api_key: Optional[str] = None):
 # AUTH COMMANDS
 # ═══════════════════════════════════════════════════════════════
 
+
 @app.command()
 def login(
     username: str = typer.Option(..., "--username", "-u"),
@@ -55,7 +58,7 @@ def login(
         "--password",
         "-p",
         prompt=True,
-        hide_input=True
+        hide_input=True,
     ),
 ):
     """Authenticate and store JWT token."""
@@ -105,7 +108,7 @@ def whoami():
     r = httpx.get(
         f"{API_URL}/auth/me",
         headers=headers,
-        timeout=10.0
+        timeout=10.0,
     )
 
     if r.status_code == 401:
@@ -134,7 +137,7 @@ def register(
         "--password",
         "-p",
         prompt=True,
-        hide_input=True
+        hide_input=True,
     ),
 ):
     """Register a new account."""
@@ -160,6 +163,7 @@ def register(
         f"[bold green]✓[/bold green] Registered as "
         f"[cyan]{username}[/cyan]"
     )
+
     console.print(
         f"API Key saved: [cyan]{data['api_key'][:20]}...[/cyan]"
     )
@@ -169,28 +173,29 @@ def register(
 # CORE COMMANDS (updated with auth headers)
 # ═══════════════════════════════════════════════════════════════
 
+
 @app.command()
 def run(
     suite_path: str = typer.Argument(
         ...,
-        help="Path to YAML test suite"
+        help="Path to YAML test suite",
     ),
     model: Optional[str] = typer.Option(
         None,
         "--model",
         "-m",
-        help="Override model"
+        help="Override model",
     ),
     evaluator: Optional[str] = typer.Option(
         None,
         "--evaluator",
         "-e",
-        help="Override evaluator"
+        help="Override evaluator",
     ),
     api_key: Optional[str] = typer.Option(
         None,
         "--api-key",
-        help="API key for CI"
+        help="API key for CI",
     ),
 ):
     """Run a test suite and display results."""
@@ -212,7 +217,7 @@ def run(
             f"{API_URL}/suites/import",
             json=suite,
             headers=headers,
-            timeout=10.0
+            timeout=10.0,
         )
 
         if r.status_code == 401:
@@ -231,7 +236,7 @@ def run(
         r = httpx.post(
             f"{API_URL}/suites/{suite_id}/run",
             headers=headers,
-            timeout=120.0
+            timeout=120.0,
         )
         r.raise_for_status()
         result = r.json()
@@ -246,7 +251,7 @@ def run(
     r = httpx.get(
         f"{API_URL}/runs/{run_id}/summary",
         headers=headers,
-        timeout=10.0
+        timeout=10.0,
     )
     summary = r.json()
 
@@ -259,21 +264,25 @@ def run(
     table.add_row("Tests", str(summary["total_tests"]))
     table.add_row("Passed", str(summary["passed"]))
     table.add_row("Failed", str(summary["failed"]))
+
     table.add_row(
         "Pass Rate",
-        f"{summary['pass_rate'] * 100:.1f}%"
+        f"{summary['pass_rate'] * 100:.1f}%",
     )
+
     table.add_row(
         "Avg Score",
-        f"{summary['avg_score']:.3f}"
+        f"{summary['avg_score']:.3f}",
     )
+
     table.add_row(
         "Avg Latency",
-        f"{summary['avg_latency_ms']:.0f} ms"
+        f"{summary['avg_latency_ms']:.0f} ms",
     )
+
     table.add_row(
         "Total Tokens",
-        str(summary["total_tokens"])
+        str(summary["total_tokens"]),
     )
 
     console.print(table)
@@ -286,16 +295,16 @@ def run(
 def compare(
     baseline_id: str = typer.Argument(
         ...,
-        help="Baseline run ID"
+        help="Baseline run ID",
     ),
     current_id: str = typer.Argument(
         ...,
-        help="Current run ID"
+        help="Current run ID",
     ),
     api_key: Optional[str] = typer.Option(
         None,
         "--api-key",
-        help="API key for CI"
+        help="API key for CI",
     ),
 ):
     """Compare two runs for regression."""
@@ -303,7 +312,7 @@ def compare(
 
     payload = {
         "baseline_run_id": baseline_id,
-        "current_run_id": current_id
+        "current_run_id": current_id,
     }
 
     with console.status(
@@ -313,7 +322,7 @@ def compare(
             f"{API_URL}/regression",
             json=payload,
             headers=headers,
-            timeout=15.0
+            timeout=15.0,
         )
 
         if r.status_code == 401:
@@ -331,27 +340,32 @@ def compare(
 
     table.add_row(
         "Baseline Mean",
-        str(comp.get("baseline_mean"))
+        str(comp.get("baseline_mean")),
     )
+
     table.add_row(
         "Current Mean",
-        str(comp.get("current_mean"))
+        str(comp.get("current_mean")),
     )
+
     table.add_row(
         "Mean Diff",
-        str(comp.get("mean_diff"))
+        str(comp.get("mean_diff")),
     )
+
     table.add_row(
         "T-Statistic",
-        str(comp.get("t_statistic"))
+        str(comp.get("t_statistic")),
     )
+
     table.add_row(
         "P-Value",
-        str(comp.get("p_value"))
+        str(comp.get("p_value")),
     )
+
     table.add_row(
         "Significant",
-        str(comp.get("significant"))
+        str(comp.get("significant")),
     )
 
     console.print(table)
@@ -371,9 +385,10 @@ def models():
     """List available Ollama models."""
     r = httpx.get(
         f"{API_URL}/suites/models",
-        timeout=10.0
+        timeout=10.0,
     )
     r.raise_for_status()
+
     data = r.json()
 
     table = Table(title="Available Models")
@@ -391,8 +406,8 @@ def init(
         "suite.yaml",
         "--output",
         "-o",
-        help="Output file path"
-    )
+        help="Output file path",
+    ),
 ):
     """Create a sample test suite."""
     sample = {
@@ -424,12 +439,12 @@ def security(
         "llama3.1",
         "--model",
         "-m",
-        help="Model to test"
+        help="Model to test",
     ),
     api_key: Optional[str] = typer.Option(
         None,
         "--api-key",
-        help="API key for CI"
+        help="API key for CI",
     ),
 ):
     """Run the built-in security and adversarial test suite."""
@@ -442,7 +457,7 @@ def security(
         r = httpx.post(
             f"{API_URL}/suites/security-suite?model={model}",
             headers=headers,
-            timeout=10.0
+            timeout=10.0,
         )
 
         if r.status_code == 401:
@@ -472,7 +487,7 @@ def security(
         r = httpx.post(
             f"{API_URL}/suites/{suite_id}/run",
             headers=headers,
-            timeout=300.0
+            timeout=300.0,
         )
         r.raise_for_status()
         result = r.json()
@@ -487,7 +502,7 @@ def security(
     r = httpx.get(
         f"{API_URL}/runs/{run_id}/summary",
         headers=headers,
-        timeout=10.0
+        timeout=10.0,
     )
     summary = r.json()
 
@@ -497,19 +512,22 @@ def security(
 
     table.add_row(
         "Tests",
-        str(summary["total_tests"])
+        str(summary["total_tests"]),
     )
+
     table.add_row(
         "Passed (Refused)",
-        str(summary["passed"])
+        str(summary["passed"]),
     )
+
     table.add_row(
         "Failed (Complied)",
-        str(summary["failed"])
+        str(summary["failed"]),
     )
+
     table.add_row(
         "Pass Rate",
-        f"{summary['pass_rate'] * 100:.1f}%"
+        f"{summary['pass_rate'] * 100:.1f}%",
     )
 
     console.print(table)
@@ -524,6 +542,88 @@ def security(
             "\n[bold green]✅ All adversarial prompts were "
             "correctly refused.[/bold green]"
         )
+
+
+# ═══════════════════════════════════════════════════════════════
+# DAY 14: RESULT EXPORT
+# ═══════════════════════════════════════════════════════════════
+
+
+@app.command()
+def export(
+    run_id: str = typer.Argument(
+        ...,
+        help="Run ID to export",
+    ),
+    format: str = typer.Option(
+        "json",
+        "--format",
+        "-f",
+        help="Export format: json or csv",
+    ),
+    output: Optional[str] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output file path",
+    ),
+    api_key: Optional[str] = typer.Option(
+        None,
+        "--api-key",
+    ),
+):
+    """Export a run to JSON or CSV."""
+
+    if format not in ("json", "csv"):
+        console.print(
+            "[red]Format must be 'json' or 'csv'[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    headers = _get_headers(api_key)
+
+    with console.status(
+        f"[bold green]Exporting run {run_id} as {format}..."
+    ):
+        r = httpx.get(
+            f"{API_URL}/runs/{run_id}/export?format={format}",
+            headers=headers,
+            timeout=10.0,
+        )
+
+        if r.status_code == 401:
+            console.print(
+                "[red]Authentication required.[/red]"
+            )
+            raise typer.Exit(code=1)
+
+        r.raise_for_status()
+
+    data = r.json()
+
+    if format == "json":
+        content = json.dumps(
+            data["data"],
+            indent=2,
+        )
+    else:
+        content = data["content"]
+
+    if output:
+        with open(output, "w") as f:
+            f.write(content)
+
+        console.print(
+            f"[bold green]✓[/bold green] Exported to "
+            f"[cyan]{output}[/cyan]"
+        )
+    else:
+        console.print(content)
+
+    console.print(
+        f"[dim]Format: {data['format']} | "
+        f"Filename: {data['filename']}[/dim]"
+    )
 
 
 if __name__ == "__main__":

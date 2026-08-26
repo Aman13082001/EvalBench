@@ -11,3 +11,6 @@ build/
 .mypy_cache/
 .pytest_cache/
 mongo_data/
+.coverage
+results.csv
+smoke-results.csv

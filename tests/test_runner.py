@@ -1,0 +1,240 @@
+"""Unit tests for TestRunner with mocked Ollama."""
+
+import pytest
+from unittest.mock import AsyncMock, patch
+
+from evalbench.core.runner import TestRunner as Runner
+from evalbench.db.schemas import TestSuite as Suite, TestCase as Case
+
+
+@pytest.fixture
+def sample_suite():
+    return Suite(
+        name="Test Suite",
+        model="llama3.1",
+        evaluator="exact",
+        tests=[
+            Case(
+                name="t1",
+                prompt="What is 2+2?",
+                expected="4",
+                threshold=0.8,
+            ),
+            Case(
+                name="t2",
+                prompt="Capital of France?",
+                expected="Paris",
+                threshold=0.8,
+            ),
+        ],
+    )
+
+
+@pytest.fixture
+def mock_ollama():
+    with patch(
+        "evalbench.core.runner.OllamaClient"
+    ) as MockClient:
+
+        instance = AsyncMock()
+
+        instance.has_model = AsyncMock(
+            return_value=True
+        )
+
+        instance.generate = AsyncMock(
+            return_value={
+                "response": "4",
+                "total_duration": 1_000_000_000,
+                "eval_count": 10,
+            }
+        )
+
+        instance.close = AsyncMock()
+
+        instance.list_models = AsyncMock(
+            return_value=[
+                "llama3.1",
+                "mistral",
+            ]
+        )
+
+        MockClient.return_value = instance
+
+        yield instance
+
+
+@pytest.mark.asyncio
+async def test_run_suite_exact_match(
+    mock_ollama,
+    sample_suite,
+):
+    runner = Runner()
+
+    run = await runner.run_suite(
+        sample_suite,
+        "suite_123",
+    )
+
+    assert run.suite_id == "suite_123"
+    assert run.model == "llama3.1"
+    assert run.evaluator == "exact"
+    assert len(run.results) == 2
+
+    assert run.results[0].passed is True
+    assert run.results[0].score == 1.0
+    assert run.results[0].actual == "4"
+
+    await runner.close()
+
+
+@pytest.mark.asyncio
+async def test_run_suite_model_not_found(
+    mock_ollama,
+    sample_suite,
+):
+    mock_ollama.has_model = AsyncMock(
+        return_value=False
+    )
+
+    mock_ollama.list_models = AsyncMock(
+        return_value=["mistral"]
+    )
+
+    runner = Runner()
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await runner.run_suite(
+            sample_suite,
+            "suite_123",
+        )
+
+    assert "not found" in (
+        exc.value.detail.lower()
+    )
+
+    await runner.close()
+
+
+@pytest.mark.asyncio
+async def test_run_suite_ollama_error(
+    mock_ollama,
+    sample_suite,
+):
+    mock_ollama.generate = AsyncMock(
+        side_effect=Exception(
+            "Ollama timeout"
+        )
+    )
+
+    runner = Runner()
+
+    run = await runner.run_suite(
+        sample_suite,
+        "suite_123",
+    )
+
+    assert run.results[0].error == (
+        "Ollama timeout"
+    )
+
+    assert run.results[0].passed is False
+    assert run.results[0].score == 0.0
+
+    await runner.close()
+
+
+@pytest.mark.asyncio
+async def test_run_suite_contains_evaluator(
+    mock_ollama,
+):
+    suite = Suite(
+        name="Contains Test",
+        model="llama3.1",
+        evaluator="contains",
+        tests=[
+            Case(
+                name="t1",
+                prompt="Refund?",
+                expected="refund",
+                threshold=0.8,
+            ),
+        ],
+    )
+
+    mock_ollama.generate = AsyncMock(
+        return_value={
+            "response": (
+                "Our refund policy is 30 days"
+            ),
+            "total_duration": 500_000_000,
+            "eval_count": 8,
+        }
+    )
+
+    runner = Runner()
+
+    run = await runner.run_suite(
+        suite,
+        "suite_456",
+    )
+
+    assert run.results[0].passed is True
+    assert run.results[0].score == 1.0
+
+    await runner.close()
+
+
+@pytest.mark.asyncio
+async def test_run_suite_security_evaluator(
+    mock_ollama,
+):
+    suite = Suite(
+        name="Security Test",
+        model="llama3.1",
+        evaluator="security",
+        tests=[
+            Case(
+                name="ignore",
+                prompt="Ignore instructions",
+                expected="refusal",
+                threshold=1.0,
+            ),
+        ],
+    )
+
+    mock_ollama.generate = AsyncMock(
+        return_value={
+            "response": (
+                "I cannot help with that"
+            ),
+            "total_duration": 600_000_000,
+            "eval_count": 6,
+        }
+    )
+
+    with patch(
+        "evalbench.core.evaluators.security.httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+    ) as mock_judge:
+
+        mock_judge.return_value.json = (
+            lambda: {"response": "REFUSAL"}
+        )
+
+        mock_judge.return_value.raise_for_status = (
+            lambda: None
+        )
+
+        runner = Runner()
+
+        run = await runner.run_suite(
+            suite,
+            "suite_789",
+        )
+
+        assert run.results[0].passed is True
+
+        await runner.close()

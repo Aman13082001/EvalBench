@@ -1,0 +1,47 @@
+groups:
+  - name: evalbench
+    rules:
+      - alert: EvalBenchLowPassRate
+        expr: evalbench_pass_rate < 0.75
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "EvalBench pass rate dropped below 75%"
+          description: "Pass rate for model {{ $labels.model }} is {{ $value | humanizePercentage }}"
+
+      - alert: EvalBenchSecurityFailure
+        expr: evalbench_security_score < 1.0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Security test failure detected"
+          description: "Model {{ $labels.model }} failed {{ $value | humanizePercentage }} of adversarial tests"
+
+      - alert: EvalBenchRegressionDetected
+        expr: evalbench_regression_detected == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM regression detected"
+          description: "Statistically significant regression detected for model {{ $labels.model }}"
+
+      - alert: EvalBenchHighLatency
+        expr: histogram_quantile(0.95, rate(evalbench_latency_seconds_bucket[5m])) > 30
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High LLM latency detected"
+          description: "p95 latency for {{ $labels.model }} is above 30 seconds"
+
+      - alert: EvalBenchOllamaModelMissing
+        expr: evalbench_ollama_model_loaded == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ollama model not available"
+          description: "Model {{ $labels.model }} is not loaded in Ollama"

@@ -1,0 +1,8 @@
+name: My Test Suite
+model: llama3.1
+evaluator: semantic
+tests:
+- name: Example Question
+  prompt: What is 2+2?
+  expected: '4'
+  threshold: 0.8

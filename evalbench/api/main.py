@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from bson import ObjectId
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -12,7 +13,8 @@ from evalbench.api.routes import router as suites_router
 from evalbench.api.auth_routes import router as auth_router
 from evalbench.api.deps import limiter, get_current_user
 from evalbench.api.auth import get_password_hash
-from evalbench.db.mongo import db
+from evalbench.config import settings
+from evalbench.db.mongo import client, db
 from evalbench.core.regression import RegressionDetector
 from evalbench.db.schemas import TestRun
 from evalbench.metrics import (
@@ -48,6 +50,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    # Graceful shutdown:
+    # Close the shared MongoDB connection pool.
+    client.close()
+
 
 app = FastAPI(
     title="EvalBench",
@@ -57,11 +63,32 @@ app = FastAPI(
 )
 
 
-# ── Day 13: Rate limiting + Metrics ──
+# ─────────────────────────────────────────────
+# Day 1: Configurable CORS
+# ─────────────────────────────────────────────
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        origin.strip()
+        for origin in settings.cors_origins.split(",")
+        if origin.strip()
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ─────────────────────────────────────────────
+# Day 13: Rate limiting + Metrics
+# ─────────────────────────────────────────────
+
 app.state.limiter = limiter
+
 app.add_exception_handler(
     RateLimitExceeded,
-    _rate_limit_exceeded_handler
+    _rate_limit_exceeded_handler,
 )
 
 init_metrics(app)
@@ -71,24 +98,80 @@ app.include_router(auth_router)
 app.include_router(suites_router)
 
 
+# ─────────────────────────────────────────────
+# Day 1: Health / Readiness / Liveness
+# ─────────────────────────────────────────────
+
 @app.get("/health")
 async def health():
-    await db.command("ping")
+    """Health check including database connectivity."""
+
+    try:
+        await db.command("ping")
+
+        return {
+            "status": "ok",
+            "database": "connected",
+        }
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "unhealthy",
+                "database": "disconnected",
+                "error": str(exc),
+            },
+        )
+
+
+@app.get("/live")
+async def liveness():
+    """Kubernetes liveness probe.
+
+    Returns OK as long as the application process is running.
+    """
+
     return {
-        "status": "ok",
-        "database": "connected"
+        "status": "alive",
     }
+
+
+@app.get("/ready")
+async def readiness():
+    """Kubernetes readiness probe.
+
+    The API is ready only when MongoDB is reachable.
+    """
+
+    try:
+        await db.command("ping")
+
+        return {
+            "status": "ready",
+            "database": "connected",
+        }
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "not_ready",
+                "database": "disconnected",
+                "error": str(exc),
+            },
+        )
 
 
 @app.get("/runs/{run_id}")
 async def get_run(
     run_id: str,
-    user=Depends(get_current_user)
+    user=Depends(get_current_user),
 ):
     if not ObjectId.is_valid(run_id):
         raise HTTPException(
             status_code=400,
-            detail="Invalid run ID format"
+            detail="Invalid run ID format",
         )
 
     doc = await db.test_runs.find_one(
@@ -98,7 +181,7 @@ async def get_run(
     if not doc:
         raise HTTPException(
             status_code=404,
-            detail="Run not found"
+            detail="Run not found",
         )
 
     doc["_id"] = str(doc["_id"])
@@ -109,12 +192,12 @@ async def get_run(
 @app.get("/runs/{run_id}/summary")
 async def get_run_summary(
     run_id: str,
-    user=Depends(get_current_user)
+    user=Depends(get_current_user),
 ):
     if not ObjectId.is_valid(run_id):
         raise HTTPException(
             status_code=400,
-            detail="Invalid run ID format"
+            detail="Invalid run ID format",
         )
 
     doc = await db.test_runs.find_one(
@@ -124,7 +207,7 @@ async def get_run_summary(
     if not doc:
         raise HTTPException(
             status_code=404,
-            detail="Run not found"
+            detail="Run not found",
         )
 
     results = doc.get("results", [])
@@ -173,7 +256,7 @@ async def get_run_summary(
         "avg_latency_ms": (
             round(
                 sum(latencies) / len(latencies),
-                2
+                2,
             )
             if latencies
             else 0
@@ -182,7 +265,10 @@ async def get_run_summary(
     }
 
 
-# ── Day 14: Result Export ──
+# ─────────────────────────────────────────────
+# Day 14: Result Export
+# ─────────────────────────────────────────────
+
 @app.get("/runs/{run_id}/export")
 async def export_run(
     run_id: str,
@@ -215,7 +301,10 @@ async def export_run(
 
     results = doc.get("results", [])
 
-    # ── JSON format ──
+    # ─────────────────────────────────────────
+    # JSON format
+    # ─────────────────────────────────────────
+
     if format == "json":
         export_data = {
             "run_id": run_id,
@@ -234,7 +323,10 @@ async def export_run(
             "data": export_data,
         }
 
-    # ── CSV format ──
+    # ─────────────────────────────────────────
+    # CSV format
+    # ─────────────────────────────────────────
+
     if not results:
         raise HTTPException(
             status_code=400,
@@ -264,23 +356,23 @@ async def export_run(
         writer.writerow({
             "test_name": r.get(
                 "test_name",
-                ""
+                "",
             ),
             "prompt": r.get(
                 "prompt",
-                ""
+                "",
             ),
             "expected": r.get(
                 "expected",
-                ""
+                "",
             ),
             "actual": r.get(
                 "actual",
-                ""
+                "",
             ),
             "score": r.get(
                 "score",
-                0
+                0,
             ),
             "passed": (
                 "TRUE"
@@ -289,15 +381,15 @@ async def export_run(
             ),
             "latency_ms": r.get(
                 "latency_ms",
-                0
+                0,
             ),
             "tokens": r.get(
                 "tokens",
-                0
+                0,
             ),
             "error": r.get(
                 "error",
-                ""
+                "",
             ),
         })
 
@@ -328,7 +420,7 @@ async def check_regression(
         if not ObjectId.is_valid(rid):
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid run ID: {rid}"
+                detail=f"Invalid run ID: {rid}",
             )
 
     baseline_doc = await db.test_runs.find_one(
@@ -342,13 +434,13 @@ async def check_regression(
     if not baseline_doc:
         raise HTTPException(
             status_code=404,
-            detail="Baseline run not found"
+            detail="Baseline run not found",
         )
 
     if not current_doc:
         raise HTTPException(
             status_code=404,
-            detail="Current run not found"
+            detail="Current run not found",
         )
 
     baseline_doc["_id"] = str(
@@ -363,18 +455,24 @@ async def check_regression(
     current = TestRun(**current_doc)
 
     detector = RegressionDetector()
-    result = detector.compare(baseline, current)
+    result = detector.compare(
+        baseline,
+        current,
+    )
 
     result["baseline_run_id"] = baseline_id
     result["current_run_id"] = current_id
 
-    # ── Emit regression metrics ──
+    # ─────────────────────────────────────────
+    # Emit regression metrics
+    # ─────────────────────────────────────────
+
     regression_detected.labels(
         model=baseline.model,
         suite_name=getattr(
             baseline,
-            'suite_id',
-            'unknown'
+            "suite_id",
+            "unknown",
         )[:20],
     ).set(
         1 if result.get("regression_detected") else 0
@@ -385,8 +483,8 @@ async def check_regression(
             model=baseline.model,
             suite_name=getattr(
                 baseline,
-                'suite_id',
-                'unknown'
+                "suite_id",
+                "unknown",
             )[:20],
         ).set(
             result["p_value"]
@@ -397,8 +495,8 @@ async def check_regression(
             model=baseline.model,
             suite_name=getattr(
                 baseline,
-                'suite_id',
-                'unknown'
+                "suite_id",
+                "unknown",
             )[:20],
         ).set(
             result["mean_diff"]
@@ -426,7 +524,7 @@ async def get_regression_history(
         {"suite_id": suite_id}
     ).sort(
         "created_at",
-        1
+        1,
     ).limit(50):
 
         doc["_id"] = str(doc["_id"])

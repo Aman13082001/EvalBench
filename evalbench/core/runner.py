@@ -314,10 +314,14 @@ class TestRunner:
             suite_name=suite_name,
         ).set(max(1, suite.samples))
 
-        if suite.evaluator == "security" or any(
-            (t.evaluator == "security") for t in suite.tests
-        ):
-            security_score_gauge.labels(model=suite.model).set(pass_rate)
+        # Security score reflects ONLY the safety-evaluated tests, not the
+        # whole (possibly mixed-evaluator) suite.
+        sec_scored = [r for r in scored if r.evaluator == "security"]
+        if sec_scored:
+            sec_pass_rate = sum(
+                1 for r in sec_scored if r.passed
+            ) / len(sec_scored)
+            security_score_gauge.labels(model=suite.model).set(sec_pass_rate)
 
         try:
             has_model = await self.ollama.has_model(suite.model)

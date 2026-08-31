@@ -12,6 +12,10 @@ RUN pip install --no-cache-dir -e .
 
 COPY frontend/app.py ./frontend/
 
+# Run as an unprivileged user
+RUN useradd -m -u 1000 evalbench && chown -R evalbench:evalbench /app
+USER evalbench
+
 EXPOSE 8501
 
 CMD ["streamlit", "run", "frontend/app.py", "--server.address=0.0.0.0", "--server.port=8501"]

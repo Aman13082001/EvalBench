@@ -14,6 +14,10 @@ COPY evalbench/ ./evalbench/
 # Install Python deps
 RUN pip install --no-cache-dir -e .
 
+# Run as an unprivileged user
+RUN useradd -m -u 1000 evalbench && chown -R evalbench:evalbench /app
+USER evalbench
+
 # Expose port
 EXPOSE 8000
 

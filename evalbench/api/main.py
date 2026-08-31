@@ -227,26 +227,46 @@ async def get_run_summary(
 
     total = len(results)
 
-    passed = sum(
-        1
-        for r in results
-        if r.get("passed")
-    )
+    def _errored(r: dict) -> bool:
+        # A test counts as an infrastructure error (excluded from the
+        # pass rate) only when no sample produced a score.
+        return bool(r.get("error")) and not r.get("runs", 0)
 
-    scores = [
-        r.get("score", 0)
-        for r in results
-    ]
+    scored = [r for r in results if not _errored(r)]
+    errors = total - len(scored)
+    total_scored = len(scored)
 
-    latencies = [
-        r.get("latency_ms", 0)
-        for r in results
-    ]
+    passed = sum(1 for r in scored if r.get("passed"))
 
-    tokens = [
-        r.get("tokens", 0)
-        for r in results
-    ]
+    scores = [r.get("score", 0) or 0 for r in scored]
+    latencies = [r.get("latency_ms", 0) for r in results]
+    tokens = [r.get("tokens", 0) for r in results]
+
+    # ── Per-category breakdown ──
+    by_category: dict = {}
+    for r in results:
+        cat = r.get("category") or "uncategorized"
+        bucket = by_category.setdefault(
+            cat,
+            {"total": 0, "passed": 0, "errors": 0, "_score_sum": 0.0},
+        )
+        bucket["total"] += 1
+        if _errored(r):
+            bucket["errors"] += 1
+            continue
+        if r.get("passed"):
+            bucket["passed"] += 1
+        bucket["_score_sum"] += r.get("score", 0) or 0
+
+    for bucket in by_category.values():
+        n_scored = bucket["total"] - bucket["errors"]
+        bucket["pass_rate"] = (
+            round(bucket["passed"] / n_scored, 4) if n_scored else 0
+        )
+        bucket["avg_score"] = (
+            round(bucket["_score_sum"] / n_scored, 4) if n_scored else 0
+        )
+        del bucket["_score_sum"]
 
     return {
         "run_id": run_id,
@@ -254,11 +274,13 @@ async def get_run_summary(
         "model": doc.get("model"),
         "evaluator": doc.get("evaluator"),
         "total_tests": total,
+        "scored_tests": total_scored,
+        "errors": errors,
         "passed": passed,
-        "failed": total - passed,
+        "failed": total_scored - passed,
         "pass_rate": (
-            round(passed / total, 4)
-            if total
+            round(passed / total_scored, 4)
+            if total_scored
             else 0
         ),
         "avg_score": (
@@ -275,6 +297,7 @@ async def get_run_summary(
             else 0
         ),
         "total_tokens": sum(tokens),
+        "by_category": by_category,
     }
 
 

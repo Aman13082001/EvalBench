@@ -84,7 +84,10 @@ REASON: [one sentence explanation]"""
         expected: str,
         actual: str,
         original_prompt: str = "",
+        threshold: float | None = None,
     ) -> tuple[bool, float]:
+
+        cutoff = 0.6 if threshold is None else threshold
 
         if not actual.strip():
             return False, 0.0
@@ -120,7 +123,7 @@ REASON: [one sentence explanation]"""
 
                 score, reason = self._parse_response(judge_output)
 
-                passed = score >= 0.6
+                passed = score >= cutoff
 
                 return passed, score
 
@@ -135,4 +138,5 @@ REASON: [one sentence explanation]"""
                     expected,
                     actual,
                     original_prompt,
+                    threshold,
                 )

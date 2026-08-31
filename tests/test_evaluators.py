@@ -84,6 +84,28 @@ class TestSemanticSimilarityEvaluator:
         assert score < 0.5
 
     @pytest.mark.asyncio
+    async def test_semantic_threshold_is_applied(self, evaluator):
+        # A moderately-close pair: passes a lenient threshold, fails a
+        # strict one. Proves the per-test threshold is actually used.
+        _, score = await evaluator.evaluate(
+            "The cat sat on the mat",
+            "A cat was sitting on a mat",
+        )
+        lenient_passed, _ = await evaluator.evaluate(
+            "The cat sat on the mat",
+            "A cat was sitting on a mat",
+            threshold=0.1,
+        )
+        strict_passed, _ = await evaluator.evaluate(
+            "The cat sat on the mat",
+            "A cat was sitting on a mat",
+            threshold=0.99,
+        )
+        assert lenient_passed is True
+        assert strict_passed is False
+        assert 0.1 < score < 0.99
+
+    @pytest.mark.asyncio
     async def test_semantic_no_substring_false_positive(self, evaluator):
         # "9" is a substring of "19" but the answer is wrong; the
         # evaluator must score on meaning, not substring containment.

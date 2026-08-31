@@ -199,6 +199,11 @@ def run(
         "--api-key",
         help="API key for CI",
     ),
+    fail_under: float = typer.Option(
+        0.75,
+        "--fail-under",
+        help="Exit non-zero if pass rate falls below this (0-1)",
+    ),
 ):
     """Run a test suite and display results."""
     with open(suite_path) as f:
@@ -267,6 +272,10 @@ def run(
     table.add_row("Passed", str(summary["passed"]))
     table.add_row("Failed", str(summary["failed"]))
 
+    errors = summary.get("errors", 0)
+    if errors:
+        table.add_row("Errors", f"[yellow]{errors}[/yellow]")
+
     table.add_row(
         "Pass Rate",
         f"{summary['pass_rate'] * 100:.1f}%",
@@ -289,7 +298,37 @@ def run(
 
     console.print(table)
 
-    if summary["pass_rate"] < 0.75:
+    by_category = summary.get("by_category") or {}
+    if len(by_category) > 1:
+        cat_table = Table(title="By Category")
+        cat_table.add_column("Category", style="cyan")
+        cat_table.add_column("Tests", style="magenta")
+        cat_table.add_column("Pass Rate", style="magenta")
+        cat_table.add_column("Avg Score", style="magenta")
+        cat_table.add_column("Errors", style="yellow")
+
+        for name, stats in sorted(by_category.items()):
+            cat_table.add_row(
+                name,
+                str(stats.get("total", 0)),
+                f"{stats.get('pass_rate', 0) * 100:.1f}%",
+                f"{stats.get('avg_score', 0):.3f}",
+                str(stats.get("errors", 0)),
+            )
+
+        console.print(cat_table)
+
+    if errors:
+        console.print(
+            f"[yellow]⚠️ {errors} test(s) errored and were excluded "
+            f"from the pass rate.[/yellow]"
+        )
+
+    if summary["pass_rate"] < fail_under:
+        console.print(
+            f"[bold red]✗ Pass rate {summary['pass_rate'] * 100:.1f}% "
+            f"is below the {fail_under * 100:.0f}% gate.[/bold red]"
+        )
         raise typer.Exit(code=1)
 
 
@@ -416,13 +455,31 @@ def init(
         "name": "My Test Suite",
         "model": "llama3.1",
         "evaluator": "semantic",
+        "temperature": 0.0,
+        "samples": 3,
         "tests": [
             {
                 "name": "Example Question",
+                "category": "arithmetic",
+                "difficulty": "easy",
+                "evaluator": "contains",
                 "prompt": "What is 2+2?",
                 "expected": "4",
-                "threshold": 0.8,
-            }
+                "threshold": 0.99,
+            },
+            {
+                "name": "Example Definition",
+                "category": "definitions",
+                "difficulty": "medium",
+                "evaluator": "semantic",
+                "prompt": "In one sentence, what is an operating system?",
+                "expected": (
+                    "An operating system is software that manages a "
+                    "computer's hardware and provides services for "
+                    "running application programs."
+                ),
+                "threshold": 0.55,
+            },
         ],
     }
 

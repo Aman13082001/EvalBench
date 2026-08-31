@@ -19,6 +19,14 @@ class TestCase(BaseModel):
         le=1.0
     )
 
+    # Per-test override of the suite-level evaluator (exact | contains |
+    # semantic | judge | security). Falls back to the suite evaluator.
+    evaluator: str | None = None
+
+    # Optional tagging for per-category reporting.
+    category: str | None = None
+    difficulty: str | None = None
+
 
 class TestSuite(BaseModel):
 
@@ -27,6 +35,13 @@ class TestSuite(BaseModel):
     model: str = "llama3.1"
 
     evaluator: str = "exact"
+
+    # Sampling temperature passed to the model for every test.
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+
+    # Number of times each test is run; the result is aggregated
+    # (mean score, majority-vote pass) across the samples.
+    samples: int = Field(default=1, ge=1, le=20)
 
     tests: List[TestCase]
 
@@ -54,6 +69,22 @@ class TestResult(BaseModel):
     score: float | None = None
 
     timestamp: datetime
+
+    # ── Aggregation / tagging metadata (added in scoring v2) ──
+    evaluator: str | None = None
+
+    category: str | None = None
+
+    difficulty: str | None = None
+
+    # How many samples actually produced a score for this test.
+    runs: int = 1
+
+    # How many of those samples passed.
+    pass_count: int = 0
+
+    # Population std-dev of the sample scores (0.0 for a single sample).
+    score_std: float | None = None
 
 
 class TestRun(BaseModel):

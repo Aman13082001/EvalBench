@@ -8,6 +8,7 @@ class ExactMatchEvaluator(Evaluator):
         expected: str,
         actual: str,
         original_prompt: str = "",
+        threshold: float | None = None,
     ) -> tuple[bool, float]:
 
         if not actual.strip():

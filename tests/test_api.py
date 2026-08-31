@@ -127,6 +127,48 @@ class TestRunEndpoints:
         assert data["passed"] == 1
         assert data["pass_rate"] == 1.0
 
+    def test_run_summary_excludes_errors_and_groups_by_category(
+        self, client, mock_db
+    ):
+        mock_db.test_runs.find_one.return_value = {
+            "_id": ObjectId("507f1f77bcf86cd799439011"),
+            "suite_id": "suite_1",
+            "model": "llama3.1",
+            "evaluator": "semantic",
+            "results": [
+                {
+                    "test_name": "m1", "prompt": "p", "expected": "e",
+                    "actual": "a", "latency_ms": 100.0, "tokens": 10,
+                    "score": 1.0, "passed": True, "category": "math",
+                    "runs": 1,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+                {
+                    "test_name": "m2", "prompt": "p", "expected": "e",
+                    "actual": "", "latency_ms": 0.0, "tokens": 0,
+                    "score": 0.0, "passed": False, "category": "math",
+                    "runs": 0, "error": "Ollama timeout",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            ],
+            "created_at": datetime.now(timezone.utc),
+        }
+
+        response = client.get(
+            "/runs/507f1f77bcf86cd799439011/summary"
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_tests"] == 2
+        assert data["errors"] == 1
+        assert data["scored_tests"] == 1
+        assert data["passed"] == 1
+        assert data["pass_rate"] == 1.0  # errored test excluded
+        assert data["by_category"]["math"]["total"] == 2
+        assert data["by_category"]["math"]["errors"] == 1
+        assert data["by_category"]["math"]["pass_rate"] == 1.0
+
 
 class TestRegressionEndpoint:
     def test_regression_comparison(self, client, mock_db):

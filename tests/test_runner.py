@@ -188,6 +188,72 @@ async def test_run_suite_contains_evaluator(
 
 
 @pytest.mark.asyncio
+async def test_run_suite_samples_are_aggregated(mock_ollama):
+    suite = Suite(
+        name="Sampled",
+        model="llama3.1",
+        evaluator="exact",
+        samples=3,
+        tests=[
+            Case(
+                name="t1",
+                prompt="What is 2+2?",
+                expected="4",
+                threshold=0.8,
+                category="math",
+            ),
+        ],
+    )
+
+    runner = Runner()
+    run = await runner.run_suite(suite, "suite_s")
+
+    r = run.results[0]
+    assert r.runs == 3
+    assert r.pass_count == 3
+    assert r.score_std == 0.0
+    assert r.passed is True
+    assert r.category == "math"
+    assert r.evaluator == "exact"
+
+    await runner.close()
+
+
+@pytest.mark.asyncio
+async def test_run_suite_per_test_evaluator_override(mock_ollama):
+    suite = Suite(
+        name="Mixed",
+        model="llama3.1",
+        evaluator="exact",
+        tests=[
+            Case(
+                name="t1",
+                prompt="Refund?",
+                expected="refund",
+                threshold=0.8,
+                evaluator="contains",
+            ),
+        ],
+    )
+
+    mock_ollama.generate = AsyncMock(
+        return_value={
+            "response": "Our refund policy is 30 days",
+            "total_duration": 500_000_000,
+            "eval_count": 8,
+        }
+    )
+
+    runner = Runner()
+    run = await runner.run_suite(suite, "suite_m")
+
+    assert run.results[0].evaluator == "contains"
+    assert run.results[0].passed is True
+
+    await runner.close()
+
+
+@pytest.mark.asyncio
 async def test_run_suite_security_evaluator(
     mock_ollama,
 ):

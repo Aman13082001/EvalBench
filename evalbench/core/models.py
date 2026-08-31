@@ -12,12 +12,17 @@ class OllamaClient:
             timeout=settings.default_request_timeout
         )
 
-    async def generate(self, model: str, prompt: str) -> dict:
+    async def generate(
+        self,
+        model: str,
+        prompt: str,
+        temperature: float = 0.7,
+    ) -> dict:
         payload = {
             "model": model,
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": 0.7},
+            "options": {"temperature": temperature},
         }
 
         response = await self.client.post(

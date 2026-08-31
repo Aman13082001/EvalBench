@@ -28,7 +28,7 @@ runs_total = Counter(
 tests_total = Counter(
     "evalbench_tests_total",
     "Total number of individual test cases executed",
-    ["model", "evaluator", "status", "suite_name"],
+    ["model", "evaluator", "status", "suite_name", "category"],
 )
 
 tokens_total = Counter(
@@ -62,6 +62,32 @@ avg_latency_gauge = Gauge(
     ["model", "evaluator"],
 )
 
+# ── Scoring v2: per-category + sampling state ──
+category_pass_rate_gauge = Gauge(
+    "evalbench_category_pass_rate",
+    "Pass rate of the most recent run, broken down by test category (0.0-1.0)",
+    ["model", "suite_name", "category"],
+)
+
+category_avg_score_gauge = Gauge(
+    "evalbench_category_avg_score",
+    "Average score of the most recent run, by test category",
+    ["model", "suite_name", "category"],
+)
+
+run_errors_gauge = Gauge(
+    "evalbench_run_errors",
+    "Number of tests in the most recent run that errored on every sample "
+    "(excluded from the pass rate)",
+    ["model", "evaluator", "suite_name"],
+)
+
+samples_configured_gauge = Gauge(
+    "evalbench_samples_configured",
+    "Number of samples per test used by the most recent run",
+    ["model", "suite_name"],
+)
+
 # ═══════════════════════════════════════════════════════════════
 # ROW 2: PERFORMANCE
 # ═══════════════════════════════════════════════════════════════
@@ -86,6 +112,14 @@ score_histogram = Histogram(
     "Distribution of test scores across all runs",
     ["model", "evaluator"],
     buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+)
+
+# ── Sample variance (flakiness) — only meaningful when samples > 1 ──
+sample_score_std_histogram = Histogram(
+    "evalbench_sample_score_std",
+    "Per-test std-dev of scores across repeated samples (0 = deterministic)",
+    ["model", "evaluator"],
+    buckets=[0.0, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5],
 )
 
 # ═══════════════════════════════════════════════════════════════

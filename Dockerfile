@@ -7,12 +7,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package files
+# Install Python deps against a stub package first so this layer (which
+# pulls torch/sentence-transformers) is cached until pyproject.toml
+# actually changes — editing source no longer triggers a reinstall.
 COPY pyproject.toml ./
-COPY evalbench/ ./evalbench/
+RUN mkdir evalbench \
+    && printf '' > evalbench/__init__.py \
+    && pip install --no-cache-dir -e . \
+    && rm -rf evalbench
 
-# Install Python deps
-RUN pip install --no-cache-dir -e .
+# Now bring in the real source (fast layer).
+COPY evalbench/ ./evalbench/
 
 # Run as an unprivileged user
 RUN useradd -m -u 1000 evalbench && chown -R evalbench:evalbench /app

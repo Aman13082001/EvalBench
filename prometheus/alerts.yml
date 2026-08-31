@@ -7,8 +7,44 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "EvalBench pass rate dropped below 75%"
-          description: "Pass rate for model {{ $labels.model }} is {{ $value | humanizePercentage }}"
+          summary: "EvalBench pass rate below 75%"
+          description: "Pass rate (over scored tests) for model {{ $labels.model }} on suite {{ $labels.suite_name }} is {{ $value | humanizePercentage }}"
+
+      - alert: EvalBenchCategoryPassRateLow
+        expr: evalbench_category_pass_rate < 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Weak category: {{ $labels.category }}"
+          description: "Model {{ $labels.model }} scores {{ $value | humanizePercentage }} on the '{{ $labels.category }}' category of suite {{ $labels.suite_name }}"
+
+      - alert: EvalBenchRunErrors
+        expr: evalbench_run_errors > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Infrastructure errors in EvalBench run"
+          description: "{{ $value }} test(s) in suite {{ $labels.suite_name }} ({{ $labels.model }}) errored on every sample and were excluded from the pass rate"
+
+      - alert: EvalBenchHighErrorRate
+        expr: sum(rate(evalbench_errors_total[10m])) by (model) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained generation error rate"
+          description: "Model {{ $labels.model }} is producing errors at {{ $value | humanize }}/s over the last 10m (Ollama unreachable, model unloaded, timeouts)"
+
+      - alert: EvalBenchHighFlakiness
+        expr: histogram_quantile(0.90, sum(rate(evalbench_sample_score_std_bucket[30m])) by (le, model, evaluator)) > 0.25
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "High sample variance (flaky tests)"
+          description: "p90 of per-test score std-dev for {{ $labels.model }} / {{ $labels.evaluator }} is {{ $value | humanize }} - raise `samples` or lower `temperature` for a stable signal"
 
       - alert: EvalBenchSecurityFailure
         expr: evalbench_security_score < 1.0
@@ -16,8 +52,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Security test failure detected"
-          description: "Model {{ $labels.model }} failed {{ $value | humanizePercentage }} of adversarial tests"
+          summary: "Security / safety test failure"
+          description: "Model {{ $labels.model }} passed only {{ $value | humanizePercentage }} of the safety suite (refusals + over-refusal checks)"
 
       - alert: EvalBenchRegressionDetected
         expr: evalbench_regression_detected == 1
@@ -26,16 +62,16 @@ groups:
           severity: warning
         annotations:
           summary: "LLM regression detected"
-          description: "Statistically significant regression detected for model {{ $labels.model }}"
+          description: "Statistically significant regression detected for model {{ $labels.model }} on suite {{ $labels.suite_name }}"
 
       - alert: EvalBenchHighLatency
-        expr: histogram_quantile(0.95, rate(evalbench_latency_seconds_bucket[5m])) > 30
+        expr: histogram_quantile(0.95, sum(rate(evalbench_latency_seconds_bucket[5m])) by (le, model)) > 30
         for: 2m
         labels:
           severity: warning
         annotations:
-          summary: "High LLM latency detected"
-          description: "p95 latency for {{ $labels.model }} is above 30 seconds"
+          summary: "High LLM latency"
+          description: "p95 per-test latency for {{ $labels.model }} is above 30 seconds"
 
       - alert: EvalBenchOllamaModelMissing
         expr: evalbench_ollama_model_loaded == 0

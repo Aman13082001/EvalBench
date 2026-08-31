@@ -2,14 +2,16 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy backend deps (streamlit needs them too)
-
+# Install deps against a stub package so the heavy layer is cached
+# until pyproject.toml changes (streamlit needs the backend deps too).
 COPY pyproject.toml ./
+RUN mkdir evalbench \
+    && printf '' > evalbench/__init__.py \
+    && pip install --no-cache-dir -e . \
+    && rm -rf evalbench
+
+# Real source (fast layers).
 COPY evalbench/ ./evalbench/
-RUN pip install --no-cache-dir -e .
-
-# Copy frontend code
-
 COPY frontend/app.py ./frontend/
 
 # Run as an unprivileged user

@@ -18,9 +18,14 @@ from evalbench.metrics import (
     security_score_gauge,
     avg_score_gauge,
     avg_latency_gauge,
+    category_pass_rate_gauge,
+    category_avg_score_gauge,
+    run_errors_gauge,
+    samples_configured_gauge,
     latency_histogram,
     suite_duration_histogram,
     score_histogram,
+    sample_score_std_histogram,
     security_tests_total,
     security_latency_histogram,
     errors_total,
@@ -174,6 +179,7 @@ class TestRunner:
                 evaluator=evaluator_name,
                 status=status,
                 suite_name=suite_name,
+                category=test.category or "uncategorized",
             ).inc()
 
             tokens_total.labels(
@@ -185,6 +191,12 @@ class TestRunner:
                 model=suite.model,
                 evaluator=evaluator_name,
             ).observe(result.score or 0.0)
+
+            if result.score_std is not None:
+                sample_score_std_histogram.labels(
+                    model=suite.model,
+                    evaluator=evaluator_name,
+                ).observe(result.score_std)
 
             # Security-specific metrics
             if evaluator_name == "security":
@@ -263,6 +275,44 @@ class TestRunner:
             model=suite.model,
             evaluator=suite.evaluator,
         ).set(avg_latency)
+
+        # ── Per-category breakdown for the most recent run ──
+        cat_buckets: dict = {}
+        for r in results:
+            cat = r.category or "uncategorized"
+            b = cat_buckets.setdefault(
+                cat, {"passed": 0, "scored": 0, "score_sum": 0.0}
+            )
+            if r.error and r.runs == 0:
+                continue
+            b["scored"] += 1
+            b["score_sum"] += r.score or 0.0
+            if r.passed:
+                b["passed"] += 1
+
+        for cat, b in cat_buckets.items():
+            n = b["scored"]
+            category_pass_rate_gauge.labels(
+                model=suite.model,
+                suite_name=suite_name,
+                category=cat,
+            ).set(b["passed"] / n if n else 0.0)
+            category_avg_score_gauge.labels(
+                model=suite.model,
+                suite_name=suite_name,
+                category=cat,
+            ).set(b["score_sum"] / n if n else 0.0)
+
+        run_errors_gauge.labels(
+            model=suite.model,
+            evaluator=suite.evaluator,
+            suite_name=suite_name,
+        ).set(total - total_scored)
+
+        samples_configured_gauge.labels(
+            model=suite.model,
+            suite_name=suite_name,
+        ).set(max(1, suite.samples))
 
         if suite.evaluator == "security" or any(
             (t.evaluator == "security") for t in suite.tests

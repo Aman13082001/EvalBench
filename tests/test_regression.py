@@ -1,7 +1,8 @@
 """Unit tests for statistical regression detection."""
 
-import pytest
 from datetime import datetime, timezone
+
+import pytest
 
 from evalbench.core.regression import RegressionDetector
 from evalbench.db.schemas import TestResult, TestRun

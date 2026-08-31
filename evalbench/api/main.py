@@ -4,27 +4,26 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException, Request, Depends
-from fastapi.middleware.cors import CORSMiddleware
 from bson import ObjectId
-from slowapi.errors import RateLimitExceeded
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
-from evalbench.api.routes import router as suites_router
-from evalbench.api.auth_routes import router as auth_router
-from evalbench.api.deps import limiter, get_current_user
 from evalbench.api.auth import get_password_hash
+from evalbench.api.auth_routes import router as auth_router
+from evalbench.api.deps import get_current_user, limiter
+from evalbench.api.routes import router as suites_router
 from evalbench.config import settings
-from evalbench.db.mongo import client, db
 from evalbench.core.regression import RegressionDetector
+from evalbench.db.mongo import client, db
 from evalbench.db.schemas import TestRun
 from evalbench.metrics import (
     init_metrics,
     regression_detected,
-    regression_pvalue,
     regression_mean_diff,
+    regression_pvalue,
 )
-
 
 logger = logging.getLogger("evalbench")
 
@@ -135,7 +134,7 @@ async def health():
                 "database": "disconnected",
                 "error": str(exc),
             },
-        )
+        ) from exc
 
 
 @app.get("/live")
@@ -173,7 +172,7 @@ async def readiness():
                 "database": "disconnected",
                 "error": str(exc),
             },
-        )
+        ) from exc
 
 
 @app.get("/runs/{run_id}")

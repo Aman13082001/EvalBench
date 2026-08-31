@@ -1,13 +1,14 @@
 """Unit tests for all EvalBench evaluators."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from evalbench.core.evaluators.exact import ExactMatchEvaluator
+import pytest
+
 from evalbench.core.evaluators.contains import ContainsEvaluator
-from evalbench.core.evaluators.semantic import SemanticSimilarityEvaluator
+from evalbench.core.evaluators.exact import ExactMatchEvaluator
 from evalbench.core.evaluators.judge import LLMJudgeEvaluator
 from evalbench.core.evaluators.security import SecurityEvaluator
+from evalbench.core.evaluators.semantic import SemanticSimilarityEvaluator
 
 
 class TestExactMatchEvaluator:

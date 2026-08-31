@@ -1,5 +1,4 @@
 import math
-from typing import List
 
 from scipy import stats
 
@@ -82,6 +81,7 @@ class RegressionDetector:
             for baseline, current in zip(
                 baseline_scores,
                 current_scores,
+                strict=True,
             )
         ]
 
@@ -162,7 +162,7 @@ class RegressionDetector:
             "reason": reason,
         }
 
-    def compare_runs(self, runs: List[TestRun]) -> List[dict]:
+    def compare_runs(self, runs: list[TestRun]) -> list[dict]:
         """
         Compare each run against the immediately previous run.
 

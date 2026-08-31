@@ -1,8 +1,7 @@
 """FastAPI dependencies: auth + rate limiting."""
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, APIKeyHeader
-
+from fastapi.security import APIKeyHeader, HTTPBearer
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 

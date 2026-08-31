@@ -1,7 +1,6 @@
 """Unit tests for auth endpoints."""
 
 from datetime import datetime, timezone
-
 from unittest.mock import AsyncMock
 
 

@@ -15,7 +15,6 @@ from evalbench.api.auth import (
 from evalbench.api.deps import get_current_user, limiter
 from evalbench.db.mongo import db
 
-
 router = APIRouter(
     prefix="/auth",
     tags=["auth"],

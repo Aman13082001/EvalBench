@@ -1,36 +1,37 @@
 import statistics
 import time
 from datetime import datetime, timezone
-from typing import List
 
 from fastapi import HTTPException
 
-from evalbench.core.models import OllamaClient
 from evalbench.core.evaluators import get_evaluator
+from evalbench.core.models import OllamaClient
 from evalbench.db.schemas import TestCase, TestResult, TestRun, TestSuite
 
 # ── Day 12: Prometheus metrics ──
 from evalbench.metrics import (
+    api_requests_total,
+    avg_latency_gauge,
+    avg_score_gauge,
+    category_avg_score_gauge,
+    category_pass_rate_gauge,
+    errors_total,
+    latency_histogram,
+    ollama_model_loaded,
+    pass_rate_gauge,
+    run_errors_gauge,
     runs_total,
+    sample_score_std_histogram,
+    samples_configured_gauge,
+    score_histogram,
+    security_latency_histogram,
+    security_score_gauge,
+    security_tests_total,
+    suite_duration_histogram,
     tests_total,
     tokens_total,
-    pass_rate_gauge,
-    security_score_gauge,
-    avg_score_gauge,
-    avg_latency_gauge,
-    category_pass_rate_gauge,
-    category_avg_score_gauge,
-    run_errors_gauge,
-    samples_configured_gauge,
-    latency_histogram,
-    suite_duration_histogram,
-    score_histogram,
-    sample_score_std_histogram,
-    security_tests_total,
-    security_latency_histogram,
-    errors_total,
-    ollama_model_loaded,
 )
+
 # ────────────────────────────────
 
 
@@ -64,12 +65,12 @@ class TestRunner:
 
         test_start = time.time()
 
-        scores: List[float] = []
-        pass_flags: List[bool] = []
-        latencies: List[float] = []
+        scores: list[float] = []
+        pass_flags: list[bool] = []
+        latencies: list[float] = []
         tokens_seen = 0
         last_response = ""
-        sample_errors: List[str] = []
+        sample_errors: list[str] = []
 
         for _ in range(max(1, suite.samples)):
             try:
@@ -93,11 +94,17 @@ class TestRunner:
                 )
                 scores.append(float(score_i))
                 pass_flags.append(bool(passed_i))
+                api_requests_total.labels(
+                    model=suite.model, endpoint="generate", status="ok"
+                ).inc()
             except Exception as e:  # noqa: BLE001 - report, don't crash the run
                 sample_errors.append(str(e))
                 errors_total.labels(
                     model=suite.model,
                     error_type=type(e).__name__,
+                ).inc()
+                api_requests_total.labels(
+                    model=suite.model, endpoint="generate", status="error"
                 ).inc()
 
         if scores:
@@ -151,7 +158,7 @@ class TestRunner:
 
         await self.validate_model(suite.model)
 
-        results: List[TestResult] = []
+        results: list[TestResult] = []
 
         suite_start = time.time()
         suite_name = getattr(suite, 'name', 'unknown')

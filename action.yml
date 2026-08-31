@@ -1,12 +1,12 @@
 name: "EvalBench LLM Eval"
-description: "Run LLM evaluation suite and fail on regression"
-author: "Your Name"
+description: "Run an EvalBench suite against a running API and fail the job below a pass-rate gate"
+author: "Aman Kumar Sharma"
 
 inputs:
   suite-path:
-    description: "Path to evaluation suite YAML"
+    description: "Path to the evaluation suite YAML"
     required: true
-    default: "evalbench-suite.yaml"
+    default: "suites/ci-suite.yaml"
 
   model:
     description: "Ollama model to test"
@@ -14,7 +14,7 @@ inputs:
     default: "llama3.1"
 
   threshold:
-    description: "Minimum pass rate (0-1)"
+    description: "Minimum pass rate before the job fails (0-1)"
     required: true
     default: "0.75"
 
@@ -24,20 +24,22 @@ inputs:
     default: "http://localhost:8000"
 
   api-key:
-    description: "API key for authentication"
-    required: false
-    default: "eb_admin_default_key_change_me"
+    description: "API key for authentication (do not hard-code — pass a secret)"
+    required: true
 
 runs:
   using: "composite"
   steps:
     - name: Install EvalBench
       shell: bash
-      run: |
-        pip install evalbench
+      run: pip install evalbench
 
     - name: Run evaluation
       shell: bash
-      run: |
-        export EVALBENCH_API_URL="${{ inputs.api-url }}"
-        evalbench run ${{ inputs.suite-path }} --model ${{ inputs.model }} --api-key ${{ inputs.api-key }}
+      env:
+        EVALBENCH_API_URL: ${{ inputs.api-url }}
+      run: >
+        evalbench run ${{ inputs.suite-path }}
+        --model ${{ inputs.model }}
+        --fail-under ${{ inputs.threshold }}
+        --api-key ${{ inputs.api-key }}

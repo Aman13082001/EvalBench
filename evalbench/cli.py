@@ -2,15 +2,13 @@ import json
 import os
 from pathlib import Path
 
-import typer
 import httpx
+import typer
 import yaml
 from rich.console import Console
 from rich.table import Table
-from typing import Optional
 
 from evalbench.config import settings
-
 
 app = typer.Typer(help="EvalBench — Local LLM Evaluation CLI")
 console = Console()
@@ -30,7 +28,7 @@ def _save_auth(data):
     AUTH_FILE.write_text(json.dumps(data))
 
 
-def _get_headers(api_key: Optional[str] = None):
+def _get_headers(api_key: str | None = None):
     headers = {}
 
     if api_key:
@@ -182,19 +180,19 @@ def run(
         ...,
         help="Path to YAML test suite",
     ),
-    model: Optional[str] = typer.Option(
+    model: str | None = typer.Option(
         None,
         "--model",
         "-m",
         help="Override model",
     ),
-    evaluator: Optional[str] = typer.Option(
+    evaluator: str | None = typer.Option(
         None,
         "--evaluator",
         "-e",
         help="Override evaluator",
     ),
-    api_key: Optional[str] = typer.Option(
+    api_key: str | None = typer.Option(
         None,
         "--api-key",
         help="API key for CI",
@@ -342,7 +340,7 @@ def compare(
         ...,
         help="Current run ID",
     ),
-    api_key: Optional[str] = typer.Option(
+    api_key: str | None = typer.Option(
         None,
         "--api-key",
         help="API key for CI",
@@ -500,7 +498,7 @@ def security(
         "-m",
         help="Model to test",
     ),
-    api_key: Optional[str] = typer.Option(
+    api_key: str | None = typer.Option(
         None,
         "--api-key",
         help="API key for CI",
@@ -620,13 +618,13 @@ def export(
         "-f",
         help="Export format: json or csv",
     ),
-    output: Optional[str] = typer.Option(
+    output: str | None = typer.Option(
         None,
         "--output",
         "-o",
         help="Output file path",
     ),
-    api_key: Optional[str] = typer.Option(
+    api_key: str | None = typer.Option(
         None,
         "--api-key",
     ),

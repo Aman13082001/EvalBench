@@ -1,7 +1,8 @@
-import streamlit as st
+import os
+
 import httpx
 import pandas as pd
-import os
+import streamlit as st
 
 from evalbench.config import settings
 
@@ -114,11 +115,29 @@ elif page == "Results":
                 st.error(f"Error fetching summary: {e}")
                 st.stop()
 
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3, col4, col5 = st.columns(5)
             col1.metric("Pass Rate", f"{summary['pass_rate']*100:.1f}%")
             col2.metric("Avg Score", f"{summary['avg_score']:.3f}")
             col3.metric("Avg Latency", f"{summary['avg_latency_ms']:.0f} ms")
             col4.metric("Total Tokens", summary['total_tokens'])
+            col5.metric("Errors", summary.get("errors", 0))
+
+            by_category = summary.get("by_category") or {}
+            if len(by_category) > 1:
+                st.subheader("By category")
+                cat_df = pd.DataFrame(
+                    [
+                        {
+                            "Category": name,
+                            "Tests": s.get("total", 0),
+                            "Pass rate": f"{s.get('pass_rate', 0) * 100:.0f}%",
+                            "Avg score": round(s.get("avg_score", 0), 3),
+                            "Errors": s.get("errors", 0),
+                        }
+                        for name, s in sorted(by_category.items())
+                    ]
+                )
+                st.dataframe(cat_df, width="stretch", hide_index=True)
 
             try:
                 resp = httpx.get(f"{API_URL}/runs/{run_id}", timeout=30.0)

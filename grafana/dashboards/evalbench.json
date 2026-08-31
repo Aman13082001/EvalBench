@@ -61,7 +61,7 @@
       "pluginVersion": "10.4.0",
       "targets": [
         {
-          "expr": "evalbench_pass_rate",
+          "expr": "evalbench_pass_rate{model=~\"$model\", suite_name=~\"$suite\"}",
           "refId": "A"
         }
       ],
@@ -102,7 +102,7 @@
       "pluginVersion": "10.4.0",
       "targets": [
         {
-          "expr": "evalbench_security_score",
+          "expr": "evalbench_security_score{model=~\"$model\"}",
           "refId": "A"
         }
       ],
@@ -135,7 +135,7 @@
       "pluginVersion": "10.4.0",
       "targets": [
         {
-          "expr": "sum(evalbench_runs_total)",
+          "expr": "sum(evalbench_runs_total{model=~\"$model\", suite_name=~\"$suite\"})",
           "refId": "A"
         }
       ],
@@ -168,7 +168,7 @@
       "pluginVersion": "10.4.0",
       "targets": [
         {
-          "expr": "sum(evalbench_tokens_total)",
+          "expr": "sum(evalbench_tokens_total{model=~\"$model\"})",
           "refId": "A"
         }
       ],
@@ -208,7 +208,7 @@
       "pluginVersion": "10.4.0",
       "targets": [
         {
-          "expr": "evalbench_avg_latency_ms",
+          "expr": "evalbench_avg_latency_ms{model=~\"$model\"}",
           "refId": "A"
         }
       ],
@@ -251,7 +251,7 @@
       "pluginVersion": "10.4.0",
       "targets": [
         {
-          "expr": "evalbench_ollama_model_loaded",
+          "expr": "evalbench_ollama_model_loaded{model=~\"$model\"}",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -527,7 +527,7 @@
       "pluginVersion": "10.4.0",
       "targets": [
         {
-          "expr": "evalbench_security_score",
+          "expr": "evalbench_security_score{model=~\"$model\"}",
           "legendFormat": "{{model}}",
           "refId": "A"
         }
@@ -633,7 +633,7 @@
       "pluginVersion": "10.4.0",
       "targets": [
         {
-          "expr": "evalbench_avg_score",
+          "expr": "evalbench_avg_score{model=~\"$model\", suite_name=~\"$suite\"}",
           "legendFormat": "{{model}} — {{suite_name}}",
           "refId": "A"
         }
@@ -676,7 +676,7 @@
       "pluginVersion": "10.4.0",
       "targets": [
         {
-          "expr": "evalbench_regression_detected",
+          "expr": "evalbench_regression_detected{model=~\"$model\"}",
           "refId": "A"
         }
       ],
@@ -1178,6 +1178,21 @@
         "current": { "selected": false, "text": "All", "value": "$__all" },
         "hide": 0,
         "includeAll": true,
+        "label": "Suite",
+        "multi": true,
+        "name": "suite",
+        "options": [],
+        "query": "label_values(evalbench_pass_rate, suite_name)",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
         "label": "Category",
         "multi": true,
         "name": "category",
@@ -1196,6 +1211,6 @@
   "timezone": "browser",
   "title": "EvalBench — Production Overview",
   "uid": "evalbench-production",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }

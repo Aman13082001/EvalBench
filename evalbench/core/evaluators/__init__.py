@@ -1,8 +1,8 @@
-from evalbench.core.evaluators.exact import ExactMatchEvaluator
 from evalbench.core.evaluators.contains import ContainsEvaluator
-from evalbench.core.evaluators.semantic import SemanticSimilarityEvaluator
+from evalbench.core.evaluators.exact import ExactMatchEvaluator
 from evalbench.core.evaluators.judge import LLMJudgeEvaluator
 from evalbench.core.evaluators.security import SecurityEvaluator
+from evalbench.core.evaluators.semantic import SemanticSimilarityEvaluator
 
 EVALUATORS = {
     "exact": ExactMatchEvaluator,

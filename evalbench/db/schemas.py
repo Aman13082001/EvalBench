@@ -1,8 +1,6 @@
-from pydantic import BaseModel, Field
-
-from typing import List
-
 from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 class TestCase(BaseModel):
@@ -43,7 +41,7 @@ class TestSuite(BaseModel):
     # (mean score, majority-vote pass) across the samples.
     samples: int = Field(default=1, ge=1, le=20)
 
-    tests: List[TestCase]
+    tests: list[TestCase]
 
 
 class TestResult(BaseModel):

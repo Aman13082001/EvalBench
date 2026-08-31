@@ -1,14 +1,15 @@
 """Shared fixtures and mocks for EvalBench test suite."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
-from evalbench.api.main import app
-from evalbench.api.deps import get_current_user
+from evalbench.api import auth_routes as auth_routes_module
 from evalbench.api import main as main_module
 from evalbench.api import routes as routes_module
-from evalbench.api import auth_routes as auth_routes_module
+from evalbench.api.deps import get_current_user
+from evalbench.api.main import app
 from evalbench.db import mongo as mongo_module
 
 

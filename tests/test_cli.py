@@ -1,14 +1,11 @@
 """Unit tests for EvalBench CLI."""
 
 import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
 from evalbench.cli import app
-
 
 runner = CliRunner()
 

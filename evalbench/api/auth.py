@@ -1,15 +1,12 @@
 """JWT and password utilities for EvalBench."""
 
 import secrets
-
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from evalbench.config import settings
-
 
 SECRET_KEY = settings.secret_key
 
@@ -41,7 +38,7 @@ def get_password_hash(
 
 def create_access_token(
     data: dict,
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     to_encode = data.copy()
 
@@ -61,7 +58,7 @@ def create_access_token(
 
 def decode_token(
     token: str
-) -> Optional[dict]:
+) -> dict | None:
     try:
         payload = jwt.decode(
             token,

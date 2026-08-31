@@ -1,15 +1,15 @@
-import yaml
-from fastapi import APIRouter, HTTPException, Request, Depends
-from bson import ObjectId
 from datetime import datetime, timezone
 
+import yaml
+from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException, Request
+
 from evalbench.api.deps import get_current_user, limiter
+from evalbench.core.models import OllamaClient
+from evalbench.core.runner import TestRunner
 from evalbench.db.mongo import db
 from evalbench.db.schemas import TestSuite
-from evalbench.core.runner import TestRunner
-from evalbench.core.models import OllamaClient
 from evalbench.security.adversarial_suite import ADVERSARIAL_TESTS
-
 
 router = APIRouter(prefix="/suites", tags=["suites"])
 
@@ -169,8 +169,8 @@ async def import_suite(
     except Exception as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid suite data: {str(e)}"
-        )
+            detail=f"Invalid suite data: {e}",
+        ) from e
 
     doc = suite.model_dump()
     doc["created_at"] = datetime.now(timezone.utc)

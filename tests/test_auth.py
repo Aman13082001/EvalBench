@@ -1,19 +1,16 @@
 """Unit tests for JWT and password utilities."""
 
-import pytest
-from jose import jwt
 
-from evalbench.config import settings
 from evalbench.api.auth import (
-    verify_password,
-    get_password_hash,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    SECRET_KEY,
     create_access_token,
     decode_token,
     generate_api_key,
-    SECRET_KEY,
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    ALGORITHM,
+    get_password_hash,
+    verify_password,
 )
+from evalbench.config import settings
 
 
 class TestConfigWiring:

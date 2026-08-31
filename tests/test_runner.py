@@ -1,10 +1,12 @@
 """Unit tests for TestRunner with mocked Ollama."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from evalbench.core.runner import TestRunner as Runner
-from evalbench.db.schemas import TestSuite as Suite, TestCase as Case
+from evalbench.db.schemas import TestCase as Case
+from evalbench.db.schemas import TestSuite as Suite
 
 
 @pytest.fixture

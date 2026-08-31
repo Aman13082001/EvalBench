@@ -3,6 +3,7 @@
 import pytest
 from jose import jwt
 
+from evalbench.config import settings
 from evalbench.api.auth import (
     verify_password,
     get_password_hash,
@@ -10,8 +11,17 @@ from evalbench.api.auth import (
     decode_token,
     generate_api_key,
     SECRET_KEY,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
     ALGORITHM,
 )
+
+
+class TestConfigWiring:
+    def test_secret_key_comes_from_settings(self):
+        assert SECRET_KEY == settings.secret_key
+
+    def test_token_expiry_comes_from_settings(self):
+        assert ACCESS_TOKEN_EXPIRE_MINUTES == settings.token_expire_minutes
 
 
 class TestPasswordHashing:

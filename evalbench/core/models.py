@@ -1,10 +1,16 @@
 import httpx
 
+from evalbench.config import settings
+
 
 class OllamaClient:
-    def __init__(self, base_url: str = "http://host.docker.internal:11434"):
-        self.base_url = base_url.rstrip("/")
-        self.client = httpx.AsyncClient(timeout=120.0)
+    def __init__(self, base_url: str | None = None):
+        self.base_url = (
+            base_url or settings.ollama_base_url
+        ).rstrip("/")
+        self.client = httpx.AsyncClient(
+            timeout=settings.default_request_timeout
+        )
 
     async def generate(self, model: str, prompt: str) -> dict:
         payload = {

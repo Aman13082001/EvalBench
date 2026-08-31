@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -25,28 +26,40 @@ from evalbench.metrics import (
 )
 
 
+logger = logging.getLogger("evalbench")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
+
+    logging.basicConfig(level=settings.log_level.upper())
 
     # Create default admin if no users exist.
     count = await db.users.count_documents({})
 
     if count == 0:
+        if settings.admin_password == "change-me-in-production":
+            logger.warning(
+                "ADMIN_PASSWORD is still the default placeholder. "
+                "Set a strong ADMIN_PASSWORD before deploying."
+            )
+
         await db.users.insert_one({
-            "username": "admin",
-            "hashed_password": get_password_hash("admin"),
-            "api_key": "eb_admin_default_key_change_me",
+            "username": settings.admin_username,
+            "hashed_password": get_password_hash(
+                settings.admin_password
+            ),
+            "api_key": settings.admin_api_key,
             "role": "admin",
             "created_at": datetime.now(timezone.utc),
         })
 
-        print("=" * 50)
-        print("DEFAULT ADMIN CREATED")
-        print("Username: admin")
-        print("Password: admin")
-        print("API Key:  eb_admin_default_key_change_me")
-        print("=" * 50)
+        logger.info(
+            "Default admin created (username=%s). "
+            "Rotate the credentials and API key immediately.",
+            settings.admin_username,
+        )
 
     yield
 

@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
 
+    # Timeouts (seconds)
+    default_request_timeout: int = 120
+    suite_run_timeout: int = 900
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 

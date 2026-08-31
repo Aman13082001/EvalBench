@@ -2,6 +2,7 @@ import re
 
 import httpx
 
+from evalbench.config import settings
 from evalbench.core.evaluators.base import Evaluator
 
 
@@ -10,10 +11,10 @@ class LLMJudgeEvaluator(Evaluator):
     def __init__(
         self,
         judge_model: str = "llama3.1",
-        base_url: str = "http://localhost:11434",
+        base_url: str | None = None,
     ):
         self.judge_model = judge_model
-        self.base_url = base_url
+        self.base_url = base_url or settings.ollama_base_url
 
     def _build_prompt(
         self,
@@ -103,7 +104,9 @@ REASON: [one sentence explanation]"""
             },
         }
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(
+            timeout=settings.default_request_timeout
+        ) as client:
             try:
                 response = await client.post(
                     f"{self.base_url}/api/generate",

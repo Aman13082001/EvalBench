@@ -1,6 +1,5 @@
 """JWT and password utilities for EvalBench."""
 
-import os
 import secrets
 
 from datetime import datetime, timedelta, timezone
@@ -9,17 +8,14 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
+from evalbench.config import settings
 
-SECRET_KEY = os.getenv(
-    "EVALBENCH_SECRET_KEY",
-    "evalbench-secret-key-change-in-production"
-)
+
+SECRET_KEY = settings.secret_key
 
 ALGORITHM = "HS256"
 
-ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("EVALBENCH_TOKEN_EXPIRE_MINUTES", "10080")
-)  # default 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.token_expire_minutes
 
 pwd_context = CryptContext(
     schemes=["bcrypt"],

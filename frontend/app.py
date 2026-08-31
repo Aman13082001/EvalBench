@@ -3,8 +3,10 @@ import httpx
 import pandas as pd
 import os
 
+from evalbench.config import settings
+
 API_URL = os.environ.get("EVALBENCH_API_URL", "http://localhost:8000")
-# API_URL = "http://localhost:8000"
+SUITE_RUN_TIMEOUT = float(settings.suite_run_timeout)
 
 
 st.set_page_config(page_title="EvalBench", layout="wide")
@@ -58,9 +60,9 @@ elif page == "Run Suite":
         suite_id = suite_names[selected_name]
 
         if st.button("Run Suite", type="primary"):
-            with st.spinner("Running tests... this may take 30-60 seconds"):
+            with st.spinner("Running tests... this may take a while"):
                 try:
-                    result = httpx.post(f"{API_URL}/suites/{suite_id}/run", timeout=120.0).json()
+                    result = httpx.post(f"{API_URL}/suites/{suite_id}/run", timeout=SUITE_RUN_TIMEOUT).json()
                     st.success(f"Run completed! Run ID: `{result['run_id']}`")
                     st.json(result)
                 except httpx.ReadTimeout:

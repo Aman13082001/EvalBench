@@ -9,6 +9,8 @@ from rich.console import Console
 from rich.table import Table
 from typing import Optional
 
+from evalbench.config import settings
+
 
 app = typer.Typer(help="EvalBench — Local LLM Evaluation CLI")
 console = Console()
@@ -236,7 +238,7 @@ def run(
         r = httpx.post(
             f"{API_URL}/suites/{suite_id}/run",
             headers=headers,
-            timeout=120.0,
+            timeout=float(settings.suite_run_timeout),
         )
         r.raise_for_status()
         result = r.json()
@@ -487,7 +489,7 @@ def security(
         r = httpx.post(
             f"{API_URL}/suites/{suite_id}/run",
             headers=headers,
-            timeout=300.0,
+            timeout=float(settings.suite_run_timeout),
         )
         r.raise_for_status()
         result = r.json()

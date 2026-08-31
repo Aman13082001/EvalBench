@@ -1,7 +1,7 @@
 """Production-grade Prometheus metrics for EvalBench."""
 
 from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import Counter, Histogram, Gauge, Info, Summary
+from prometheus_client import Counter, Histogram, Gauge, Info
 
 # ── FastAPI HTTP auto-instrumentation ──
 instrumentator = Instrumentator(

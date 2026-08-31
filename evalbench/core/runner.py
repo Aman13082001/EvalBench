@@ -92,7 +92,7 @@ class TestRunner:
                     error=error,
                     passed=passed,
                     score=round(score, 4),
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                 )
             )
 

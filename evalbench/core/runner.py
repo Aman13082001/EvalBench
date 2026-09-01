@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from evalbench.core.evaluators import get_evaluator
-from evalbench.core.models import OllamaClient
+from evalbench.core.providers import Provider, get_provider
 from evalbench.db.schemas import TestCase, TestResult, TestRun, TestSuite
 
 # ── Day 12: Prometheus metrics ──
@@ -37,7 +37,7 @@ from evalbench.metrics import (
 
 class TestRunner:
     def __init__(self):
-        self.ollama = OllamaClient()
+        self.provider: Provider | None = None
         self._evaluator_cache: dict = {}
 
     def _get_evaluator(self, name: str):
@@ -46,11 +46,14 @@ class TestRunner:
         return self._evaluator_cache[name]
 
     async def validate_model(self, model: str):
-        if not await self.ollama.has_model(model):
-            available = await self.ollama.list_models()
+        if not await self.provider.has_model(model):
+            available = await self.provider.list_models()
             raise HTTPException(
                 status_code=400,
-                detail=f"Model '{model}' not found in Ollama. Available: {available}",
+                detail=(
+                    f"Model '{model}' not available for provider "
+                    f"'{self.provider.name}'. Available: {available}"
+                ),
             )
 
     async def _run_one_test(
@@ -74,17 +77,15 @@ class TestRunner:
 
         for _ in range(max(1, suite.samples)):
             try:
-                ollama_resp = await self.ollama.generate(
+                resp = await self.provider.generate(
                     model=suite.model,
                     prompt=test.prompt,
                     temperature=suite.temperature,
                 )
-                response_text = ollama_resp.get("response", "").strip()
+                response_text = resp.text.strip()
                 last_response = response_text
-                latencies.append(
-                    ollama_resp.get("total_duration", 0) / 1_000_000
-                )
-                tokens_seen += ollama_resp.get("eval_count", 0)
+                latencies.append(resp.latency_ms)
+                tokens_seen += resp.completion_tokens
 
                 passed_i, score_i = await evaluator.evaluate(
                     test.expected,
@@ -156,6 +157,7 @@ class TestRunner:
         suite_id: str
     ) -> TestRun:
 
+        self.provider = get_provider(suite.provider)
         await self.validate_model(suite.model)
 
         results: list[TestResult] = []
@@ -331,7 +333,7 @@ class TestRunner:
             security_score_gauge.labels(model=suite.model).set(sec_pass_rate)
 
         try:
-            has_model = await self.ollama.has_model(suite.model)
+            has_model = await self.provider.has_model(suite.model)
             ollama_model_loaded.labels(model=suite.model).set(
                 1 if has_model else 0
             )
@@ -349,4 +351,5 @@ class TestRunner:
         )
 
     async def close(self):
-        await self.ollama.close()
+        if self.provider is not None:
+            await self.provider.close()

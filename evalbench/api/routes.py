@@ -5,7 +5,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from evalbench.api.deps import get_current_user, limiter
-from evalbench.core.models import OllamaClient
+from evalbench.core.providers import get_provider
 from evalbench.core.runner import TestRunner
 from evalbench.db.mongo import db
 from evalbench.db.schemas import TestSuite
@@ -43,15 +43,11 @@ async def list_suites():
     return suites
 
 
-# MOVED HERE (only change)
-
 @router.get("/models")
-async def list_ollama_models():
-    client = OllamaClient()
-
+async def list_models(provider: str = "ollama"):
+    client = get_provider(provider)
     try:
-        models = await client.list_models()
-        return {"models": models}
+        return {"provider": provider, "models": await client.list_models()}
     finally:
         await client.close()
 

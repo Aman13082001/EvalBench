@@ -30,6 +30,9 @@ class TestSuite(BaseModel):
 
     name: str
 
+    # Backend that serves `model` (ollama | ...). See evalbench.core.providers.
+    provider: str = "ollama"
+
     model: str = "llama3.1"
 
     evaluator: str = "exact"

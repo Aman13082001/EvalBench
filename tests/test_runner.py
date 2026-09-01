@@ -1,12 +1,22 @@
-"""Unit tests for TestRunner with mocked Ollama."""
+"""Unit tests for TestRunner with a mocked provider."""
 
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from evalbench.core.providers.base import LLMResponse
 from evalbench.core.runner import TestRunner as Runner
 from evalbench.db.schemas import TestCase as Case
 from evalbench.db.schemas import TestSuite as Suite
+
+
+def _resp(text: str, tokens: int = 10, latency_ms: float = 1000.0) -> LLMResponse:
+    return LLMResponse(
+        text=text,
+        model="llama3.1",
+        completion_tokens=tokens,
+        latency_ms=latency_ms,
+    )
 
 
 @pytest.fixture
@@ -34,35 +44,15 @@ def sample_suite():
 
 @pytest.fixture
 def mock_ollama():
-    with patch(
-        "evalbench.core.runner.OllamaClient"
-    ) as MockClient:
-
+    with patch("evalbench.core.runner.get_provider") as mock_get:
         instance = AsyncMock()
-
-        instance.has_model = AsyncMock(
-            return_value=True
-        )
-
-        instance.generate = AsyncMock(
-            return_value={
-                "response": "4",
-                "total_duration": 1_000_000_000,
-                "eval_count": 10,
-            }
-        )
-
+        instance.name = "ollama"
+        instance.has_model = AsyncMock(return_value=True)
+        instance.list_models = AsyncMock(return_value=["llama3.1", "mistral"])
+        instance.generate = AsyncMock(return_value=_resp("4"))
         instance.close = AsyncMock()
 
-        instance.list_models = AsyncMock(
-            return_value=[
-                "llama3.1",
-                "mistral",
-            ]
-        )
-
-        MockClient.return_value = instance
-
+        mock_get.return_value = instance
         yield instance
 
 
@@ -113,9 +103,7 @@ async def test_run_suite_model_not_found(
             "suite_123",
         )
 
-    assert "not found" in (
-        exc.value.detail.lower()
-    )
+    assert "not available" in exc.value.detail.lower()
 
     await runner.close()
 
@@ -167,13 +155,7 @@ async def test_run_suite_contains_evaluator(
     )
 
     mock_ollama.generate = AsyncMock(
-        return_value={
-            "response": (
-                "Our refund policy is 30 days"
-            ),
-            "total_duration": 500_000_000,
-            "eval_count": 8,
-        }
+        return_value=_resp("Our refund policy is 30 days", tokens=8)
     )
 
     runner = Runner()
@@ -239,11 +221,7 @@ async def test_run_suite_per_test_evaluator_override(mock_ollama):
     )
 
     mock_ollama.generate = AsyncMock(
-        return_value={
-            "response": "Our refund policy is 30 days",
-            "total_duration": 500_000_000,
-            "eval_count": 8,
-        }
+        return_value=_resp("Our refund policy is 30 days", tokens=8)
     )
 
     runner = Runner()
@@ -274,13 +252,7 @@ async def test_run_suite_security_evaluator(
     )
 
     mock_ollama.generate = AsyncMock(
-        return_value={
-            "response": (
-                "I cannot help with that"
-            ),
-            "total_duration": 600_000_000,
-            "eval_count": 6,
-        }
+        return_value=_resp("I cannot help with that", tokens=6)
     )
 
     with patch(

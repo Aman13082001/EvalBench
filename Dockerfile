@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python deps against a stub package first so this layer (which
 # pulls torch/sentence-transformers) is cached until pyproject.toml
 # actually changes — editing source no longer triggers a reinstall.
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 RUN mkdir evalbench \
     && printf '' > evalbench/__init__.py \
     && pip install --no-cache-dir -e . \

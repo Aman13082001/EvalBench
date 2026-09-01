@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install deps against a stub package so the heavy layer is cached
 # until pyproject.toml changes (streamlit needs the backend deps too).
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 RUN mkdir evalbench \
     && printf '' > evalbench/__init__.py \
     && pip install --no-cache-dir -e . \

@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from pathlib import Path
 
 import httpx
@@ -9,6 +10,15 @@ from rich.console import Console
 from rich.table import Table
 
 from evalbench.config import settings
+
+# Legacy Windows consoles default to cp1252 and choke on the ✓/⚠ glyphs
+# Rich emits. Force UTF-8 (with a safe fallback) so the CLI never crashes
+# on output.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 app = typer.Typer(help="EvalBench — Local LLM Evaluation CLI")
 console = Console()

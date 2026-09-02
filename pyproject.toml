@@ -1,6 +1,6 @@
 [project]
 name = "evalbench"
-version = "0.1.0"
+version = "0.4.0"
 description = "Local LLM evaluation, regression testing, and safety monitoring platform"
 readme = "README.md"
 requires-python = ">=3.10"

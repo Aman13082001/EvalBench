@@ -13,7 +13,7 @@ instrumentator = Instrumentator(
 
 # ── Build info ──
 evalbench_info = Info("evalbench_build", "EvalBench build information")
-evalbench_info.info({"version": "0.1.0", "platform": "EvalBench"})
+evalbench_info.info({"version": "0.4.0", "platform": "EvalBench"})
 
 # ═══════════════════════════════════════════════════════════════
 # ROW 1: OVERVIEW
@@ -47,6 +47,12 @@ cost_usd_total = Counter(
     "evalbench_cost_usd_total",
     "Cumulative estimated USD cost across all runs (0 for local/free models)",
     ["model", "provider", "suite_name"],
+)
+
+run_status_total = Counter(
+    "evalbench_run_status_total",
+    "Async run outcomes by terminal status (completed | failed)",
+    ["status"],
 )
 
 # ── Gauges (current state) ──

@@ -16,6 +16,7 @@ from evalbench.core.providers import get_provider
 from evalbench.core.runner import TestRunner
 from evalbench.db.mongo import db
 from evalbench.db.schemas import TestRun, TestSuite
+from evalbench.metrics import run_status_total
 from evalbench.security.adversarial_suite import ADVERSARIAL_TESTS
 
 logger = logging.getLogger("evalbench")
@@ -225,6 +226,7 @@ async def execute_run_job(run_id: str, suite_id: str, suite: TestSuite):
                 "finished_at": datetime.now(timezone.utc),
             }},
         )
+        run_status_total.labels(status="completed").inc()
     except Exception as e:  # noqa: BLE001 - record failure, don't crash the worker
         logger.exception("Run %s failed", run_id)
         await db.test_runs.update_one(
@@ -235,6 +237,7 @@ async def execute_run_job(run_id: str, suite_id: str, suite: TestSuite):
                 "finished_at": datetime.now(timezone.utc),
             }},
         )
+        run_status_total.labels(status="failed").inc()
     finally:
         await runner.close()
 

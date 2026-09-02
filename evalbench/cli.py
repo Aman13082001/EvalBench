@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import httpx
@@ -53,6 +54,58 @@ def _get_headers(api_key: str | None = None):
         headers["X-API-Key"] = auth["api_key"]
 
     return headers
+
+
+def _run_and_wait(suite_id: str, headers: dict, model: str) -> str:
+    """Kick off an async run and poll until it finishes. Returns the run id."""
+
+    r = httpx.post(
+        f"{API_URL}/suites/{suite_id}/run",
+        headers=headers,
+        timeout=30.0,
+    )
+    r.raise_for_status()
+    run_id = r.json()["run_id"]
+
+    deadline = time.monotonic() + float(settings.suite_run_timeout)
+    with console.status(
+        f"[bold green]Running tests against {model}..."
+    ) as status:
+        while True:
+            s = httpx.get(
+                f"{API_URL}/runs/{run_id}/status",
+                headers=headers,
+                timeout=10.0,
+            )
+            s.raise_for_status()
+            info = s.json()
+            state = info.get("status", "completed")
+
+            if state == "failed":
+                console.print(
+                    f"[bold red]✗ Run failed:[/bold red] "
+                    f"{info.get('error') or 'unknown error'}"
+                )
+                raise typer.Exit(code=1)
+
+            if state == "completed":
+                return run_id
+
+            done = info.get("completed_tests", 0)
+            total = info.get("total_tests", 0)
+            status.update(
+                f"[bold green]Running {model}... "
+                f"{done}/{total} tests[/bold green]"
+            )
+
+            if time.monotonic() > deadline:
+                console.print(
+                    "[bold red]✗ Timed out waiting for the run "
+                    "to finish.[/bold red]"
+                )
+                raise typer.Exit(code=1)
+
+            time.sleep(1.0)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -254,18 +307,7 @@ def run(
         r.raise_for_status()
         suite_id = r.json()["id"]
 
-    with console.status(
-        f"[bold green]Running tests against {suite['model']}..."
-    ):
-        r = httpx.post(
-            f"{API_URL}/suites/{suite_id}/run",
-            headers=headers,
-            timeout=float(settings.suite_run_timeout),
-        )
-        r.raise_for_status()
-        result = r.json()
-
-    run_id = result["run_id"]
+    run_id = _run_and_wait(suite_id, headers, suite["model"])
 
     console.print(
         f"\n[bold green]✓[/bold green] Run completed: "
@@ -568,18 +610,7 @@ def security(
         f"Categories: {', '.join(suite_result['categories'])}"
     )
 
-    with console.status(
-        f"[bold green]Running security tests against {model}..."
-    ):
-        r = httpx.post(
-            f"{API_URL}/suites/{suite_id}/run",
-            headers=headers,
-            timeout=float(settings.suite_run_timeout),
-        )
-        r.raise_for_status()
-        result = r.json()
-
-    run_id = result["run_id"]
+    run_id = _run_and_wait(suite_id, headers, model)
 
     console.print(
         f"\n[bold green]✓[/bold green] Run completed: "

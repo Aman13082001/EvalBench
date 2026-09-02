@@ -1,15 +1,24 @@
+import logging
 from datetime import datetime, timezone
 
 import yaml
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+)
 
 from evalbench.api.deps import get_current_user, limiter
 from evalbench.core.providers import get_provider
 from evalbench.core.runner import TestRunner
 from evalbench.db.mongo import db
-from evalbench.db.schemas import TestSuite
+from evalbench.db.schemas import TestRun, TestSuite
 from evalbench.security.adversarial_suite import ADVERSARIAL_TESTS
+
+logger = logging.getLogger("evalbench")
 
 router = APIRouter(prefix="/suites", tags=["suites"])
 
@@ -179,11 +188,63 @@ async def import_suite(
     }
 
 
-@router.post("/{suite_id}/run", status_code=201)
+async def execute_run_job(run_id: str, suite_id: str, suite: TestSuite):
+    """Background worker: run the suite and stream status into the run doc."""
+
+    oid = {"_id": ObjectId(run_id)}
+    await db.test_runs.update_one(
+        oid,
+        {"$set": {
+            "status": "running",
+            "started_at": datetime.now(timezone.utc),
+        }},
+    )
+
+    runner = TestRunner()
+
+    async def _report(done: int, total: int):
+        await db.test_runs.update_one(
+            oid,
+            {"$set": {
+                "completed_tests": done,
+                "progress": round(done / total, 4) if total else 1.0,
+            }},
+        )
+
+    try:
+        run = await runner.run_suite(suite, suite_id, progress_cb=_report)
+        await db.test_runs.update_one(
+            oid,
+            {"$set": {
+                "status": "completed",
+                "progress": 1.0,
+                "completed_tests": len(run.results),
+                "results": [r.model_dump() for r in run.results],
+                "model": run.model,
+                "evaluator": run.evaluator,
+                "finished_at": datetime.now(timezone.utc),
+            }},
+        )
+    except Exception as e:  # noqa: BLE001 - record failure, don't crash the worker
+        logger.exception("Run %s failed", run_id)
+        await db.test_runs.update_one(
+            oid,
+            {"$set": {
+                "status": "failed",
+                "error": str(e),
+                "finished_at": datetime.now(timezone.utc),
+            }},
+        )
+    finally:
+        await runner.close()
+
+
+@router.post("/{suite_id}/run", status_code=202)
 @limiter.limit("10/minute")
 async def run_suite(
     request: Request,
     suite_id: str,
+    background_tasks: BackgroundTasks,
     user=Depends(get_current_user),
 ):
     if not ObjectId.is_valid(suite_id):
@@ -206,29 +267,30 @@ async def run_suite(
 
     suite = TestSuite(**doc)
 
-    runner = TestRunner()
-
-    try:
-        run = await runner.run_suite(
-            suite,
-            suite_id
-        )
-    finally:
-        await runner.close()
-
-    run_doc = run.model_dump()
-
-    result = await db.test_runs.insert_one(
-        run_doc
+    queued = TestRun(
+        suite_id=suite_id,
+        model=suite.model,
+        evaluator=suite.evaluator,
+        results=[],
+        created_at=datetime.now(timezone.utc),
+        status="queued",
+        progress=0.0,
+        total_tests=len(suite.tests),
+        completed_tests=0,
     )
 
+    result = await db.test_runs.insert_one(queued.model_dump())
+    run_id = str(result.inserted_id)
+
+    background_tasks.add_task(execute_run_job, run_id, suite_id, suite)
+
     return {
-        "run_id": str(result.inserted_id),
+        "run_id": run_id,
         "suite_id": suite_id,
-        "model": run.model,
-        "evaluator": run.evaluator,
-        "test_count": len(run.results),
-        "status": "completed",
+        "model": suite.model,
+        "evaluator": suite.evaluator,
+        "test_count": len(suite.tests),
+        "status": "queued",
     }
 
 

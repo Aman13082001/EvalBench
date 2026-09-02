@@ -1,6 +1,7 @@
 import asyncio
 import statistics
 import time
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
@@ -195,7 +196,8 @@ class TestRunner:
     async def run_suite(
         self,
         suite: TestSuite,
-        suite_id: str
+        suite_id: str,
+        progress_cb: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> TestRun:
 
         self.provider = get_provider(suite.provider)
@@ -218,9 +220,17 @@ class TestRunner:
         )
         semaphore = asyncio.Semaphore(limit)
 
+        total = len(suite.tests)
+        completed = 0
+
         async def _run_guarded(test: TestCase) -> TestResult:
+            nonlocal completed
             async with semaphore:
-                return await self._run_one_test(suite, test)
+                result = await self._run_one_test(suite, test)
+            completed += 1
+            if progress_cb is not None:
+                await progress_cb(completed, total)
+            return result
 
         results: list[TestResult] = list(
             await asyncio.gather(
@@ -427,6 +437,10 @@ class TestRunner:
             created_at=datetime.now(
                 timezone.utc
             ),
+            status="completed",
+            progress=1.0,
+            total_tests=total,
+            completed_tests=len(results),
         )
 
     async def close(self):

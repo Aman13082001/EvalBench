@@ -201,6 +201,43 @@ async def get_run(
     return doc
 
 
+@app.get("/runs/{run_id}/status")
+async def get_run_status(
+    run_id: str,
+    user=Depends(get_current_user),
+):
+    """Lightweight job-status view — no results payload."""
+
+    if not ObjectId.is_valid(run_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid run ID format",
+        )
+
+    doc = await db.test_runs.find_one(
+        {"_id": ObjectId(run_id)},
+        {"results": 0},
+    )
+
+    if not doc:
+        raise HTTPException(
+            status_code=404,
+            detail="Run not found",
+        )
+
+    return {
+        "run_id": run_id,
+        "status": doc.get("status", "completed"),
+        "progress": doc.get("progress", 1.0),
+        "completed_tests": doc.get("completed_tests", 0),
+        "total_tests": doc.get("total_tests", 0),
+        "error": doc.get("error"),
+        "model": doc.get("model"),
+        "started_at": doc.get("started_at"),
+        "finished_at": doc.get("finished_at"),
+    }
+
+
 @app.get("/runs/{run_id}/summary")
 async def get_run_summary(
     run_id: str,
@@ -275,6 +312,8 @@ async def get_run_summary(
         "suite_id": doc.get("suite_id"),
         "model": doc.get("model"),
         "evaluator": doc.get("evaluator"),
+        "status": doc.get("status", "completed"),
+        "progress": doc.get("progress", 1.0),
         "total_tests": total,
         "scored_tests": total_scored,
         "errors": errors,

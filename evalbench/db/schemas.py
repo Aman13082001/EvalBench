@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 
 class TestCase(BaseModel):
 
+    __test__ = False
+
     name: str
 
     prompt: str
@@ -27,6 +29,8 @@ class TestCase(BaseModel):
 
 
 class TestSuite(BaseModel):
+
+    __test__ = False
 
     name: str
 
@@ -115,9 +119,25 @@ class TestRun(BaseModel):
 
     evaluator: str
 
-    results: list[TestResult]
+    results: list[TestResult] = []
 
     created_at: datetime
+
+    # ── Job lifecycle (async execution) ──
+    # queued -> running -> completed | failed
+    status: str = "completed"
+
+    progress: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    total_tests: int = 0
+
+    completed_tests: int = 0
+
+    started_at: datetime | None = None
+
+    finished_at: datetime | None = None
+
+    error: str | None = None
 
 
 class User(BaseModel):

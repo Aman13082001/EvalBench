@@ -101,6 +101,43 @@ class TestRunStatusEndpoint:
         assert resp.status_code == 404
 
 
+class TestAssertionRollup:
+    def test_summary_rolls_up_assertion_types(self, client, mock_db):
+        ts = datetime.now(timezone.utc).isoformat()
+        mock_db.test_runs.find_one.return_value = {
+            "_id": ObjectId(RUN_ID),
+            "suite_id": "s",
+            "model": "m",
+            "evaluator": "exact",
+            "results": [
+                {
+                    "test_name": "t1", "prompt": "p", "expected": "",
+                    "actual": "a", "latency_ms": 1, "tokens": 1,
+                    "score": 1.0, "passed": True, "runs": 1, "timestamp": ts,
+                    "assertions": [
+                        {"type": "icontains", "passed": True, "score": 1.0, "detail": ""},
+                        {"type": "latency", "passed": True, "score": 1.0, "detail": ""},
+                    ],
+                },
+                {
+                    "test_name": "t2", "prompt": "p", "expected": "",
+                    "actual": "b", "latency_ms": 1, "tokens": 1,
+                    "score": 0.5, "passed": False, "runs": 1, "timestamp": ts,
+                    "assertions": [
+                        {"type": "icontains", "passed": True, "score": 1.0, "detail": ""},
+                        {"type": "latency", "passed": False, "score": 0.0, "detail": ""},
+                    ],
+                },
+            ],
+            "created_at": datetime.now(timezone.utc),
+        }
+        resp = client.get(f"/runs/{RUN_ID}/summary")
+        assert resp.status_code == 200
+        at = resp.json()["assertion_types"]
+        assert at["icontains"] == {"passed": 2, "failed": 0}
+        assert at["latency"] == {"passed": 1, "failed": 1}
+
+
 class TestExecuteRunJob:
     @pytest.mark.asyncio
     async def test_marks_running_then_completed(self, mock_db):

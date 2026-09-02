@@ -409,6 +409,22 @@ def run(
 
         console.print(cat_table)
 
+    assertion_types = summary.get("assertion_types") or {}
+    if assertion_types:
+        a_table = Table(title="Assertion Checks")
+        a_table.add_column("Type", style="cyan")
+        a_table.add_column("Passed", style="green")
+        a_table.add_column("Failed", style="red")
+
+        for a_type, counts in sorted(assertion_types.items()):
+            a_table.add_row(
+                a_type,
+                str(counts.get("passed", 0)),
+                str(counts.get("failed", 0)),
+            )
+
+        console.print(a_table)
+
     if errors:
         console.print(
             f"[yellow]⚠️ {errors} test(s) errored and were excluded "

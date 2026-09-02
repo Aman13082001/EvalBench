@@ -1,0 +1,78 @@
+# Composable assertions showcase.
+#
+# Each test lists one or more assertions under `assert`. Every assertion
+# must pass for the test to pass; the test score is the weighted mean of
+# the assertion scores. This replaces the single evaluator/expected/
+# threshold triple (which still works and is synthesised into one
+# assertion when `assert` is absent).
+
+name: Assertions Demo
+provider: groq
+model: openai/gpt-oss-20b
+evaluator: contains
+temperature: 0.0
+samples: 1
+concurrency: 4
+
+tests:
+  - name: exact-answer
+    category: factual
+    prompt: "Capital of France? Reply with the single word only."
+    assert:
+      - type: icontains
+        value: paris
+      - type: latency
+        max_ms: 8000
+
+  - name: regex-format
+    category: format
+    prompt: "Give a UK-style phone number as XXX-XXXX. Digits only, that format."
+    assert:
+      - type: regex
+        value: "\\d{3}-\\d{4}"
+
+  - name: json-structure
+    category: format
+    prompt: >
+      Return a JSON object for a person named Ada Lovelace, born 1815.
+      Keys: "name" (string) and "born" (integer). JSON only, no prose.
+    assert:
+      - type: json-schema
+        value:
+          type: object
+          required: [name, born]
+          properties:
+            name: {type: string}
+            born: {type: integer}
+      - type: icontains
+        value: lovelace
+
+  - name: semantic-definition
+    category: knowledge
+    prompt: "In one sentence, what is a regression test?"
+    assert:
+      - type: semantic
+        value: "A test that re-runs existing cases to confirm recent changes did not break working behaviour."
+        threshold: 0.45
+
+  - name: budget-bounded
+    category: perf
+    prompt: "Name three primary colours, comma-separated."
+    assert:
+      - type: icontains
+        value: red
+      - type: latency
+        max_ms: 8000
+      - type: cost
+        max_usd: 0.001
+
+  - name: rubric-graded
+    category: quality
+    prompt: "Explain what a race condition is to a junior developer."
+    assert:
+      - type: llm-rubric
+        criteria: >
+          The answer defines a race condition as two or more operations
+          depending on timing/interleaving, gives a concrete example, and
+          is understandable without a CS degree.
+        threshold: 0.6

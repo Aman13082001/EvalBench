@@ -298,6 +298,15 @@ async def get_run_summary(
     completion_tokens = [r.get("completion_tokens", 0) for r in results]
     costs = [r.get("cost_usd", 0) or 0 for r in results]
 
+    # ── Per-assertion-type rollup ──
+    assertion_types: dict = {}
+    for r in results:
+        for a in r.get("assertions") or []:
+            bucket = assertion_types.setdefault(
+                a.get("type", "?"), {"passed": 0, "failed": 0}
+            )
+            bucket["passed" if a.get("passed") else "failed"] += 1
+
     # ── Per-category breakdown ──
     by_category: dict = {}
     for r in results:
@@ -359,6 +368,7 @@ async def get_run_summary(
         "total_completion_tokens": sum(completion_tokens),
         "total_cost_usd": round(sum(costs), 6),
         "by_category": by_category,
+        "assertion_types": assertion_types,
     }
 
 

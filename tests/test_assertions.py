@@ -99,6 +99,51 @@ class TestJsonSchema:
         assert o.passed is False
 
 
+class TestLLMBackedTypes:
+    @pytest.mark.asyncio
+    async def test_llm_rubric_passes_on_high_score(self):
+        from evalbench.core.providers.mock import MockProvider
+
+        prov = MockProvider(
+            response="Analysis...\nSCORE: 5\nREASON: meets every criterion"
+        )
+        o = await check_assertion(
+            Assertion(type="llm-rubric", criteria="define X and give an example",
+                      threshold=0.6),
+            AssertionContext(response_text="a good answer", prompt="q",
+                             judge_provider=prov),
+        )
+        assert o.passed is True
+        assert o.score == 1.0
+        assert "criterion" in o.detail
+
+    @pytest.mark.asyncio
+    async def test_llm_rubric_fails_on_low_score(self):
+        from evalbench.core.providers.mock import MockProvider
+
+        prov = MockProvider(response="SCORE: 2\nREASON: no example provided")
+        o = await check_assertion(
+            Assertion(type="llm-rubric", criteria="...", threshold=0.6),
+            AssertionContext(response_text="weak", prompt="q",
+                             judge_provider=prov),
+        )
+        assert o.passed is False
+        assert o.score == pytest.approx(0.4)
+
+    @pytest.mark.asyncio
+    async def test_judge_assertion_uses_provider(self):
+        from evalbench.core.providers.mock import MockProvider
+
+        prov = MockProvider(response="SCORE: 4\nREASON: correct and complete")
+        o = await check_assertion(
+            Assertion(type="judge", value="Paris", threshold=0.6),
+            AssertionContext(response_text="The capital is Paris.", prompt="q",
+                             judge_provider=prov),
+        )
+        assert o.passed is True
+        assert o.score == pytest.approx(0.8)
+
+
 class TestSynthesisAndAggregation:
     def test_explicit_assertions_used_verbatim(self):
         out = build_assertions(

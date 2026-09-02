@@ -60,6 +60,23 @@ async def lifespan(app: FastAPI):
             settings.admin_username,
         )
 
+    # Reap runs orphaned by a crash/restart. Background tasks die with the
+    # process, so any run still queued/running is dead — fail it so it
+    # doesn't hang forever.
+    reaped = await db.test_runs.update_many(
+        {"status": {"$in": ["queued", "running"]}},
+        {"$set": {
+            "status": "failed",
+            "error": "interrupted by API restart",
+            "finished_at": datetime.now(timezone.utc),
+        }},
+    )
+    if getattr(reaped, "modified_count", 0):
+        logger.warning(
+            "Marked %d orphaned run(s) as failed on startup",
+            reaped.modified_count,
+        )
+
     yield
 
     # Graceful shutdown:

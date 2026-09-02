@@ -56,6 +56,16 @@ class TestRunEndpointIsAsync:
         assert resp.status_code == 404
 
 
+class TestStartupReaper:
+    def test_orphaned_runs_are_failed_on_startup(self, client, mock_db):
+        # The `client` fixture runs the app lifespan on entry.
+        mock_db.test_runs.update_many.assert_called()
+        flt, update = mock_db.test_runs.update_many.call_args[0]
+        assert flt == {"status": {"$in": ["queued", "running"]}}
+        assert update["$set"]["status"] == "failed"
+        assert "restart" in update["$set"]["error"]
+
+
 class TestRunStatusEndpoint:
     def test_status_reports_progress(self, client, mock_db):
         mock_db.test_runs.find_one.return_value = {

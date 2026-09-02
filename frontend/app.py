@@ -1,4 +1,5 @@
 import os
+import time
 
 import httpx
 import pandas as pd
@@ -15,6 +16,12 @@ st.title("EvalBench — Local LLM Evaluation Platform")
 
 
 page = st.sidebar.radio("Navigate", ["Suites", "Run Suite", "Results", "Compare Runs", "Regression"])
+
+st.sidebar.divider()
+api_key = st.sidebar.text_input(
+    "API key", type="password", help="Required to start a run"
+)
+AUTH = {"X-API-Key": api_key} if api_key else {}
 
 
 # --- Page: Suites ---
@@ -61,15 +68,62 @@ elif page == "Run Suite":
         suite_id = suite_names[selected_name]
 
         if st.button("Run Suite", type="primary"):
-            with st.spinner("Running tests... this may take a while"):
+            if not api_key:
+                st.error("Enter your API key in the sidebar to start a run.")
+                st.stop()
+
+            try:
+                resp = httpx.post(
+                    f"{API_URL}/suites/{suite_id}/run",
+                    headers=AUTH,
+                    timeout=30.0,
+                )
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                st.error(f"Could not start run: {e.response.text[:300]}")
+                st.stop()
+            except Exception as e:
+                st.error(f"Could not start run: {e}")
+                st.stop()
+
+            run_id = resp.json()["run_id"]
+            bar = st.progress(0.0, text="Queued...")
+            status_box = st.empty()
+            deadline = time.monotonic() + SUITE_RUN_TIMEOUT
+
+            while True:
                 try:
-                    result = httpx.post(f"{API_URL}/suites/{suite_id}/run", timeout=SUITE_RUN_TIMEOUT).json()
-                    st.success(f"Run completed! Run ID: `{result['run_id']}`")
-                    st.json(result)
-                except httpx.ReadTimeout:
-                    st.error("Timed out. The suite may still be running — check Results page.")
+                    info = httpx.get(
+                        f"{API_URL}/runs/{run_id}/status",
+                        headers=AUTH,
+                        timeout=10.0,
+                    ).json()
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    status_box.error(f"Lost contact with the run: {e}")
+                    break
+
+                state = info.get("status", "completed")
+                done = info.get("completed_tests", 0)
+                total = info.get("total_tests", 0)
+                frac = (done / total) if total else (
+                    1.0 if state == "completed" else 0.0
+                )
+                bar.progress(min(frac, 1.0), text=f"{state} — {done}/{total} tests")
+
+                if state == "completed":
+                    status_box.success(f"Run completed! Run ID: `{run_id}`")
+                    break
+                if state == "failed":
+                    status_box.error(
+                        f"Run failed: {info.get('error') or 'unknown error'}"
+                    )
+                    break
+                if time.monotonic() > deadline:
+                    status_box.warning(
+                        "Still running — check the Results page later."
+                    )
+                    break
+                time.sleep(1.0)
 
 
 # --- Page: Results ---

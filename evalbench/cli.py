@@ -8,6 +8,13 @@ import httpx
 import typer
 import yaml
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.table import Table
 
 from evalbench.config import settings
@@ -65,12 +72,23 @@ def _run_and_wait(suite_id: str, headers: dict, model: str) -> str:
         timeout=30.0,
     )
     r.raise_for_status()
-    run_id = r.json()["run_id"]
+    body = r.json()
+    run_id = body["run_id"]
+    total = body.get("test_count") or 0
 
     deadline = time.monotonic() + float(settings.suite_run_timeout)
-    with console.status(
-        f"[bold green]Running tests against {model}..."
-    ) as status:
+
+    with Progress(
+        TextColumn("[bold green]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TextColumn("{task.completed}/{task.total} tests"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task(f"Running {model}", total=total or None)
+
         while True:
             s = httpx.get(
                 f"{API_URL}/runs/{run_id}/status",
@@ -80,8 +98,14 @@ def _run_and_wait(suite_id: str, headers: dict, model: str) -> str:
             s.raise_for_status()
             info = s.json()
             state = info.get("status", "completed")
+            done = info.get("completed_tests", 0)
+            tot = info.get("total_tests") or total
+
+            if tot:
+                progress.update(task, completed=done, total=tot)
 
             if state == "failed":
+                progress.stop()
                 console.print(
                     f"[bold red]✗ Run failed:[/bold red] "
                     f"{info.get('error') or 'unknown error'}"
@@ -89,16 +113,13 @@ def _run_and_wait(suite_id: str, headers: dict, model: str) -> str:
                 raise typer.Exit(code=1)
 
             if state == "completed":
+                progress.update(
+                    task, completed=tot or done, total=tot or done or 1
+                )
                 return run_id
 
-            done = info.get("completed_tests", 0)
-            total = info.get("total_tests", 0)
-            status.update(
-                f"[bold green]Running {model}... "
-                f"{done}/{total} tests[/bold green]"
-            )
-
             if time.monotonic() > deadline:
+                progress.stop()
                 console.print(
                     "[bold red]✗ Timed out waiting for the run "
                     "to finish.[/bold red]"

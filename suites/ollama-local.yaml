@@ -1,4 +1,4 @@
-name: Llama Parallel Demo
+name: Ollama Local (llama3.1)
 provider: ollama
 model: llama3.1
 evaluator: contains

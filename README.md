@@ -174,7 +174,7 @@ tests:
 | `category` / `difficulty` | test | tags for the per-category report |
 | `evaluator` / `expected` / `threshold` | test | legacy single-check form; synthesised into one assertion when `assert` is absent |
 
-Bundled suites live in `suites/`: `starter-suite.yaml` (broad capability probe), `assertions-demo.yaml` (every assertion type), `groq-parallel-demo.yaml` / `llama-parallel-demo.yaml` (same suite, hosted vs local), `ci-suite.yaml` (fast gate).
+Bundled suites live in `suites/`: `starter-suite.yaml` (broad capability probe), `assertions.yaml` (every assertion type), `groq-hosted.yaml` / `ollama-local.yaml` (same suite, hosted vs local), `ci-suite.yaml` (fast gate).
 
 ---
 

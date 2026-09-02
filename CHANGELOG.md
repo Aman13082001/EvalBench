@@ -41,8 +41,7 @@ All notable changes to EvalBench. Versions follow the shape of
   `regressed` flag per case.
 - Split LLM judge/security graders can run on a different provider than
   the model under test (`judge_provider`, `judge_model`).
-- Example suites: `assertions-demo.yaml`, `groq-parallel-demo.yaml`,
-  `llama-parallel-demo.yaml`.
+- Example suites: `assertions.yaml`, `groq-hosted.yaml`, `ollama-local.yaml`.
 
 ### Changed
 - The runner dispatches assertions instead of a single evaluator;

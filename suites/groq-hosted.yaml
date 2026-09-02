@@ -1,4 +1,4 @@
-name: Groq Parallel Demo
+name: Groq Hosted (parallel)
 provider: groq
 model: openai/gpt-oss-20b
 evaluator: contains

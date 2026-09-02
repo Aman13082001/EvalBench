@@ -1,4 +1,4 @@
-# Composable assertions showcase.
+# Composable assertions: every assertion type in one suite.
 #
 # Each test lists one or more assertions under `assert`. Every assertion
 # must pass for the test to pass; the test score is the weighted mean of
@@ -6,7 +6,7 @@
 # threshold triple (which still works and is synthesised into one
 # assertion when `assert` is absent).
 
-name: Assertions Demo
+name: Composable Assertions
 provider: groq
 model: openai/gpt-oss-20b
 evaluator: contains

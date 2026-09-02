@@ -360,6 +360,77 @@ async def test_run_suite_preserves_order_under_concurrency():
 
 
 @pytest.mark.asyncio
+async def test_run_suite_with_explicit_assertions(mock_ollama):
+    suite = Suite(
+        name="Asserted",
+        model="llama3.1",
+        evaluator="exact",
+        tests=[
+            Case(
+                name="t1",
+                prompt="Capital of France?",
+                expected="",
+                **{
+                    "assert": [
+                        {"type": "icontains", "value": "paris"},
+                        {"type": "regex", "value": "Paris"},
+                        {"type": "latency", "max_ms": 100000},
+                    ]
+                },
+            ),
+        ],
+    )
+    mock_ollama.generate = AsyncMock(
+        return_value=_resp("The capital of France is Paris.", tokens=6)
+    )
+
+    runner = Runner()
+    run = await runner.run_suite(suite, "suite_assert")
+
+    r = run.results[0]
+    assert r.passed is True
+    assert [a["type"] for a in r.assertions] == ["icontains", "regex", "latency"]
+    assert all(a["passed"] for a in r.assertions)
+
+    await runner.close()
+
+
+@pytest.mark.asyncio
+async def test_run_suite_assertion_failure_fails_test(mock_ollama):
+    suite = Suite(
+        name="AssertFail",
+        model="llama3.1",
+        evaluator="exact",
+        tests=[
+            Case(
+                name="t1",
+                prompt="q",
+                expected="",
+                **{
+                    "assert": [
+                        {"type": "icontains", "value": "paris"},
+                        {"type": "latency", "max_ms": 1},  # will fail
+                    ]
+                },
+            ),
+        ],
+    )
+    mock_ollama.generate = AsyncMock(
+        return_value=_resp("Paris", tokens=2, latency_ms=5000.0)
+    )
+
+    runner = Runner()
+    run = await runner.run_suite(suite, "suite_assert_fail")
+
+    r = run.results[0]
+    assert r.passed is False
+    types_failed = {a["type"] for a in r.assertions if not a["passed"]}
+    assert types_failed == {"latency"}
+
+    await runner.close()
+
+
+@pytest.mark.asyncio
 async def test_run_suite_security_evaluator(
     mock_ollama,
 ):

@@ -1,17 +1,21 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from evalbench.core.assertions import Assertion
 
 
 class TestCase(BaseModel):
 
     __test__ = False
 
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
 
     prompt: str
 
-    expected: str
+    expected: str = ""
 
     threshold: float = Field(
         default=0.8,
@@ -22,6 +26,10 @@ class TestCase(BaseModel):
     # Per-test override of the suite-level evaluator (exact | contains |
     # semantic | judge | security). Falls back to the suite evaluator.
     evaluator: str | None = None
+
+    # Composable assertions (YAML key: ``assert``). When present these are
+    # used instead of the evaluator/expected/threshold triple.
+    assert_: list[Assertion] | None = Field(default=None, alias="assert")
 
     # Optional tagging for per-category reporting.
     category: str | None = None
@@ -107,6 +115,10 @@ class TestResult(BaseModel):
 
     # Population std-dev of the sample scores (0.0 for a single sample).
     score_std: float | None = None
+
+    # Per-assertion breakdown from the last sample:
+    # [{"type", "passed", "score", "detail"}].
+    assertions: list[dict] = []
 
 
 class TestRun(BaseModel):

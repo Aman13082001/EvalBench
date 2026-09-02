@@ -6,6 +6,11 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
+from evalbench.core.assertions import (
+    AssertionContext,
+    build_assertions,
+    run_assertions,
+)
 from evalbench.core.evaluators import get_evaluator
 from evalbench.core.evaluators.judge import LLMJudgeEvaluator
 from evalbench.core.evaluators.security import SecurityEvaluator
@@ -75,6 +80,32 @@ class TestRunner:
         )
         return cls(judge_model=judge_model, provider=self._judge_provider)
 
+    def _judge_target(self, suite: TestSuite):
+        """Resolve (provider, model) for judge/rubric assertions.
+
+        Returns ``(None, model)`` for the plain-Ollama path so the evaluator
+        falls back to a direct HTTP call.
+        """
+        explicit = suite.judge_provider is not None
+        jp = (suite.judge_provider or suite.provider).lower()
+        if jp == "ollama" and not explicit:
+            return None, suite.judge_model or "llama3.1"
+        if self._judge_provider is None:
+            self._judge_provider = get_provider(jp)
+        model = suite.judge_model or (
+            "llama3.1" if jp == "ollama" else suite.model
+        )
+        return self._judge_provider, model
+
+    def _needs_llm_judge(self, suite: TestSuite) -> bool:
+        for t in suite.tests:
+            if (t.evaluator or suite.evaluator) in ("judge", "security"):
+                return True
+            for a in t.assert_ or []:
+                if a.type in ("judge", "llm-rubric"):
+                    return True
+        return False
+
     async def validate_model(self, model: str):
         if not await self.provider.has_model(model):
             available = await self.provider.list_models()
@@ -94,7 +125,18 @@ class TestRunner:
         """Run a single test ``suite.samples`` times and aggregate."""
 
         evaluator_name = test.evaluator or suite.evaluator
-        evaluator = self._get_evaluator(evaluator_name, suite)
+
+        # The security evaluator stays a dedicated path (refusal classifier).
+        use_security = not test.assert_ and evaluator_name == "security"
+        if use_security:
+            security_eval = self._get_evaluator("security", suite)
+            assertions = []
+        else:
+            security_eval = None
+            assertions = build_assertions(
+                test.assert_, evaluator_name, test.expected, test.threshold
+            )
+            judge_provider, judge_model = self._judge_target(suite)
 
         test_start = time.time()
 
@@ -104,6 +146,7 @@ class TestRunner:
         tokens_seen = 0
         prompt_tokens_seen = 0
         last_response = ""
+        last_assertions: list = []
         sample_errors: list[str] = []
 
         for _ in range(max(1, suite.samples)):
@@ -119,12 +162,40 @@ class TestRunner:
                 tokens_seen += resp.completion_tokens
                 prompt_tokens_seen += resp.prompt_tokens
 
-                passed_i, score_i = await evaluator.evaluate(
-                    test.expected,
-                    response_text,
-                    test.prompt,
-                    test.threshold,
-                )
+                if use_security:
+                    passed_i, score_i = await security_eval.evaluate(
+                        test.expected,
+                        response_text,
+                        test.prompt,
+                        test.threshold,
+                    )
+                else:
+                    ctx = AssertionContext(
+                        response_text=response_text,
+                        prompt=test.prompt,
+                        latency_ms=resp.latency_ms,
+                        cost_usd=estimate_cost(
+                            suite.model,
+                            resp.prompt_tokens,
+                            resp.completion_tokens,
+                            provider=suite.provider,
+                        ),
+                        judge_provider=judge_provider,
+                        judge_model=judge_model,
+                    )
+                    passed_i, score_i, outcomes = await run_assertions(
+                        assertions, ctx
+                    )
+                    last_assertions = [
+                        {
+                            "type": o.type,
+                            "passed": o.passed,
+                            "score": round(o.score, 4),
+                            "detail": o.detail,
+                        }
+                        for o in outcomes
+                    ]
+
                 scores.append(float(score_i))
                 pass_flags.append(bool(passed_i))
                 api_requests_total.labels(
@@ -191,6 +262,7 @@ class TestRunner:
             score_std=(
                 round(score_std, 4) if score_std is not None else None
             ),
+            assertions=last_assertions,
         )
 
     async def run_suite(
@@ -206,12 +278,10 @@ class TestRunner:
         suite_start = time.time()
         suite_name = getattr(suite, 'name', 'unknown')
 
-        # Build the judge/security provider once, before tests fan out, so
+        # Build the shared judge provider once, before tests fan out, so
         # concurrent tests don't race to create it.
-        evaluator_names = {t.evaluator or suite.evaluator for t in suite.tests}
-        for llm_eval in ("judge", "security"):
-            if llm_eval in evaluator_names:
-                self._get_evaluator(llm_eval, suite)
+        if self._needs_llm_judge(suite):
+            self._judge_target(suite)
 
         # Tests run in parallel, bounded by the smaller of the suite setting
         # and the provider's own ceiling. Result order matches suite order.

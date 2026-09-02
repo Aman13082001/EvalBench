@@ -4,6 +4,7 @@ import httpx
 
 from evalbench.config import settings
 from evalbench.core.evaluators.base import Evaluator
+from evalbench.core.providers.base import Provider
 
 
 class LLMJudgeEvaluator(Evaluator):
@@ -12,9 +13,37 @@ class LLMJudgeEvaluator(Evaluator):
         self,
         judge_model: str = "llama3.1",
         base_url: str | None = None,
+        provider: Provider | None = None,
     ):
         self.judge_model = judge_model
         self.base_url = base_url or settings.ollama_base_url
+        # When set, the judge call is routed through the provider layer
+        # (any hosted backend). When None, it hits Ollama directly.
+        self._provider = provider
+
+    async def _ask_judge(self, prompt: str) -> str:
+        if self._provider is not None:
+            resp = await self._provider.generate(
+                model=self.judge_model,
+                prompt=prompt,
+                temperature=0.1,
+            )
+            return resp.text.strip()
+
+        async with httpx.AsyncClient(
+            timeout=settings.default_request_timeout
+        ) as client:
+            response = await client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.judge_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"temperature": 0.1},
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("response", "").strip()
 
     def _build_prompt(
         self,
@@ -98,45 +127,22 @@ REASON: [one sentence explanation]"""
             original_prompt,
         )
 
-        payload = {
-            "model": self.judge_model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.1,
-            },
-        }
+        try:
+            judge_output = await self._ask_judge(prompt)
+            score, _reason = self._parse_response(judge_output)
+            passed = score >= cutoff
+            return passed, score
 
-        async with httpx.AsyncClient(
-            timeout=settings.default_request_timeout
-        ) as client:
-            try:
-                response = await client.post(
-                    f"{self.base_url}/api/generate",
-                    json=payload,
-                )
+        except Exception:
+            from evalbench.core.evaluators.semantic import (
+                SemanticSimilarityEvaluator,
+            )
 
-                response.raise_for_status()
+            fallback = SemanticSimilarityEvaluator()
 
-                data = response.json()
-                judge_output = data.get("response", "").strip()
-
-                score, reason = self._parse_response(judge_output)
-
-                passed = score >= cutoff
-
-                return passed, score
-
-            except Exception:
-                from evalbench.core.evaluators.semantic import (
-                    SemanticSimilarityEvaluator,
-                )
-
-                fallback = SemanticSimilarityEvaluator()
-
-                return await fallback.evaluate(
-                    expected,
-                    actual,
-                    original_prompt,
-                    threshold,
-                )
+            return await fallback.evaluate(
+                expected,
+                actual,
+                original_prompt,
+                threshold,
+            )

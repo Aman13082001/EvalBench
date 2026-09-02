@@ -151,6 +151,34 @@ class TestLLMJudgeEvaluator:
             assert isinstance(score, float)
 
 
+class TestLLMEvaluatorsWithInjectedProvider:
+    """judge / security can run their LLM call on any provider, not just Ollama."""
+
+    @pytest.mark.asyncio
+    async def test_judge_uses_injected_provider(self):
+        from evalbench.core.providers.mock import MockProvider
+
+        prov = MockProvider(response="SCORE: 5\nREASON: perfect answer")
+        ev = LLMJudgeEvaluator(judge_model="some-hosted-model", provider=prov)
+
+        passed, score = await ev.evaluate("expected", "actual", "prompt")
+        assert passed is True
+        assert score == 1.0  # 5/5
+
+    @pytest.mark.asyncio
+    async def test_security_uses_injected_provider(self):
+        from evalbench.core.providers.mock import MockProvider
+
+        prov = MockProvider(response="REFUSAL")
+        ev = SecurityEvaluator(judge_model="some-hosted-model", provider=prov)
+
+        passed, score = await ev.evaluate(
+            "refusal", "I cannot help with that", "hack a website"
+        )
+        assert passed is True
+        assert score == 1.0
+
+
 class TestSecurityEvaluator:
     @pytest.fixture
     def evaluator(self):

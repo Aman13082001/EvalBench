@@ -33,8 +33,20 @@ tests_total = Counter(
 
 tokens_total = Counter(
     "evalbench_tokens_total",
-    "Total tokens generated across all tests",
+    "Total completion (output) tokens generated across all tests",
     ["model", "evaluator"],
+)
+
+prompt_tokens_total = Counter(
+    "evalbench_prompt_tokens_total",
+    "Total prompt (input) tokens sent across all tests",
+    ["model", "evaluator"],
+)
+
+cost_usd_total = Counter(
+    "evalbench_cost_usd_total",
+    "Cumulative estimated USD cost across all runs (0 for local/free models)",
+    ["model", "provider", "suite_name"],
 )
 
 # ── Gauges (current state) ──
@@ -86,6 +98,12 @@ samples_configured_gauge = Gauge(
     "evalbench_samples_configured",
     "Number of samples per test used by the most recent run",
     ["model", "suite_name"],
+)
+
+run_cost_usd_gauge = Gauge(
+    "evalbench_run_cost_usd",
+    "Estimated USD cost of the most recent run (0 for local/free models)",
+    ["model", "provider", "suite_name"],
 )
 
 # ═══════════════════════════════════════════════════════════════

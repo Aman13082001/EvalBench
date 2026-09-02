@@ -10,10 +10,16 @@ from evalbench.db.schemas import TestCase as Case
 from evalbench.db.schemas import TestSuite as Suite
 
 
-def _resp(text: str, tokens: int = 10, latency_ms: float = 1000.0) -> LLMResponse:
+def _resp(
+    text: str,
+    tokens: int = 10,
+    latency_ms: float = 1000.0,
+    prompt_tokens: int = 5,
+) -> LLMResponse:
     return LLMResponse(
         text=text,
         model="llama3.1",
+        prompt_tokens=prompt_tokens,
         completion_tokens=tokens,
         latency_ms=latency_ms,
     )
@@ -76,6 +82,48 @@ async def test_run_suite_exact_match(
     assert run.results[0].passed is True
     assert run.results[0].score == 1.0
     assert run.results[0].actual == "4"
+
+    await runner.close()
+
+
+@pytest.mark.asyncio
+async def test_run_suite_tracks_token_split_and_free_cost(
+    mock_ollama,
+    sample_suite,
+):
+    runner = Runner()
+    run = await runner.run_suite(sample_suite, "suite_cost")
+
+    r = run.results[0]
+    assert r.prompt_tokens == 5
+    assert r.completion_tokens == 10
+    # Ollama is a local/free provider -> no cost.
+    assert r.cost_usd == 0.0
+
+    await runner.close()
+
+
+@pytest.mark.asyncio
+async def test_run_suite_estimates_hosted_cost(mock_ollama):
+    suite = Suite(
+        name="Hosted",
+        provider="groq",
+        model="openai/gpt-oss-20b",
+        evaluator="exact",
+        tests=[
+            Case(name="t1", prompt="2+2?", expected="4", threshold=0.8),
+        ],
+    )
+    mock_ollama.name = "groq"
+    mock_ollama.generate = AsyncMock(
+        return_value=_resp("4", tokens=1000, prompt_tokens=2000)
+    )
+
+    runner = Runner()
+    run = await runner.run_suite(suite, "suite_hosted")
+
+    # 2000/1e6 * 0.10 + 1000/1e6 * 0.50 = 0.0007
+    assert run.results[0].cost_usd == pytest.approx(0.0007)
 
     await runner.close()
 

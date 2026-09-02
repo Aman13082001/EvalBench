@@ -304,6 +304,17 @@ def run(
         str(summary["total_tokens"]),
     )
 
+    tin = summary.get("total_prompt_tokens")
+    tout = summary.get("total_completion_tokens")
+    if tin or tout:
+        table.add_row("Tokens (in / out)", f"{tin} / {tout}")
+
+    cost = summary.get("total_cost_usd", 0) or 0
+    table.add_row(
+        "Est. Cost (USD)",
+        f"${cost:.4f}" if cost else "$0.0000 (local / free)",
+    )
+
     console.print(table)
 
     by_category = summary.get("by_category") or {}

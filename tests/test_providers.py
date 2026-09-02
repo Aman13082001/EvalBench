@@ -51,6 +51,10 @@ class TestMockProvider:
 
 class TestPresets:
     def test_preset_builds_openai_compatible_with_env_key(self, monkeypatch):
+        # Isolate from any real key in the developer's .env.
+        monkeypatch.setattr(
+            "evalbench.core.providers.settings.groq_api_key", "", raising=False
+        )
         monkeypatch.setenv("GROQ_API_KEY", "gsk_test")
         p = get_provider("groq")
         assert isinstance(p, OpenAICompatibleProvider)

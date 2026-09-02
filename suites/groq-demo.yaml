@@ -1,0 +1,32 @@
+name: Groq Hosted Demo
+provider: groq
+model: openai/gpt-oss-20b
+evaluator: contains
+temperature: 0.0
+samples: 1
+tests:
+  - name: capital-france
+    category: geography
+    difficulty: easy
+    prompt: "What is the capital of France? Answer with one word."
+    expected: "Paris"
+    threshold: 0.99
+  - name: multiplication
+    category: arithmetic
+    difficulty: easy
+    prompt: "What is 12 multiplied by 12? Reply with the number only."
+    expected: "144"
+    threshold: 0.99
+  - name: json-keys
+    category: formatting
+    difficulty: medium
+    prompt: 'Return a JSON object with keys "name" and "age" for a person named Ada aged 36. JSON only.'
+    expected: "age"
+    threshold: 0.99
+  - name: definition
+    category: definitions
+    difficulty: medium
+    evaluator: semantic
+    prompt: "In one sentence, what is a regression test?"
+    expected: "A test that re-runs existing cases to confirm recent changes did not break working functionality."
+    threshold: 0.5

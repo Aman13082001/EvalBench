@@ -240,6 +240,9 @@ async def get_run_summary(
     scores = [r.get("score", 0) or 0 for r in scored]
     latencies = [r.get("latency_ms", 0) for r in results]
     tokens = [r.get("tokens", 0) for r in results]
+    prompt_tokens = [r.get("prompt_tokens", 0) for r in results]
+    completion_tokens = [r.get("completion_tokens", 0) for r in results]
+    costs = [r.get("cost_usd", 0) or 0 for r in results]
 
     # ── Per-category breakdown ──
     by_category: dict = {}
@@ -296,6 +299,9 @@ async def get_run_summary(
             else 0
         ),
         "total_tokens": sum(tokens),
+        "total_prompt_tokens": sum(prompt_tokens),
+        "total_completion_tokens": sum(completion_tokens),
+        "total_cost_usd": round(sum(costs), 6),
         "by_category": by_category,
     }
 

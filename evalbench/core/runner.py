@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from evalbench.core.evaluators import get_evaluator
+from evalbench.core.evaluators.judge import LLMJudgeEvaluator
+from evalbench.core.evaluators.security import SecurityEvaluator
 from evalbench.core.providers import Provider, get_provider
 from evalbench.db.schemas import TestCase, TestResult, TestRun, TestSuite
 
@@ -15,10 +17,13 @@ from evalbench.metrics import (
     avg_score_gauge,
     category_avg_score_gauge,
     category_pass_rate_gauge,
+    cost_usd_total,
     errors_total,
     latency_histogram,
     ollama_model_loaded,
     pass_rate_gauge,
+    prompt_tokens_total,
+    run_cost_usd_gauge,
     run_errors_gauge,
     runs_total,
     sample_score_std_histogram,
@@ -31,6 +36,7 @@ from evalbench.metrics import (
     tests_total,
     tokens_total,
 )
+from evalbench.pricing import estimate_cost
 
 # ────────────────────────────────
 
@@ -38,12 +44,34 @@ from evalbench.metrics import (
 class TestRunner:
     def __init__(self):
         self.provider: Provider | None = None
+        # Lazily built when a suite uses the judge / security evaluator.
+        self._judge_provider: Provider | None = None
         self._evaluator_cache: dict = {}
 
-    def _get_evaluator(self, name: str):
+    def _get_evaluator(self, name: str, suite: TestSuite):
+        if name in ("judge", "security"):
+            return self._build_llm_evaluator(name, suite)
         if name not in self._evaluator_cache:
             self._evaluator_cache[name] = get_evaluator(name)
         return self._evaluator_cache[name]
+
+    def _build_llm_evaluator(self, name: str, suite: TestSuite):
+        cls = LLMJudgeEvaluator if name == "judge" else SecurityEvaluator
+        explicit = suite.judge_provider is not None
+        jp = (suite.judge_provider or suite.provider).lower()
+
+        # Ollama with no explicit judge override keeps the direct call path
+        # (unchanged behavior). Any hosted provider, or an explicit
+        # judge_provider, routes the judge call through the provider layer.
+        if jp == "ollama" and not explicit:
+            return cls()
+
+        if self._judge_provider is None:
+            self._judge_provider = get_provider(jp)
+        judge_model = suite.judge_model or (
+            "llama3.1" if jp == "ollama" else suite.model
+        )
+        return cls(judge_model=judge_model, provider=self._judge_provider)
 
     async def validate_model(self, model: str):
         if not await self.provider.has_model(model):
@@ -64,7 +92,7 @@ class TestRunner:
         """Run a single test ``suite.samples`` times and aggregate."""
 
         evaluator_name = test.evaluator or suite.evaluator
-        evaluator = self._get_evaluator(evaluator_name)
+        evaluator = self._get_evaluator(evaluator_name, suite)
 
         test_start = time.time()
 
@@ -72,6 +100,7 @@ class TestRunner:
         pass_flags: list[bool] = []
         latencies: list[float] = []
         tokens_seen = 0
+        prompt_tokens_seen = 0
         last_response = ""
         sample_errors: list[str] = []
 
@@ -86,6 +115,7 @@ class TestRunner:
                 last_response = response_text
                 latencies.append(resp.latency_ms)
                 tokens_seen += resp.completion_tokens
+                prompt_tokens_seen += resp.prompt_tokens
 
                 passed_i, score_i = await evaluator.evaluate(
                     test.expected,
@@ -130,6 +160,13 @@ class TestRunner:
             latency_ms = (time.time() - test_start) * 1000
             error = "; ".join(sorted(set(sample_errors))) or "unknown error"
 
+        cost_usd = estimate_cost(
+            suite.model,
+            prompt_tokens_seen,
+            tokens_seen,
+            provider=suite.provider,
+        )
+
         return TestResult(
             test_name=test.name,
             prompt=test.prompt,
@@ -137,6 +174,9 @@ class TestRunner:
             actual=last_response,
             latency_ms=round(latency_ms, 2),
             tokens=tokens_seen,
+            prompt_tokens=prompt_tokens_seen,
+            completion_tokens=tokens_seen,
+            cost_usd=cost_usd,
             error=error,
             passed=passed,
             score=round(score_mean, 4),
@@ -195,6 +235,11 @@ class TestRunner:
                 model=suite.model,
                 evaluator=evaluator_name,
             ).inc(result.tokens)
+
+            prompt_tokens_total.labels(
+                model=suite.model,
+                evaluator=evaluator_name,
+            ).inc(result.prompt_tokens)
 
             score_histogram.labels(
                 model=suite.model,
@@ -323,6 +368,20 @@ class TestRunner:
             suite_name=suite_name,
         ).set(max(1, suite.samples))
 
+        # ── Estimated cost of this run ──
+        total_cost = round(sum(r.cost_usd for r in results), 6)
+        run_cost_usd_gauge.labels(
+            model=suite.model,
+            provider=suite.provider,
+            suite_name=suite_name,
+        ).set(total_cost)
+        if total_cost > 0:
+            cost_usd_total.labels(
+                model=suite.model,
+                provider=suite.provider,
+                suite_name=suite_name,
+            ).inc(total_cost)
+
         # Security score reflects ONLY the safety-evaluated tests, not the
         # whole (possibly mixed-evaluator) suite.
         sec_scored = [r for r in scored if r.evaluator == "security"]
@@ -353,3 +412,5 @@ class TestRunner:
     async def close(self):
         if self.provider is not None:
             await self.provider.close()
+        if self._judge_provider is not None:
+            await self._judge_provider.close()

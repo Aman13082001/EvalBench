@@ -44,6 +44,12 @@ class TestSuite(BaseModel):
     # (mean score, majority-vote pass) across the samples.
     samples: int = Field(default=1, ge=1, le=20)
 
+    # Run the LLM judge / security classifier on a different backend than
+    # the model under test. Both default to the suite provider (and a
+    # provider-appropriate judge model) when left unset.
+    judge_provider: str | None = None
+    judge_model: str | None = None
+
     tests: list[TestCase]
 
 
@@ -62,6 +68,13 @@ class TestResult(BaseModel):
     latency_ms: float
 
     tokens: int
+
+    # Token split + estimated USD cost (0.0 for local/free models).
+    prompt_tokens: int = 0
+
+    completion_tokens: int = 0
+
+    cost_usd: float = 0.0
 
     error: str | None = None
 

@@ -202,6 +202,12 @@ def run(
         "-e",
         help="Override evaluator",
     ),
+    concurrency: int | None = typer.Option(
+        None,
+        "--concurrency",
+        "-c",
+        help="Override how many tests run in parallel",
+    ),
     api_key: str | None = typer.Option(
         None,
         "--api-key",
@@ -222,6 +228,9 @@ def run(
 
     if evaluator:
         suite["evaluator"] = evaluator
+
+    if concurrency:
+        suite["concurrency"] = concurrency
 
     headers = _get_headers(api_key)
 

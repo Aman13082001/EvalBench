@@ -7,6 +7,7 @@ from evalbench.core.providers.base import LLMResponse, Provider
 
 class MockProvider(Provider):
     name = "mock"
+    max_concurrency = 64
 
     def __init__(
         self,

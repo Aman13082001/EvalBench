@@ -1,0 +1,56 @@
+name: Groq Parallel Demo
+provider: groq
+model: openai/gpt-oss-20b
+evaluator: contains
+temperature: 0.0
+samples: 1
+concurrency: 4
+tests:
+  - name: capital-france
+    category: geography
+    prompt: "Capital of France? One word."
+    expected: "Paris"
+  - name: capital-japan
+    category: geography
+    prompt: "Capital of Japan? One word."
+    expected: "Tokyo"
+  - name: capital-egypt
+    category: geography
+    prompt: "Capital of Egypt? One word."
+    expected: "Cairo"
+  - name: capital-canada
+    category: geography
+    prompt: "Capital of Canada? One word."
+    expected: "Ottawa"
+  - name: add
+    category: arithmetic
+    prompt: "What is 7 + 6? Number only."
+    expected: "13"
+  - name: multiply
+    category: arithmetic
+    prompt: "What is 9 * 8? Number only."
+    expected: "72"
+  - name: subtract
+    category: arithmetic
+    prompt: "What is 100 - 37? Number only."
+    expected: "63"
+  - name: square
+    category: arithmetic
+    prompt: "What is 15 squared? Number only."
+    expected: "225"
+  - name: hello-spanish
+    category: language
+    prompt: "Say 'hello' in Spanish. One word."
+    expected: "hola"
+  - name: hello-french
+    category: language
+    prompt: "Say 'hello' in French. One word."
+    expected: "bonjour"
+  - name: hello-german
+    category: language
+    prompt: "Say 'hello' in German. One word."
+    expected: "hallo"
+  - name: hello-italian
+    category: language
+    prompt: "Say 'hello' in Italian. One word."
+    expected: "ciao"

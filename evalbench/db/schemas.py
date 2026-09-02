@@ -44,6 +44,10 @@ class TestSuite(BaseModel):
     # (mean score, majority-vote pass) across the samples.
     samples: int = Field(default=1, ge=1, le=20)
 
+    # How many tests run at once. Capped further by the provider's own
+    # concurrency limit (free hosted tiers have low request-rate ceilings).
+    concurrency: int = Field(default=4, ge=1, le=64)
+
     # Run the LLM judge / security classifier on a different backend than
     # the model under test. Both default to the suite provider (and a
     # provider-appropriate judge model) when left unset.

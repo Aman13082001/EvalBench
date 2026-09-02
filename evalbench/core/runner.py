@@ -1,3 +1,4 @@
+import asyncio
 import statistics
 import time
 from datetime import datetime, timezone
@@ -200,15 +201,34 @@ class TestRunner:
         self.provider = get_provider(suite.provider)
         await self.validate_model(suite.model)
 
-        results: list[TestResult] = []
-
         suite_start = time.time()
         suite_name = getattr(suite, 'name', 'unknown')
 
-        for test in suite.tests:
-            result = await self._run_one_test(suite, test)
-            results.append(result)
+        # Build the judge/security provider once, before tests fan out, so
+        # concurrent tests don't race to create it.
+        evaluator_names = {t.evaluator or suite.evaluator for t in suite.tests}
+        for llm_eval in ("judge", "security"):
+            if llm_eval in evaluator_names:
+                self._get_evaluator(llm_eval, suite)
 
+        # Tests run in parallel, bounded by the smaller of the suite setting
+        # and the provider's own ceiling. Result order matches suite order.
+        limit = max(
+            1, min(suite.concurrency, self.provider.max_concurrency)
+        )
+        semaphore = asyncio.Semaphore(limit)
+
+        async def _run_guarded(test: TestCase) -> TestResult:
+            async with semaphore:
+                return await self._run_one_test(suite, test)
+
+        results: list[TestResult] = list(
+            await asyncio.gather(
+                *(_run_guarded(t) for t in suite.tests)
+            )
+        )
+
+        for test, result in zip(suite.tests, results, strict=True):
             evaluator_name = test.evaluator or suite.evaluator
             status = (
                 "error"

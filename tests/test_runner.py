@@ -1,5 +1,6 @@
 """Unit tests for TestRunner with a mocked provider."""
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -53,6 +54,7 @@ def mock_ollama():
     with patch("evalbench.core.runner.get_provider") as mock_get:
         instance = AsyncMock()
         instance.name = "ollama"
+        instance.max_concurrency = 8
         instance.has_model = AsyncMock(return_value=True)
         instance.list_models = AsyncMock(return_value=["llama3.1", "mistral"])
         instance.generate = AsyncMock(return_value=_resp("4"))
@@ -279,6 +281,82 @@ async def test_run_suite_per_test_evaluator_override(mock_ollama):
     assert run.results[0].passed is True
 
     await runner.close()
+
+
+@pytest.mark.asyncio
+async def test_run_suite_respects_provider_concurrency_cap():
+    active = 0
+    peak = 0
+
+    async def slow_generate(model, prompt, temperature=0.7):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0.05)
+        active -= 1
+        return _resp("4")
+
+    provider = AsyncMock()
+    provider.name = "groq"
+    provider.max_concurrency = 2
+    provider.has_model = AsyncMock(return_value=True)
+    provider.list_models = AsyncMock(return_value=["m"])
+    provider.generate = slow_generate
+    provider.close = AsyncMock()
+
+    suite = Suite(
+        name="conc",
+        provider="groq",
+        model="m",
+        evaluator="exact",
+        concurrency=10,  # asks for 10, provider only allows 2
+        tests=[
+            Case(name=f"t{i}", prompt="2+2?", expected="4") for i in range(8)
+        ],
+    )
+
+    with patch("evalbench.core.runner.get_provider", return_value=provider):
+        runner = Runner()
+        run = await runner.run_suite(suite, "suite_conc")
+        await runner.close()
+
+    assert len(run.results) == 8
+    assert peak == 2  # ran in parallel, but never above the provider cap
+
+
+@pytest.mark.asyncio
+async def test_run_suite_preserves_order_under_concurrency():
+    async def echo_generate(model, prompt, temperature=0.7):
+        await asyncio.sleep(0.01)
+        return _resp(prompt)
+
+    provider = AsyncMock()
+    provider.name = "mock"
+    provider.max_concurrency = 32
+    provider.has_model = AsyncMock(return_value=True)
+    provider.list_models = AsyncMock(return_value=[])
+    provider.generate = echo_generate
+    provider.close = AsyncMock()
+
+    suite = Suite(
+        name="order",
+        provider="mock",
+        model="m",
+        evaluator="contains",
+        concurrency=8,
+        tests=[
+            Case(name=f"t{i}", prompt=str(i), expected=str(i))
+            for i in range(12)
+        ],
+    )
+
+    with patch("evalbench.core.runner.get_provider", return_value=provider):
+        runner = Runner()
+        run = await runner.run_suite(suite, "suite_order")
+        await runner.close()
+
+    assert [r.test_name for r in run.results] == [f"t{i}" for i in range(12)]
+    assert [r.actual for r in run.results] == [str(i) for i in range(12)]
 
 
 @pytest.mark.asyncio

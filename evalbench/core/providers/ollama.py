@@ -12,6 +12,9 @@ from evalbench.core.providers.base import LLMResponse, Provider
 
 class OllamaProvider(Provider):
     name = "ollama"
+    # Local box, single GPU — more than a handful of parallel generations
+    # just thrashes. Still well above the default.
+    max_concurrency = 8
 
     def __init__(self, base_url: str | None = None):
         self.base_url = (base_url or settings.ollama_base_url).rstrip("/")

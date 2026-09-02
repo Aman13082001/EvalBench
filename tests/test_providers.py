@@ -82,6 +82,18 @@ class TestPresets:
         )
         assert p.base_url == "http://localhost:9999/v1"
 
+    def test_presets_carry_free_tier_concurrency_caps(self):
+        assert get_provider("groq", api_key="k").max_concurrency == 4
+        assert get_provider("github", api_key="k").max_concurrency == 1
+        assert get_provider("gemini", api_key="k").max_concurrency == 2
+        assert get_provider("openai", api_key="k").max_concurrency == 8
+
+
+class TestConcurrencyDefaults:
+    def test_class_provider_concurrency(self):
+        assert get_provider("ollama").max_concurrency == 8
+        assert get_provider("mock").max_concurrency == 64
+
 
 class TestOpenAICompatibleProvider:
     @pytest.mark.asyncio

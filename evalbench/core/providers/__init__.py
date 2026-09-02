@@ -41,6 +41,15 @@ _PRESETS: dict[str, tuple[str, str]] = {
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
 }
 
+# Safe parallel-request ceilings for each hosted preset's free tier.
+_PRESET_CONCURRENCY: dict[str, int] = {
+    "openai": 8,
+    "groq": 4,
+    "gemini": 2,
+    "github": 1,
+    "openrouter": 4,
+}
+
 
 def register_provider(name: str, cls: type[Provider]) -> None:
     _PROVIDERS[name.lower()] = cls
@@ -66,6 +75,9 @@ def _build_preset(name: str, **overrides) -> OpenAICompatibleProvider:
         base_url=overrides.pop("base_url", "") or base_url,
         api_key=api_key,
         name=name,
+        max_concurrency=overrides.pop(
+            "max_concurrency", _PRESET_CONCURRENCY.get(name)
+        ),
         **overrides,
     )
 

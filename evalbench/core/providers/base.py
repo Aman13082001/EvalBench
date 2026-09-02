@@ -34,6 +34,10 @@ class Provider(ABC):
 
     name: str = "provider"
 
+    # Upper bound on concurrent in-flight requests to this backend. The
+    # runner takes ``min(suite.concurrency, provider.max_concurrency)``.
+    max_concurrency: int = 4
+
     @abstractmethod
     async def generate(
         self,

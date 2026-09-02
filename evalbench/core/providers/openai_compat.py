@@ -23,9 +23,12 @@ class OpenAICompatibleProvider(Provider):
         name: str = "openai-compat",
         extra_headers: dict[str, str] | None = None,
         timeout: float | None = None,
+        max_concurrency: int | None = None,
     ):
         self.name = name
         self.base_url = base_url.rstrip("/")
+        if max_concurrency is not None:
+            self.max_concurrency = max_concurrency
         headers = {"Authorization": f"Bearer {api_key}"}
         if extra_headers:
             headers.update(extra_headers)

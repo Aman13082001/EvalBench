@@ -75,6 +75,23 @@ class TestRegressionDetector:
         assert result["regression_detected"] is None
         assert "mismatch" in result["reason"].lower()
 
+    def test_per_test_flags_which_cases_regressed(self, detector):
+        baseline = make_run([0.9, 0.9, 0.9, 0.9])
+        current = make_run([0.9, 0.2, 0.9, 0.85])  # only test_1 drops hard
+
+        result = detector.compare(baseline, current)
+        per_test = result["per_test"]
+
+        assert len(per_test) == 4
+        assert per_test[0]["regressed"] is False
+        assert per_test[1]["regressed"] is True
+        assert per_test[1]["delta"] == pytest.approx(-0.7)
+        assert per_test[3]["regressed"] is False  # -0.05 is not < -0.05
+
+    def test_per_test_empty_on_count_mismatch(self, detector):
+        result = detector.compare(make_run([0.9, 0.8]), make_run([0.5]))
+        assert result["per_test"] == []
+
     def test_compare_runs_chain(self, detector):
         runs = [
             make_run([0.9, 0.9]),

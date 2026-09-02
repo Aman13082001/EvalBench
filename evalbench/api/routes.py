@@ -294,6 +294,58 @@ async def run_suite(
     }
 
 
+@router.get("/{suite_id}/baseline")
+async def get_baseline(suite_id: str):
+    if not ObjectId.is_valid(suite_id):
+        raise HTTPException(status_code=400, detail="Invalid suite ID format")
+    doc = await db.suites.find_one({"_id": ObjectId(suite_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Suite not found")
+    return {
+        "suite_id": suite_id,
+        "baseline_run_id": doc.get("baseline_run_id"),
+    }
+
+
+@router.post("/{suite_id}/baseline", status_code=200)
+@limiter.limit("20/minute")
+async def set_baseline(
+    request: Request,
+    suite_id: str,
+    payload: dict,
+    user=Depends(get_current_user),
+):
+    """Promote a completed run as this suite's regression baseline."""
+
+    run_id = payload.get("run_id")
+    if not run_id or not ObjectId.is_valid(suite_id) or not ObjectId.is_valid(
+        run_id
+    ):
+        raise HTTPException(
+            status_code=400, detail="Valid suite_id and run_id are required"
+        )
+
+    suite = await db.suites.find_one({"_id": ObjectId(suite_id)})
+    if not suite:
+        raise HTTPException(status_code=404, detail="Suite not found")
+
+    run = await db.test_runs.find_one({"_id": ObjectId(run_id)})
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.get("status", "completed") != "completed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Run is '{run.get('status')}', only completed runs "
+            f"can be a baseline",
+        )
+
+    await db.suites.update_one(
+        {"_id": ObjectId(suite_id)},
+        {"$set": {"baseline_run_id": run_id}},
+    )
+    return {"suite_id": suite_id, "baseline_run_id": run_id}
+
+
 @router.post("/{suite_id}/compare", status_code=201)
 @limiter.limit("10/minute")
 async def compare_models(

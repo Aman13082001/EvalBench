@@ -21,7 +21,31 @@ class RegressionDetector:
 
         return round(f, 6)
 
+    def _per_test(self, baseline: TestRun, current: TestRun) -> list[dict]:
+        """Score delta for each test, aligned by position."""
+        if len(baseline.results) != len(current.results):
+            return []
+        rows = []
+        for b, c in zip(baseline.results, current.results, strict=True):
+            bs = self._safe_float(b.score) if b.score is not None else None
+            cs = self._safe_float(c.score) if c.score is not None else None
+            delta = None
+            regressed = False
+            if bs is not None and cs is not None:
+                delta = round(cs - bs, 6)
+                regressed = delta < -0.05
+            rows.append({
+                "test_name": c.test_name,
+                "baseline_score": bs,
+                "current_score": cs,
+                "delta": delta,
+                "regressed": regressed,
+            })
+        return rows
+
     def compare(self, baseline: TestRun, current: TestRun) -> dict:
+        per_test = self._per_test(baseline, current)
+
         baseline_scores = [
             r.score
             for r in baseline.results
@@ -40,6 +64,7 @@ class RegressionDetector:
                 "reason": "Test count mismatch or missing scores",
                 "baseline_count": len(baseline_scores),
                 "current_count": len(current_scores),
+                "per_test": per_test,
             }
 
         if len(baseline_scores) < 2:
@@ -69,6 +94,7 @@ class RegressionDetector:
                 "p_value": None,
                 "significant": False,
                 "test_count": len(baseline_scores),
+                "per_test": per_test,
             }
 
         baseline_mean = sum(baseline_scores) / len(baseline_scores)
@@ -122,6 +148,7 @@ class RegressionDetector:
                 "significant": significant,
                 "test_count": len(baseline_scores),
                 "reason": reason,
+                "per_test": per_test,
             }
 
         # Normal case: paired t-test
@@ -160,6 +187,7 @@ class RegressionDetector:
             "significant": significant,
             "test_count": len(baseline_scores),
             "reason": reason,
+            "per_test": per_test,
         }
 
     def compare_runs(self, runs: list[TestRun]) -> list[dict]:

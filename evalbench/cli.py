@@ -129,6 +129,58 @@ def _run_and_wait(suite_id: str, headers: dict, model: str) -> str:
             time.sleep(1.0)
 
 
+def _check_regression(baseline_id: str, current_id: str, headers: dict) -> bool:
+    """Run the baseline comparison and print it. Returns True if regressed."""
+
+    r = httpx.post(
+        f"{API_URL}/regression",
+        json={"baseline_run_id": baseline_id, "current_run_id": current_id},
+        headers=headers,
+        timeout=20.0,
+    )
+    if r.status_code >= 400:
+        console.print(
+            f"[yellow]Baseline check skipped: {r.text[:200]}[/yellow]"
+        )
+        return False
+
+    comp = r.json()
+
+    table = Table(title="Baseline Comparison")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="magenta")
+    table.add_row("Baseline mean", str(comp.get("baseline_mean")))
+    table.add_row("Current mean", str(comp.get("current_mean")))
+    table.add_row("Mean diff", str(comp.get("mean_diff")))
+    table.add_row("P-value", str(comp.get("p_value")))
+    console.print(table)
+
+    regressed_tests = [
+        t for t in comp.get("per_test", []) if t.get("regressed")
+    ]
+    if regressed_tests:
+        rt = Table(title="Regressed Tests")
+        rt.add_column("Test", style="cyan")
+        rt.add_column("Baseline", style="magenta")
+        rt.add_column("Current", style="magenta")
+        rt.add_column("Δ", style="red")
+        for t in regressed_tests:
+            rt.add_row(
+                t["test_name"],
+                f"{t['baseline_score']:.3f}",
+                f"{t['current_score']:.3f}",
+                f"{t['delta']:+.3f}",
+            )
+        console.print(rt)
+
+    if comp.get("regression_detected"):
+        console.print("[bold red]✗ REGRESSION DETECTED vs baseline[/bold red]")
+        return True
+
+    console.print("[bold green]✓ No regression vs baseline[/bold green]")
+    return False
+
+
 # ═══════════════════════════════════════════════════════════════
 # AUTH COMMANDS
 # ═══════════════════════════════════════════════════════════════
@@ -292,6 +344,18 @@ def run(
         "--fail-under",
         help="Exit non-zero if pass rate falls below this (0-1)",
     ),
+    compare_to_baseline: bool = typer.Option(
+        False,
+        "--compare-to-baseline",
+        "-B",
+        help="After the run, check it against the suite's baseline_run_id "
+        "and exit non-zero on a detected regression",
+    ),
+    baseline_run: str | None = typer.Option(
+        None,
+        "--baseline-run",
+        help="Explicit baseline run id (overrides the suite's baseline_run_id)",
+    ),
 ):
     """Run a test suite and display results."""
     with open(suite_path) as f:
@@ -431,12 +495,53 @@ def run(
             f"from the pass rate.[/yellow]"
         )
 
+    if compare_to_baseline or baseline_run:
+        baseline_id = baseline_run or suite.get("baseline_run_id")
+        if not baseline_id:
+            console.print(
+                "[yellow]No baseline set. Add `baseline_run_id` to the "
+                "suite YAML or pass --baseline-run.[/yellow]"
+            )
+        else:
+            regressed = _check_regression(baseline_id, run_id, headers)
+            if regressed:
+                raise typer.Exit(code=1)
+
     if summary["pass_rate"] < fail_under:
         console.print(
             f"[bold red]✗ Pass rate {summary['pass_rate'] * 100:.1f}% "
             f"is below the {fail_under * 100:.0f}% gate.[/bold red]"
         )
         raise typer.Exit(code=1)
+
+
+@app.command()
+def baseline(
+    suite_id: str = typer.Argument(..., help="Suite ID"),
+    run_id: str = typer.Argument(..., help="Run ID to promote as baseline"),
+    api_key: str | None = typer.Option(None, "--api-key"),
+):
+    """Promote a completed run as a suite's regression baseline."""
+    headers = _get_headers(api_key)
+    r = httpx.post(
+        f"{API_URL}/suites/{suite_id}/baseline",
+        json={"run_id": run_id},
+        headers=headers,
+        timeout=10.0,
+    )
+    if r.status_code == 401:
+        console.print("[red]Authentication required.[/red]")
+        raise typer.Exit(code=1)
+    if r.status_code >= 400:
+        console.print(f"[bold red]✗[/bold red] {r.json().get('detail', r.text)}")
+        raise typer.Exit(code=1)
+
+    data = r.json()
+    console.print(
+        f"[bold green]✓[/bold green] Baseline for suite "
+        f"[cyan]{data['suite_id']}[/cyan] set to run "
+        f"[cyan]{data['baseline_run_id']}[/cyan]"
+    )
 
 
 @app.command()

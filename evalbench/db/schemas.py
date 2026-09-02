@@ -66,6 +66,10 @@ class TestSuite(BaseModel):
     judge_provider: str | None = None
     judge_model: str | None = None
 
+    # Run id promoted as this suite's regression baseline. `evalbench run
+    # --compare-to-baseline` checks the fresh run against it.
+    baseline_run_id: str | None = None
+
     tests: list[TestCase]
 
 

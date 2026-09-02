@@ -15,6 +15,14 @@ class Settings(BaseSettings):
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
 
+    # Hosted provider API keys (OpenAI-compatible). All optional — a
+    # provider is only usable once its key is set.
+    openai_api_key: str = ""
+    groq_api_key: str = ""
+    gemini_api_key: str = ""
+    github_token: str = ""
+    openrouter_api_key: str = ""
+
     # Timeouts (seconds)
     default_request_timeout: int = 120
     suite_run_timeout: int = 900

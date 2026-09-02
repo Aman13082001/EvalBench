@@ -93,7 +93,7 @@ def _run_and_wait(suite_id: str, headers: dict, model: str) -> str:
             s = httpx.get(
                 f"{API_URL}/runs/{run_id}/status",
                 headers=headers,
-                timeout=10.0,
+                timeout=30.0,
             )
             s.raise_for_status()
             info = s.json()

@@ -7,8 +7,12 @@ test score is the weighted mean.
 Legacy suites (``evaluator`` + ``expected`` + ``threshold``, no ``assert``)
 have a single assertion synthesised for them, so nothing breaks.
 
-Day 7 types:  exact, equals, contains, icontains, regex, semantic, judge
-Day 8 types:  json-schema, llm-rubric, latency, cost
+String:   exact, equals, contains, icontains, regex
+Graded:   semantic, judge, llm-rubric
+Budget:   latency, cost
+Schema:   json-schema
+RAG:      faithfulness, context-recall, context-precision
+          (need a ``context`` on the test case)
 """
 
 from __future__ import annotations
@@ -58,6 +62,8 @@ class AssertionOutcome:
 class AssertionContext:
     response_text: str
     prompt: str = ""
+    expected: str = ""
+    context: list[str] = field(default_factory=list)
     latency_ms: float = 0.0
     cost_usd: float = 0.0
     judge_provider: Provider | None = None

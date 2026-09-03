@@ -31,6 +31,9 @@ class TestCase(BaseModel):
     # used instead of the evaluator/expected/threshold triple.
     assert_: list[Assertion] | None = Field(default=None, alias="assert")
 
+    # Retrieved passages, for RAG assertions (faithfulness, context-recall).
+    context: list[str] | None = None
+
     # Optional tagging for per-category reporting.
     category: str | None = None
     difficulty: str | None = None

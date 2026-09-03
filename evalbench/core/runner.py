@@ -175,6 +175,8 @@ class TestRunner:
                     ctx = AssertionContext(
                         response_text=response_text,
                         prompt=test.prompt,
+                        expected=test.expected,
+                        context=test.context or [],
                         latency_ms=resp.latency_ms,
                         cost_usd=estimate_cost(
                             suite.model,

@@ -1,5 +1,6 @@
-# Small, fast suite for the CI quality gate. Deterministic (temp 0,
-# single sample) so a pass/fail flip means a real change, not noise.
+# Local CI gate — runs against Ollama. Deterministic (temp 0, single
+# sample) so a pass/fail flip means a real change, not noise. For the
+# GitHub Action (no local model) use ci-hosted.yaml instead.
 name: "CI Quality Gate"
 model: "llama3.1"
 evaluator: "semantic"

@@ -1,8 +1,8 @@
-"""Startup guards: placeholder-secret refusal."""
+"""Startup guards: placeholder-secret refusal + index creation."""
 
 import pytest
 
-from evalbench.api.main import _check_secrets
+from evalbench.api.main import _check_secrets, _ensure_indexes
 
 
 @pytest.fixture
@@ -44,3 +44,16 @@ def test_allow_insecure_downgrades_to_warning(_settings, monkeypatch, caplog):
     monkeypatch.setenv("EVALBENCH_ALLOW_INSECURE", "1")
     _check_secrets()  # no raise
     assert "placeholder" in caplog.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_ensure_indexes_covers_hot_paths(mock_db):
+    await _ensure_indexes()
+
+    users_idx = [c.args[0] for c in mock_db.users.create_index.call_args_list]
+    assert "api_key" in users_idx
+    assert "username" in users_idx
+
+    run_idx = [c.args[0] for c in mock_db.test_runs.create_index.call_args_list]
+    assert [("suite_id", 1), ("created_at", -1)] in run_idx
+    assert "status" in run_idx

@@ -64,12 +64,25 @@ def _check_secrets() -> None:
     )
 
 
+async def _ensure_indexes() -> None:
+    """Idempotent index creation for the hot query paths."""
+    # Auth does users.find_one({api_key}) / ({username}) on every request.
+    await db.users.create_index("api_key")
+    await db.users.create_index("username")
+    # list_suites sorts by created_at; list_runs filters suite_id + sorts.
+    await db.suites.create_index([("created_at", -1)])
+    await db.test_runs.create_index([("suite_id", 1), ("created_at", -1)])
+    # The startup reaper queries status $in [queued, running].
+    await db.test_runs.create_index("status")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
 
     logging.basicConfig(level=settings.log_level.upper())
     _check_secrets()
+    await _ensure_indexes()
 
     # Create default admin if no users exist.
     count = await db.users.count_documents({})

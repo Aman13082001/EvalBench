@@ -47,6 +47,7 @@ def mock_db():
     mock.suites.count_documents = AsyncMock(
         return_value=1
     )
+    mock.suites.create_index = AsyncMock()
 
     # Test runs collection
     mock.test_runs = MagicMock()
@@ -57,6 +58,7 @@ def mock_db():
         return_value=MagicMock(modified_count=0)
     )
     mock.test_runs.find = MagicMock()
+    mock.test_runs.create_index = AsyncMock()
 
     # Users collection
     mock.users = MagicMock()
@@ -66,6 +68,7 @@ def mock_db():
     mock.users.count_documents = AsyncMock(
         return_value=1
     )
+    mock.users.create_index = AsyncMock()
 
     mock.command = AsyncMock(
         return_value={"ok": 1}

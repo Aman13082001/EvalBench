@@ -138,6 +138,14 @@ score_histogram = Histogram(
     buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
 )
 
+assertion_score_histogram = Histogram(
+    "evalbench_assertion_score",
+    "Per-assertion score distribution, by assertion type "
+    "(faithfulness, context-recall, semantic, ...)",
+    ["model", "assertion_type"],
+    buckets=[0.0, 0.25, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+)
+
 # ── Sample variance (flakiness) — only meaningful when samples > 1 ──
 sample_score_std_histogram = Histogram(
     "evalbench_sample_score_std",

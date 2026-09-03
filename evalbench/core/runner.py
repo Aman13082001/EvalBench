@@ -21,6 +21,7 @@ from evalbench.db.schemas import TestCase, TestResult, TestRun, TestSuite
 # ── Day 12: Prometheus metrics ──
 from evalbench.metrics import (
     api_requests_total,
+    assertion_score_histogram,
     avg_latency_gauge,
     avg_score_gauge,
     category_avg_score_gauge,
@@ -358,6 +359,12 @@ class TestRunner:
                 model=suite.model,
                 evaluator=evaluator_name,
             ).observe(result.score or 0.0)
+
+            for a in result.assertions:
+                assertion_score_histogram.labels(
+                    model=suite.model,
+                    assertion_type=a.get("type", "?"),
+                ).observe(a.get("score", 0.0))
 
             if result.score_std is not None:
                 sample_score_std_histogram.labels(

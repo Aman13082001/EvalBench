@@ -195,8 +195,33 @@ A test passes when **every** assertion in its `assert` list passes; the test sco
 | `json-schema` | 1 / 0 | response parses as JSON and validates against `value` (a JSON Schema) | structured output |
 | `latency` | 1 / 0 | `latency_ms <= max_ms` | perf budgets |
 | `cost` | 1 / 0 | `cost_usd <= max_usd` | spend budgets |
+| `faithfulness` | grounded fraction | `score >= threshold` (default 0.8) | RAG: answer's claims are supported by `context` |
+| `context-recall` | facts-found fraction | `score >= threshold` (default 0.8) | RAG: `context` contains what's needed to answer `expected` |
+| `context-precision` | relevant fraction | `score >= threshold` (default 0.6) | RAG: retrieved passages aren't noise |
 
-`security` stays a dedicated evaluator (not an assertion type): `expected: refusal` passes when the model refuses, `expected: safe` passes when it answers helpfully. `judge` / `llm-rubric` / `security` call an LLM grader (local `llama3.1` by default, or `judge_provider`), with keyword / similarity fallbacks when it is unavailable.
+`security` stays a dedicated evaluator (not an assertion type): `expected: refusal` passes when the model refuses, `expected: safe` passes when it answers helpfully. The LLM grader (used by `judge` / `llm-rubric` / `faithfulness` / `context-*`) returns **structured JSON** which is parsed with a regex/keyword fallback; it runs on `judge_provider` (or local `llama3.1`).
+
+### RAG evaluation
+
+A test with a `context:` list (the passages a retriever fetched) can be scored on how the answer *uses* retrieval:
+
+```yaml
+- name: grounded-answer
+  prompt: "Based on the context, when was the Eiffel Tower completed?"
+  expected: "It was completed in 1889."
+  context:
+    - "Construction of the Eiffel Tower finished in 1889 for the World's Fair."
+    - "The tower is about 330 metres tall."
+  assert:
+    - type: faithfulness       # no claim outside the context
+      threshold: 0.8
+    - type: context-recall     # the context held the answer
+      threshold: 0.8
+    - type: context-precision  # the passages were relevant
+      threshold: 0.6
+```
+
+`faithfulness` decomposes the answer into atomic claims and marks each supported / unsupported by the context (unsupported ones are named in the result). `context-recall` does the same for `expected` against the context — a low score means retrieval *missed* something. `context-precision` scores the fraction of passages that bear on the question — a low score means retrieval pulled in noise. These are strict by design: a model that elaborates beyond the retrieved text will fail `faithfulness`, which is the point. See `suites/rag-demo.yaml`. Per-type score distributions land on the Grafana **RAG Assertion Quality** row.
 
 ---
 

@@ -1,0 +1,71 @@
+# RAG evaluation showcase.
+#
+# Each test carries a `context` (the passages a retriever would have
+# fetched) and asserts on how the answer uses it:
+#   faithfulness       - every claim in the answer is grounded in context
+#   context-recall     - the context contains what's needed to answer
+#   context-precision  - the retrieved passages are actually relevant
+#
+# Thresholds mirror a real gate: faithfulness/recall high, precision
+# lower (retrievers always pull some noise). The judge runs on
+# `judge_provider`. Set GROQ_API_KEY.
+
+name: RAG Evaluation Demo
+provider: groq
+model: openai/gpt-oss-120b
+judge_provider: groq
+judge_model: openai/gpt-oss-120b
+temperature: 0.0
+samples: 1
+concurrency: 3
+
+tests:
+  - name: grounded-answer
+    category: rag
+    prompt: >
+      Based on the context below, when was the Eiffel Tower completed and
+      roughly how tall is it?
+    expected: "The Eiffel Tower was completed in 1889 and is about 330 metres tall."
+    context:
+      - "The Eiffel Tower is a wrought-iron lattice tower in Paris, France."
+      - "Construction of the Eiffel Tower finished in 1889 for the World's Fair."
+      - "The tower stands about 330 metres (1,083 ft) tall including antennas."
+    assert:
+      - type: faithfulness
+        threshold: 0.7
+      - type: context-recall
+        threshold: 0.8
+      - type: icontains
+        value: "1889"
+
+  - name: language-lookup
+    category: rag
+    prompt: "According to the context, what language is Django written in?"
+    expected: "Django is written in Python."
+    context:
+      - "Django is a high-level web framework written in Python."
+      - "The Django ORM maps Python classes to database tables."
+    assert:
+      - type: context-precision
+        threshold: 0.5
+      - type: context-recall
+        threshold: 0.8
+      - type: faithfulness
+        threshold: 0.7
+
+  - name: answer-with-some-noise
+    category: rag
+    prompt: "From the context, what is the boiling point of water at sea level?"
+    expected: "Water boils at 100 degrees Celsius at sea level."
+    context:
+      - "At standard atmospheric pressure, water boils at 100 C (212 F)."
+      - "Atmospheric pressure at sea level is about 101.3 kilopascals."
+      - "Jupiter is the largest planet in the Solar System."
+    assert:
+      # 2 of 3 passages bear on the question -> precision ~0.67
+      - type: context-precision
+        threshold: 0.5
+      - type: faithfulness
+        threshold: 0.7
+      - type: icontains
+        value: "100"

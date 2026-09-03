@@ -5,6 +5,19 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Added — Phase B: RAG evaluation
+- `TestCase.context: list[str]` — retrieved passages, threaded to assertions.
+- **`faithfulness`** — grounded fraction of the answer's atomic claims
+  against `context`; unsupported claims are named.
+- **`context-recall`** — fraction of `expected`'s facts present in
+  `context` (low = retrieval missed something).
+- **`context-precision`** — fraction of retrieved passages relevant to
+  the question (low = retrieval noise).
+- The LLM grader now returns **structured JSON** (`{"score", "reason"}` /
+  claim lists), parsed with the old regex scrape only as a fallback.
+- `evalbench_assertion_score` histogram (by assertion type) + a Grafana
+  **RAG Assertion Quality** row. Example suite `suites/rag-demo.yaml`.
+
 ### Changed — Phase A hardening
 - **Auth is now consistent** — every data endpoint requires a user; only
   `/health`, `/live`, `/ready` are public. `tests/test_auth_coverage.py`

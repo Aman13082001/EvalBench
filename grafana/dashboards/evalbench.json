@@ -2419,6 +2419,110 @@
       ],
       "title": "Run Outcomes (completed vs failed)",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 95
+      },
+      "id": 107,
+      "panels": [],
+      "title": "🧠 RAG Assertion Quality",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Mean score per RAG/graded assertion type over time (faithfulness, context-recall, context-precision, semantic, llm-rubric).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 6,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 96
+      },
+      "id": 45,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "min"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "expr": "sum by (assertion_type) (rate(evalbench_assertion_score_sum{model=~\"$model\"}[$__rate_interval])) / clamp_min(sum by (assertion_type) (rate(evalbench_assertion_score_count{model=~\"$model\"}[$__rate_interval])), 1)",
+          "legendFormat": "{{assertion_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Mean Assertion Score by Type",
+      "type": "timeseries"
     }
   ],
   "refresh": "5s",
@@ -2530,6 +2634,6 @@
   "timezone": "browser",
   "title": "EvalBench — Production Overview",
   "uid": "evalbench-production",
-  "version": 6,
+  "version": 7,
   "weekStart": ""
 }

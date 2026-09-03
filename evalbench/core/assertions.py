@@ -303,9 +303,11 @@ async def _check_faithfulness(
     cutoff = a.threshold if a.threshold is not None else 0.8
 
     prompt = (
-        "Break the ANSWER into atomic factual claims. For each, decide "
-        "whether the CONTEXT supports it. A claim not addressed by the "
-        "context counts as unsupported. Output ONLY JSON:\n"
+        "Break the ANSWER into atomic factual claims about the world. For "
+        "each, decide whether the CONTEXT supports it; a claim the context "
+        "does not address counts as unsupported. If the ANSWER is a "
+        "refusal, a non-answer, or contains no factual claims, return an "
+        "empty list. Output ONLY JSON:\n"
         '{"claims": [{"claim": "<text>", "supported": true|false}]}\n\n'
         f"CONTEXT:\n{_numbered_context(ctx.context)}\n\n"
         f"ANSWER:\n{ctx.response_text}"

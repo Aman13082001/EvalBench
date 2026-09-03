@@ -427,6 +427,10 @@ def run(
     if errors:
         table.add_row("Errors", f"[yellow]{errors}[/yellow]")
 
+    rl = summary.get("rate_limited_samples", 0)
+    if rl:
+        table.add_row("Rate-limited samples", f"[yellow]{rl}[/yellow]")
+
     table.add_row(
         "Pass Rate",
         f"{summary['pass_rate'] * 100:.1f}%",

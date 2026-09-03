@@ -117,6 +117,9 @@ class TestResult(BaseModel):
     # How many of those samples passed.
     pass_count: int = 0
 
+    # Samples that hit a provider rate limit (429) even after retries.
+    rate_limited: int = 0
+
     # Population std-dev of the sample scores (0.0 for a single sample).
     score_std: float | None = None
 

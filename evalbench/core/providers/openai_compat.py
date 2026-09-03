@@ -7,12 +7,18 @@ differ by ``base_url`` and which env var holds the key.
 
 from __future__ import annotations
 
+import asyncio
 import time
 
 import httpx
 
 from evalbench.config import settings
-from evalbench.core.providers.base import LLMResponse, Provider
+from evalbench.core.providers.base import LLMResponse, Provider, RateLimitError
+
+# 429 retry policy: back off 1s, 2s, 4s (capped), honouring Retry-After.
+_MAX_RETRIES = 3
+_BACKOFF_BASE = 1.0
+_BACKOFF_CAP = 10.0
 
 
 class OpenAICompatibleProvider(Provider):
@@ -49,10 +55,7 @@ class OpenAICompatibleProvider(Provider):
             "temperature": temperature,
         }
         started = time.time()
-        resp = await self._client.post(
-            f"{self.base_url}/chat/completions", json=payload
-        )
-        resp.raise_for_status()
+        resp = await self._post_with_retry(payload)
         data = resp.json()
 
         choice = (data.get("choices") or [{}])[0]
@@ -68,6 +71,32 @@ class OpenAICompatibleProvider(Provider):
             finish_reason=choice.get("finish_reason"),
             raw=data,
         )
+
+    async def _post_with_retry(self, payload: dict) -> httpx.Response:
+        """POST /chat/completions, retrying 429s with backoff."""
+        for attempt in range(_MAX_RETRIES + 1):
+            resp = await self._client.post(
+                f"{self.base_url}/chat/completions", json=payload
+            )
+            if resp.status_code != 429:
+                resp.raise_for_status()
+                return resp
+
+            if attempt == _MAX_RETRIES:
+                raise RateLimitError(
+                    f"{self.name}: rate limited (429) after "
+                    f"{_MAX_RETRIES} retries"
+                )
+
+            retry_after = resp.headers.get("retry-after")
+            if retry_after and retry_after.isdigit():
+                delay = float(retry_after)
+            else:
+                delay = min(_BACKOFF_BASE * (2 ** attempt), _BACKOFF_CAP)
+            await asyncio.sleep(delay)
+
+        # unreachable
+        raise RateLimitError(f"{self.name}: rate limited")
 
     async def list_models(self) -> list[str]:
         # Best effort — not every gateway implements /models.

@@ -12,6 +12,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+class RateLimitError(Exception):
+    """Raised when a provider keeps returning 429 after retries.
+
+    The runner treats this as backpressure (a labelled `rate_limited`
+    sample), not a hard error against the model.
+    """
+
+
+
 @dataclass
 class LLMResponse:
     """Normalized result of a single generation."""

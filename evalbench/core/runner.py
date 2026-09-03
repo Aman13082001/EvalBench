@@ -15,6 +15,7 @@ from evalbench.core.evaluators import get_evaluator
 from evalbench.core.evaluators.judge import LLMJudgeEvaluator
 from evalbench.core.evaluators.security import SecurityEvaluator
 from evalbench.core.providers import Provider, get_provider
+from evalbench.core.providers.base import RateLimitError
 from evalbench.db.schemas import TestCase, TestResult, TestRun, TestSuite
 
 # ── Day 12: Prometheus metrics ──
@@ -148,6 +149,7 @@ class TestRunner:
         last_response = ""
         last_assertions: list = []
         sample_errors: list[str] = []
+        rate_limited = 0
 
         for _ in range(max(1, suite.samples)):
             try:
@@ -200,6 +202,14 @@ class TestRunner:
                 pass_flags.append(bool(passed_i))
                 api_requests_total.labels(
                     model=suite.model, endpoint="generate", status="ok"
+                ).inc()
+            except RateLimitError as e:
+                rate_limited += 1
+                sample_errors.append(str(e))
+                api_requests_total.labels(
+                    model=suite.model,
+                    endpoint="generate",
+                    status="rate_limited",
                 ).inc()
             except Exception as e:  # noqa: BLE001 - report, don't crash the run
                 sample_errors.append(str(e))
@@ -259,6 +269,7 @@ class TestRunner:
             difficulty=test.difficulty,
             runs=runs,
             pass_count=pass_count,
+            rate_limited=rate_limited,
             score_std=(
                 round(score_std, 4) if score_std is not None else None
             ),

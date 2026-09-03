@@ -136,6 +136,55 @@ class TestOpenAICompatibleProvider:
         ):
             assert await p.list_models() == []
 
+    @pytest.mark.asyncio
+    async def test_retries_429_then_succeeds(self):
+        p = OpenAICompatibleProvider(
+            base_url="https://api.groq.com/openai/v1", api_key="k", name="groq"
+        )
+
+        def _resp(status, body=None):
+            m = type("R", (), {})()
+            m.status_code = status
+            m.headers = {}
+            m.json = lambda: body or {}
+            m.raise_for_status = lambda: None
+            return m
+
+        ok = _resp(200, {
+            "choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        })
+        with (
+            patch.object(
+                p._client, "post", new_callable=AsyncMock,
+                side_effect=[_resp(429), _resp(429), ok],
+            ),
+            patch("evalbench.core.providers.openai_compat.asyncio.sleep",
+                  new_callable=AsyncMock),
+        ):
+            r = await p.generate("m", "q")
+        assert r.text == "hi"
+
+    @pytest.mark.asyncio
+    async def test_persistent_429_raises_rate_limit_error(self):
+        from evalbench.core.providers.base import RateLimitError
+
+        p = OpenAICompatibleProvider(
+            base_url="https://api.groq.com/openai/v1", api_key="k", name="groq"
+        )
+        m = type("R", (), {})()
+        m.status_code = 429
+        m.headers = {}
+        with (
+            patch.object(
+                p._client, "post", new_callable=AsyncMock, return_value=m
+            ),
+            patch("evalbench.core.providers.openai_compat.asyncio.sleep",
+                  new_callable=AsyncMock),
+        ):
+            with pytest.raises(RateLimitError, match="rate limited"):
+                await p.generate("m", "q")
+
 
 class TestOllamaProvider:
     @pytest.mark.asyncio

@@ -325,6 +325,28 @@ async def test_run_suite_respects_provider_concurrency_cap():
 
 
 @pytest.mark.asyncio
+async def test_rate_limited_samples_are_labelled_not_errored(mock_ollama):
+    from evalbench.core.providers.base import RateLimitError
+
+    suite = Suite(
+        name="RL", model="llama3.1", evaluator="exact", samples=2,
+        tests=[Case(name="t1", prompt="q", expected="4", threshold=0.8)],
+    )
+    mock_ollama.generate = AsyncMock(
+        side_effect=RateLimitError("groq: rate limited (429) after 3 retries")
+    )
+
+    runner = Runner()
+    run = await runner.run_suite(suite, "suite_rl")
+
+    r = run.results[0]
+    assert r.rate_limited == 2
+    assert r.runs == 0
+    assert "rate limited" in r.error
+    await runner.close()
+
+
+@pytest.mark.asyncio
 async def test_run_suite_preserves_order_under_concurrency():
     async def echo_generate(model, prompt, temperature=0.7):
         await asyncio.sleep(0.01)

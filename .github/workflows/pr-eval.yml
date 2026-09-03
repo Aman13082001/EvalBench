@@ -1,0 +1,33 @@
+# Example: gate PRs on an EvalBench suite and comment the result.
+#
+# Needs a repo secret GROQ_API_KEY (free, no card: https://console.groq.com).
+# The comment step needs `pull-requests: write`.
+
+name: PR Eval Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "evalbench/**"
+      - "suites/**"
+      - ".github/workflows/pr-eval.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: EvalBench
+        uses: ./.github/actions/evalbench
+        with:
+          suite: suites/ci-hosted.yaml
+          fail-under: "0.80"
+          compare-to-baseline: "false"

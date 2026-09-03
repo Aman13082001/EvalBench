@@ -174,7 +174,7 @@ tests:
 | `category` / `difficulty` | test | tags for the per-category report |
 | `evaluator` / `expected` / `threshold` | test | legacy single-check form; synthesised into one assertion when `assert` is absent |
 
-Bundled suites live in `suites/`: `starter-suite.yaml` (broad capability probe), `assertions.yaml` (every assertion type), `groq-hosted.yaml` / `ollama-local.yaml` (same suite, hosted vs local), `ci-suite.yaml` (fast gate).
+Bundled suites live in `suites/`: `starter-suite.yaml` (broad capability probe), `assertions.yaml` (every assertion type), `groq-hosted.yaml` / `ollama-local.yaml` (same suite, hosted vs local), `ci-suite.yaml` (local fast gate), `ci-hosted.yaml` (fast gate on Groq's free tier, for the GitHub Action).
 
 ---
 
@@ -242,16 +242,39 @@ Promote a good run as a suite's baseline with `evalbench baseline <suite_id> <ru
 evalbench login  -u <user>                 # store a JWT
 evalbench register -u <user>               # create an account, store its API key
 evalbench run <suite.yaml> [--model M] [--evaluator E] [--concurrency N]
-              [--fail-under 0.75] [--compare-to-baseline] [--baseline-run ID] [--api-key K]
+              [--fail-under 0.75] [--compare-to-baseline] [--baseline-run ID]
+              [--report report.json] [--api-key K]
 evalbench baseline <suite_id> <run_id>     # promote a run as the suite's baseline
 evalbench compare <baseline_run_id> <current_run_id>
+evalbench pr-comment --report report.json  # post/update the result on a PR
 evalbench security [--model M]             # run the built-in adversarial suite
 evalbench models [--provider P]            # list a provider's models
 evalbench init [-o suite.yaml]             # scaffold a suite
 evalbench export <run_id> [--format json|csv] [-o file]
 ```
 
-`run` exits non-zero when the pass rate is below `--fail-under` (default 0.75) **or**, with `--compare-to-baseline`, when a regression is detected against the suite's `baseline_run_id`. It polls the async job and shows a progress bar. `EVALBENCH_API_URL` overrides the API location (default `http://localhost:8000`).
+`run` exits non-zero when the pass rate is below `--fail-under` (default 0.75) **or**, with `--compare-to-baseline`, when a regression is detected against the suite's `baseline_run_id`. It polls the async job and shows a progress bar. `--report` writes a machine-readable JSON (`summary` + `regression` + `gate`) for CI. `EVALBENCH_API_URL` overrides the API location (default `http://localhost:8000`).
+
+### GitHub Action — PR gate + comment
+
+`.github/actions/evalbench` is a composite action that spins up an ephemeral EvalBench (MongoDB + API), runs a suite, **fails the check** on a low pass rate or a regression, and posts a result comment on the PR (updated in place on re-runs). Example workflow in `.github/workflows/pr-eval.yml`:
+
+```yaml
+permissions: { contents: read, pull-requests: write }
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    env: { GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }} }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/evalbench
+        with:
+          suite: suites/ci-hosted.yaml
+          fail-under: "0.80"
+          compare-to-baseline: "false"
+```
+
+`suites/ci-hosted.yaml` runs against Groq's free tier, so the gate needs no local model — just a `GROQ_API_KEY` repo secret.
 
 ---
 
@@ -323,7 +346,9 @@ CI (`.github/workflows/eval-check.yml`) runs `ruff check` + `pytest` on every pu
 
 Shipped in **v0.4.0**: provider abstraction (Ollama + hosted), per-run cost/token tracking, concurrent execution, an async job model with a crash reaper, an 11-type composable assertion engine, and baseline promotion with regression-as-a-CI-gate.
 
-Planned next (Phase 2): a React frontend, a job queue (Celery) for multi-worker execution, RAG-specific evaluators (faithfulness, context recall), a richer statistical engine (bootstrap CIs, McNemar's test), and a published GitHub Action with a PR-comment bot.
+Also shipped: a **GitHub Action** (`.github/actions/evalbench`) that gates PRs on a suite and posts a result comment.
+
+Planned next (Phase 2): a React frontend, a job queue (Celery) for multi-worker execution, RAG-specific evaluators (faithfulness, context recall), a richer statistical engine (bootstrap CIs, McNemar's test), and publishing the Action to the Marketplace.
 
 ## License
 

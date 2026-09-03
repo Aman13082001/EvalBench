@@ -129,8 +129,10 @@ def _run_and_wait(suite_id: str, headers: dict, model: str) -> str:
             time.sleep(1.0)
 
 
-def _check_regression(baseline_id: str, current_id: str, headers: dict) -> bool:
-    """Run the baseline comparison and print it. Returns True if regressed."""
+def _check_regression(
+    baseline_id: str, current_id: str, headers: dict
+) -> dict | None:
+    """Run the baseline comparison and print it. Returns the comparison dict."""
 
     r = httpx.post(
         f"{API_URL}/regression",
@@ -142,7 +144,7 @@ def _check_regression(baseline_id: str, current_id: str, headers: dict) -> bool:
         console.print(
             f"[yellow]Baseline check skipped: {r.text[:200]}[/yellow]"
         )
-        return False
+        return None
 
     comp = r.json()
 
@@ -175,10 +177,10 @@ def _check_regression(baseline_id: str, current_id: str, headers: dict) -> bool:
 
     if comp.get("regression_detected"):
         console.print("[bold red]✗ REGRESSION DETECTED vs baseline[/bold red]")
-        return True
+    else:
+        console.print("[bold green]✓ No regression vs baseline[/bold green]")
 
-    console.print("[bold green]✓ No regression vs baseline[/bold green]")
-    return False
+    return comp
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -356,6 +358,11 @@ def run(
         "--baseline-run",
         help="Explicit baseline run id (overrides the suite's baseline_run_id)",
     ),
+    report: str | None = typer.Option(
+        None,
+        "--report",
+        help="Write a machine-readable JSON report to this path (for CI)",
+    ),
 ):
     """Run a test suite and display results."""
     with open(suite_path) as f:
@@ -495,6 +502,7 @@ def run(
             f"from the pass rate.[/yellow]"
         )
 
+    comp = None
     if compare_to_baseline or baseline_run:
         baseline_id = baseline_run or suite.get("baseline_run_id")
         if not baseline_id:
@@ -503,16 +511,86 @@ def run(
                 "suite YAML or pass --baseline-run.[/yellow]"
             )
         else:
-            regressed = _check_regression(baseline_id, run_id, headers)
-            if regressed:
-                raise typer.Exit(code=1)
+            comp = _check_regression(baseline_id, run_id, headers)
 
-    if summary["pass_rate"] < fail_under:
+    gate_pass_rate = summary["pass_rate"] >= fail_under
+    regression_detected = bool(comp and comp.get("regression_detected"))
+
+    if report:
+        Path(report).write_text(
+            json.dumps(
+                {
+                    "suite": suite.get("name"),
+                    "run_id": run_id,
+                    "summary": summary,
+                    "regression": comp,
+                    "gate": {
+                        "fail_under": fail_under,
+                        "pass_rate_ok": gate_pass_rate,
+                        "regression_detected": regression_detected,
+                        "passed": gate_pass_rate and not regression_detected,
+                    },
+                },
+                indent=2,
+            )
+        )
+        console.print(f"[dim]Report written to {report}[/dim]")
+
+    if regression_detected:
+        raise typer.Exit(code=1)
+
+    if not gate_pass_rate:
         console.print(
             f"[bold red]✗ Pass rate {summary['pass_rate'] * 100:.1f}% "
             f"is below the {fail_under * 100:.0f}% gate.[/bold red]"
         )
         raise typer.Exit(code=1)
+
+
+@app.command(name="pr-comment")
+def pr_comment(
+    report: str = typer.Option(
+        ..., "--report", help="report.json from `evalbench run --report`"
+    ),
+    repo: str | None = typer.Option(
+        None, "--repo", help="owner/name (default $GITHUB_REPOSITORY)"
+    ),
+    pr: int | None = typer.Option(
+        None, "--pr", help="PR number (default: from the Actions event)"
+    ),
+    token: str | None = typer.Option(
+        None, "--token", help="GitHub token (default $GITHUB_TOKEN)"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the comment instead of posting it"
+    ),
+):
+    """Post (or update) an EvalBench result comment on a pull request."""
+
+    from evalbench.ci import render_markdown, resolve_target, upsert_comment
+
+    with open(report) as f:
+        data = json.load(f)
+
+    body = render_markdown(data)
+
+    if dry_run:
+        console.print(body)
+        return
+
+    tok = token or os.getenv("GITHUB_TOKEN")
+    if not tok:
+        console.print("[red]No GitHub token (--token or $GITHUB_TOKEN).[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        target_repo, target_pr = resolve_target(repo, pr)
+        action, url = upsert_comment(target_repo, target_pr, tok, body)
+    except (ValueError, httpx.HTTPError) as e:
+        console.print(f"[red]Could not post comment: {e}[/red]")
+        raise typer.Exit(code=1) from e
+
+    console.print(f"[bold green]✓[/bold green] Comment {action}: {url}")
 
 
 @app.command()

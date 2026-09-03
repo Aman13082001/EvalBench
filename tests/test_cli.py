@@ -475,6 +475,64 @@ tests:
         assert "Run completed" in result.stdout
         assert "run123" in result.stdout
 
+    @patch("evalbench.cli.httpx.get")
+    @patch("evalbench.cli.httpx.post")
+    def test_run_writes_json_report(
+        self, mock_post, mock_get, tmp_path, monkeypatch
+    ):
+        import evalbench.cli as cli
+
+        monkeypatch.setattr(cli, "AUTH_FILE", tmp_path / "auth.json")
+        (tmp_path / "auth.json").write_text(json.dumps({"token": "t"}))
+
+        suite_file = tmp_path / "suite.yaml"
+        suite_file.write_text(
+            "name: S\nmodel: llama3.1\nevaluator: exact\ntests:\n"
+            "  - name: t1\n    prompt: p\n    expected: '4'\n    threshold: 0.8\n"
+        )
+
+        mock_post.side_effect = [
+            mock_response(201, {"id": "suite123"}),
+            mock_response(201, {"run_id": "run123"}),
+        ]
+        mock_get.return_value = mock_response(
+            200,
+            {
+                "model": "llama3.1", "evaluator": "exact", "total_tests": 1,
+                "passed": 1, "failed": 0, "pass_rate": 1.0, "avg_score": 0.95,
+                "avg_latency_ms": 100.0, "total_tokens": 10,
+            },
+        )
+
+        report = tmp_path / "report.json"
+        result = runner.invoke(
+            app, ["run", str(suite_file), "--report", str(report)]
+        )
+
+        assert result.exit_code == 0
+        data = json.loads(report.read_text())
+        assert data["run_id"] == "run123"
+        assert data["summary"]["pass_rate"] == 1.0
+        assert data["gate"]["passed"] is True
+        assert data["gate"]["regression_detected"] is False
+
+    def test_pr_comment_dry_run(self, tmp_path):
+        report = tmp_path / "r.json"
+        report.write_text(json.dumps({
+            "suite": "S", "run_id": "x",
+            "summary": {
+                "model": "m", "total_tests": 1, "passed": 1, "failed": 0,
+                "pass_rate": 1.0, "avg_score": 1.0, "avg_latency_ms": 10,
+            },
+            "regression": None,
+            "gate": {"fail_under": 0.75, "passed": True},
+        }))
+        result = runner.invoke(
+            app, ["pr-comment", "--report", str(report), "--dry-run"]
+        )
+        assert result.exit_code == 0
+        assert "EvalBench" in result.stdout
+
     @patch("evalbench.cli.httpx.post")
     def test_run_authentication_required(
         self,

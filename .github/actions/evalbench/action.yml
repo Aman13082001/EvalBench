@@ -1,0 +1,116 @@
+name: "EvalBench"
+description: "Run an EvalBench suite as a PR gate and comment the result"
+author: "Aman Kumar Sharma"
+
+inputs:
+  suite:
+    description: "Path to the YAML suite to run"
+    required: true
+  fail-under:
+    description: "Fail if pass rate is below this (0-1)"
+    required: false
+    default: "0.75"
+  compare-to-baseline:
+    description: "Also fail on a regression vs the suite's baseline_run_id"
+    required: false
+    default: "false"
+  comment:
+    description: "Post/update a result comment on the PR"
+    required: false
+    default: "true"
+  api-key:
+    description: "Admin API key for the ephemeral EvalBench instance"
+    required: false
+    default: "eb_ci_key"
+  github-token:
+    description: "Token used to post the PR comment"
+    required: false
+    default: ${{ github.token }}
+  python-version:
+    description: "Python version for the EvalBench install"
+    required: false
+    default: "3.11"
+
+outputs:
+  report:
+    description: "Path to the JSON report"
+    value: "evalbench-report.json"
+  passed:
+    description: "'true' when the gate passed"
+    value: ${{ steps.gate.outputs.passed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+
+    - name: Install EvalBench
+      shell: bash
+      run: pip install -e ".[dev]"
+
+    - name: Start MongoDB + API
+      shell: bash
+      env:
+        ADMIN_API_KEY: ${{ inputs.api-key }}
+        SECRET_KEY: ci-secret-not-for-prod
+        MONGODB_URL: mongodb://localhost:27017
+        MONGODB_DB: evalbench
+        # Provider keys flow from the caller's job env (secrets).
+        GROQ_API_KEY: ${{ env.GROQ_API_KEY }}
+        GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
+        OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
+        GITHUB_MODELS_TOKEN: ${{ env.GITHUB_MODELS_TOKEN }}
+        OPENROUTER_API_KEY: ${{ env.OPENROUTER_API_KEY }}
+      run: |
+        docker run -d --name evalbench-mongo -p 27017:27017 mongo:7 >/dev/null
+        for i in $(seq 1 30); do
+          docker exec evalbench-mongo mongosh --quiet --eval 'db.runCommand({ping:1})' >/dev/null 2>&1 && break
+          sleep 1
+        done
+        nohup uvicorn evalbench.api.main:app --host 0.0.0.0 --port 8000 \
+          > evalbench-api.log 2>&1 &
+        for i in $(seq 1 40); do
+          curl -sf http://localhost:8000/health >/dev/null && break
+          sleep 1
+        done
+        curl -sf http://localhost:8000/health || (cat evalbench-api.log; exit 1)
+
+    - name: Run suite
+      id: gate
+      shell: bash
+      run: |
+        FLAGS=""
+        if [ "${{ inputs.compare-to-baseline }}" = "true" ]; then
+          FLAGS="--compare-to-baseline"
+        fi
+        set +e
+        evalbench run "${{ inputs.suite }}" \
+          --api-key "${{ inputs.api-key }}" \
+          --fail-under "${{ inputs.fail-under }}" \
+          $FLAGS \
+          --report evalbench-report.json
+        code=$?
+        set -e
+        if [ "$code" -eq 0 ]; then
+          echo "passed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "passed=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Comment on PR
+      if: ${{ inputs.comment == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: evalbench pr-comment --report evalbench-report.json
+
+    - name: Enforce gate
+      if: ${{ steps.gate.outputs.passed != 'true' }}
+      shell: bash
+      run: |
+        echo "::error::EvalBench gate failed — see the PR comment / report."
+        exit 1

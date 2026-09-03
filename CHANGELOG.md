@@ -3,6 +3,18 @@
 All notable changes to EvalBench. Versions follow the shape of
 [Keep a Changelog](https://keepachangelog.com/); dates are release dates.
 
+## [Unreleased]
+
+### Added
+- **GitHub Action + PR-comment bot.** `evalbench run --report <file>`
+  writes a machine-readable JSON (`summary` + `regression` + `gate`).
+  `evalbench pr-comment --report <file>` renders it as Markdown and
+  creates/updates a marker comment on the PR. `.github/actions/evalbench`
+  is a composite action that stands up an ephemeral EvalBench, runs a
+  suite, fails the check on a low pass rate or a regression, and posts the
+  comment. Example workflow `.github/workflows/pr-eval.yml`; hosted CI
+  suite `suites/ci-hosted.yaml` (no local model needed).
+
 ## [0.4.0] — provider abstraction, cost, async jobs, assertions, baselines
 
 ### Added

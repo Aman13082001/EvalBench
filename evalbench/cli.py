@@ -532,7 +532,8 @@ def run(
                     },
                 },
                 indent=2,
-            )
+            ),
+            encoding="utf-8",
         )
         console.print(f"[dim]Report written to {report}[/dim]")
 
@@ -569,7 +570,8 @@ def pr_comment(
 
     from evalbench.ci import render_markdown, resolve_target, upsert_comment
 
-    with open(report) as f:
+    # utf-8-sig tolerates a BOM (e.g. from PowerShell's Set-Content).
+    with open(report, encoding="utf-8-sig") as f:
         data = json.load(f)
 
     body = render_markdown(data)

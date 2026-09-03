@@ -231,20 +231,41 @@ async def _check_json_schema(
     return AssertionOutcome("json-schema", True, 1.0, "valid")
 
 
-async def _ask_and_parse(
-    ctx: AssertionContext, prompt: str
-) -> tuple[float, str]:
-    """Run one judge call and parse it to (score_0_to_1, reason)."""
-    from evalbench.core.evaluators.judge import (
-        LLMJudgeEvaluator,
-        parse_judge_output,
-    )
+async def _ask_judge_raw(ctx: AssertionContext, prompt: str) -> str:
+    from evalbench.core.evaluators.judge import LLMJudgeEvaluator
 
     ev = LLMJudgeEvaluator(
         judge_model=ctx.judge_model, provider=ctx.judge_provider
     )
-    raw = await ev._ask_judge(prompt)
-    return parse_judge_output(raw)
+    return await ev._ask_judge(prompt)
+
+
+async def _ask_and_parse(
+    ctx: AssertionContext, prompt: str
+) -> tuple[float, str]:
+    """Run one judge call and parse it to (score_0_to_1, reason)."""
+    from evalbench.core.evaluators.judge import parse_judge_output
+
+    return parse_judge_output(await _ask_judge_raw(ctx, prompt))
+
+
+def _extract_json_obj(raw: str) -> dict | None:
+    text = raw.strip()
+    fence = re.search(r"```(?:json)?\s*(.+?)```", text, re.DOTALL)
+    if fence:
+        text = fence.group(1).strip()
+    brace = re.search(r"\{.*\}", text, re.DOTALL)
+    if not brace:
+        return None
+    try:
+        obj = json.loads(brace.group(0))
+        return obj if isinstance(obj, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def _numbered_context(passages: list[str]) -> str:
+    return "\n\n".join(f"[{i + 1}] {p}" for i, p in enumerate(passages))
 
 
 async def _check_llm_rubric(
@@ -270,6 +291,52 @@ async def _check_llm_rubric(
     return AssertionOutcome("llm-rubric", score >= cutoff, score, reason)
 
 
+async def _check_faithfulness(
+    a: Assertion, ctx: AssertionContext
+) -> AssertionOutcome:
+    """Fraction of the answer's atomic claims that the context supports."""
+    if not ctx.context:
+        return AssertionOutcome(
+            "faithfulness", False, 0.0,
+            "needs `context` on the test case",
+        )
+    cutoff = a.threshold if a.threshold is not None else 0.8
+
+    prompt = (
+        "Break the ANSWER into atomic factual claims. For each, decide "
+        "whether the CONTEXT supports it. A claim not addressed by the "
+        "context counts as unsupported. Output ONLY JSON:\n"
+        '{"claims": [{"claim": "<text>", "supported": true|false}]}\n\n'
+        f"CONTEXT:\n{_numbered_context(ctx.context)}\n\n"
+        f"ANSWER:\n{ctx.response_text}"
+    )
+
+    try:
+        obj = _extract_json_obj(await _ask_judge_raw(ctx, prompt))
+    except Exception as e:  # noqa: BLE001 - judge unavailable
+        return AssertionOutcome(
+            "faithfulness", False, 0.0, f"judge error: {e}"
+        )
+
+    claims = (obj or {}).get("claims") or []
+    if not claims:
+        return AssertionOutcome(
+            "faithfulness", True, 1.0, "no verifiable claims in the answer"
+        )
+
+    supported = [c for c in claims if c.get("supported")]
+    score = round(len(supported) / len(claims), 4)
+    unsupported = [
+        str(c.get("claim", "?")) for c in claims if not c.get("supported")
+    ]
+    detail = f"{len(supported)}/{len(claims)} claims grounded"
+    if unsupported:
+        detail += "; unsupported: " + " | ".join(unsupported[:3])
+    return AssertionOutcome(
+        "faithfulness", score >= cutoff, score, detail
+    )
+
+
 _CHECKERS = {
     "exact": _check_exact,
     "equals": _check_equals,
@@ -282,6 +349,7 @@ _CHECKERS = {
     "cost": _check_cost,
     "json-schema": _check_json_schema,
     "llm-rubric": _check_llm_rubric,
+    "faithfulness": _check_faithfulness,
 }
 
 

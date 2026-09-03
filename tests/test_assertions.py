@@ -144,6 +144,53 @@ class TestLLMBackedTypes:
         assert o.score == pytest.approx(0.8)
 
 
+class TestFaithfulness:
+    @pytest.mark.asyncio
+    async def test_fails_without_context(self):
+        o = await check_assertion(
+            Assertion(type="faithfulness"),
+            ctx("The sky is green.", context=[]),
+        )
+        assert o.passed is False
+        assert "context" in o.detail
+
+    @pytest.mark.asyncio
+    async def test_scores_grounded_fraction(self):
+        from evalbench.core.providers.mock import MockProvider
+
+        judged = MockProvider(response=(
+            '{"claims": ['
+            '{"claim": "Paris is the capital of France", "supported": true},'
+            '{"claim": "It has 40 million people", "supported": false}]}'
+        ))
+        o = await check_assertion(
+            Assertion(type="faithfulness", threshold=0.8),
+            ctx(
+                "Paris is the capital of France and has 40M people.",
+                context=["Paris is the capital of France."],
+                judge_provider=judged,
+            ),
+        )
+        assert o.score == 0.5
+        assert o.passed is False
+        assert "unsupported" in o.detail
+
+    @pytest.mark.asyncio
+    async def test_no_claims_is_vacuously_faithful(self):
+        from evalbench.core.providers.mock import MockProvider
+
+        o = await check_assertion(
+            Assertion(type="faithfulness"),
+            ctx(
+                "I cannot answer that.",
+                context=["irrelevant passage"],
+                judge_provider=MockProvider(response='{"claims": []}'),
+            ),
+        )
+        assert o.passed is True
+        assert o.score == 1.0
+
+
 class TestSynthesisAndAggregation:
     def test_explicit_assertions_used_verbatim(self):
         out = build_assertions(

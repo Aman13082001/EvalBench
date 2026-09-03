@@ -1,41 +1,57 @@
 """Estimated USD cost of a model call.
 
-Rates are USD per 1,000,000 tokens as ``(input, output)``, taken from each
-provider's public pricing page. Local backends (``ollama``, ``mock``) are
-always free. A model with no entry is treated as free rather than guessed —
-the cost column then reads ``$0.0000`` instead of a made-up number.
+Rates are USD per 1,000,000 tokens. Each entry carries ``as_of`` (the
+month the rate was last checked) and ``source`` so the table's staleness
+is visible — `scripts/check_pricing.py` fails CI on entries that go
+stale. Local backends (``ollama``, ``mock``) are always free; a model
+with no entry is treated as free rather than guessed, unless the caller
+opts into ``--strict-cost``.
 """
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 FREE_PROVIDERS = {"ollama", "mock"}
 
-# model name -> (usd_per_1M_input, usd_per_1M_output)
-MODEL_PRICING: dict[str, tuple[float, float]] = {
+
+class ModelPrice(NamedTuple):
+    input: float  # USD per 1M input tokens
+    output: float  # USD per 1M output tokens
+    as_of: str  # YYYY-MM, when this rate was last verified
+    source: str
+
+
+_OPENAI = "openai.com/api/pricing"
+_GROQ = "groq.com/pricing"
+_GEMINI = "ai.google.dev/pricing"
+_ANTHROPIC = "anthropic.com/pricing"
+
+MODEL_PRICING: dict[str, ModelPrice] = {
     # ── OpenAI ──
-    "gpt-4o": (2.50, 10.00),
-    "gpt-4o-mini": (0.15, 0.60),
-    "gpt-4.1": (2.00, 8.00),
-    "gpt-4.1-mini": (0.40, 1.60),
-    "gpt-4.1-nano": (0.10, 0.40),
-    "o3-mini": (1.10, 4.40),
-    # ── Groq (billed like OpenAI; free tier still has these list prices) ──
-    "openai/gpt-oss-20b": (0.10, 0.50),
-    "openai/gpt-oss-120b": (0.15, 0.75),
-    "llama-3.3-70b-versatile": (0.59, 0.79),
-    "llama-3.1-8b-instant": (0.05, 0.08),
-    "qwen/qwen3.8-27b": (0.20, 0.40),
+    "gpt-4o": ModelPrice(2.50, 10.00, "2026-08", _OPENAI),
+    "gpt-4o-mini": ModelPrice(0.15, 0.60, "2026-08", _OPENAI),
+    "gpt-4.1": ModelPrice(2.00, 8.00, "2026-08", _OPENAI),
+    "gpt-4.1-mini": ModelPrice(0.40, 1.60, "2026-08", _OPENAI),
+    "gpt-4.1-nano": ModelPrice(0.10, 0.40, "2026-08", _OPENAI),
+    "o3-mini": ModelPrice(1.10, 4.40, "2026-08", _OPENAI),
+    # ── Groq ──
+    "openai/gpt-oss-20b": ModelPrice(0.10, 0.50, "2026-08", _GROQ),
+    "openai/gpt-oss-120b": ModelPrice(0.15, 0.75, "2026-08", _GROQ),
+    "llama-3.3-70b-versatile": ModelPrice(0.59, 0.79, "2026-08", _GROQ),
+    "llama-3.1-8b-instant": ModelPrice(0.05, 0.08, "2026-08", _GROQ),
+    "qwen/qwen3.8-27b": ModelPrice(0.20, 0.40, "2026-08", _GROQ),
     # ── Google Gemini ──
-    "gemini-2.0-flash": (0.10, 0.40),
-    "gemini-1.5-flash": (0.075, 0.30),
-    "gemini-1.5-pro": (1.25, 5.00),
-    # ── Anthropic (reachable through OpenAI-compatible gateways) ──
-    "claude-3-5-haiku": (0.80, 4.00),
-    "claude-3-5-sonnet": (3.00, 15.00),
+    "gemini-2.0-flash": ModelPrice(0.10, 0.40, "2026-08", _GEMINI),
+    "gemini-1.5-flash": ModelPrice(0.075, 0.30, "2026-08", _GEMINI),
+    "gemini-1.5-pro": ModelPrice(1.25, 5.00, "2026-08", _GEMINI),
+    # ── Anthropic (via OpenAI-compatible gateways) ──
+    "claude-3-5-haiku": ModelPrice(0.80, 4.00, "2026-08", _ANTHROPIC),
+    "claude-3-5-sonnet": ModelPrice(3.00, 15.00, "2026-08", _ANTHROPIC),
 }
 
 
-def _lookup(model: str) -> tuple[float, float] | None:
+def _lookup(model: str) -> ModelPrice | None:
     if model in MODEL_PRICING:
         return MODEL_PRICING[model]
     # Tolerate a version/date suffix (``gpt-4o-mini-2024-07-18``). Longest
@@ -44,6 +60,13 @@ def _lookup(model: str) -> tuple[float, float] | None:
         if model.startswith(name):
             return MODEL_PRICING[name]
     return None
+
+
+def is_priced(model: str, provider: str | None = None) -> bool:
+    """Whether cost for this call can be computed (free providers count)."""
+    if provider and provider.lower() in FREE_PROVIDERS:
+        return True
+    return _lookup(model) is not None
 
 
 def estimate_cost(
@@ -62,7 +85,6 @@ def estimate_cost(
     price = _lookup(model)
     if price is None:
         return 0.0
-    in_rate, out_rate = price
-    cost = (prompt_tokens / 1_000_000) * in_rate
-    cost += (completion_tokens / 1_000_000) * out_rate
+    cost = (prompt_tokens / 1_000_000) * price.input
+    cost += (completion_tokens / 1_000_000) * price.output
     return round(cost, 6)

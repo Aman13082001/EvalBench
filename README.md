@@ -46,7 +46,7 @@ flowchart LR
 | **Runner** (`evalbench/core/runner.py`) | executes a suite: concurrent sampling, assertion checks, aggregation, cost, metric emission |
 | **Providers** (`evalbench/core/providers`) | one interface over Ollama + any OpenAI-compatible host (Groq, Gemini, OpenAI, GitHub Models, OpenRouter) |
 | **Assertions** (`evalbench/core/assertions.py`) | `exact`, `equals`, `contains`, `icontains`, `regex`, `semantic`, `judge`, `json-schema`, `llm-rubric`, `latency`, `cost` |
-| **Pricing** (`evalbench/pricing.py`) | per-model token rates → estimated USD cost per run |
+| **Pricing** (`evalbench/pricing.py`) | per-model token rates (each with `source` + `as_of`) → estimated USD per run; `scripts/check_pricing.py` fails CI on stale entries |
 | **MongoDB** | stores suites and run results |
 | **Prometheus + Grafana** | scrape `/metrics`, alert rules, "EvalBench — Production Overview" dashboard |
 | **Streamlit UI** (`frontend/app.py`) | browse suites, fire-and-poll runs, inspect results, compare runs |

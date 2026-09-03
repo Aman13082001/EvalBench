@@ -363,10 +363,27 @@ def run(
         "--report",
         help="Write a machine-readable JSON report to this path (for CI)",
     ),
+    strict_cost: bool = typer.Option(
+        False,
+        "--strict-cost",
+        help="Fail if the model has no pricing entry (cost would be $0)",
+    ),
 ):
     """Run a test suite and display results."""
     with open(suite_path) as f:
         suite = yaml.safe_load(f)
+
+    if strict_cost:
+        from evalbench.pricing import is_priced
+
+        _p = suite.get("provider", "ollama")
+        _m = model or suite.get("model", "")
+        if not is_priced(_m, _p):
+            console.print(
+                f"[bold red]✗ --strict-cost:[/bold red] no pricing entry for "
+                f"'{_m}' (provider '{_p}'). Add it to evalbench/pricing.py."
+            )
+            raise typer.Exit(code=1)
 
     if model:
         suite["model"] = model

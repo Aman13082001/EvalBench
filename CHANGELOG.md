@@ -5,6 +5,27 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Changed — Phase A hardening
+- **Auth is now consistent** — every data endpoint requires a user; only
+  `/health`, `/live`, `/ready` are public. `tests/test_auth_coverage.py`
+  asserts it per route.
+- **Refuse to boot on placeholder secrets** — `SECRET_KEY` /
+  `ADMIN_PASSWORD` / `ADMIN_API_KEY` at their shipped defaults fail
+  startup unless `EVALBENCH_ALLOW_INSECURE=1`.
+- **Mongo indexes** created on startup for the hot paths (`users.api_key`,
+  `users.username`, `suites.created_at`, `test_runs` (suite_id,
+  created_at), `test_runs.status`).
+- **Provider 429 backpressure** — `OpenAICompatibleProvider` retries rate
+  limits with exponential backoff (honours `Retry-After`); a persistent
+  limit raises `RateLimitError` and the runner records the sample as
+  `rate_limited`, not `error`. Surfaced in the summary + CLI.
+- **Pricing table honesty** — every entry carries `source` + `as_of`;
+  `scripts/check_pricing.py` fails CI on stale entries; `evalbench run
+  --strict-cost` fails on an unpriced model.
+- **First integration test** on a real async Mongo (mongomock-motor) —
+  register → run → summary → baseline → regression through the live API.
+- Deleted the dead `evalbench/core/models.py` shim.
+
 ### Added
 - **GitHub Action + PR-comment bot.** `evalbench run --report <file>`
   writes a machine-readable JSON (`summary` + `regression` + `gate`).

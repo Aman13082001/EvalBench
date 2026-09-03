@@ -1,8 +1,10 @@
 """Cost estimation from token counts."""
 
+from datetime import date
+
 import pytest
 
-from evalbench.pricing import estimate_cost
+from evalbench.pricing import MODEL_PRICING, estimate_cost, is_priced
 
 
 def test_known_model_cost_matches_list_price():
@@ -35,3 +37,20 @@ def test_longest_prefix_wins_over_shorter_one():
 
 def test_zero_tokens_zero_cost():
     assert estimate_cost("gpt-4o", 0, 0) == 0.0
+
+
+def test_is_priced():
+    assert is_priced("gpt-4o-mini") is True
+    assert is_priced("made-up-model") is False
+    # free providers are always "priced" (at zero)
+    assert is_priced("made-up-model", provider="ollama") is True
+    assert is_priced("gpt-4o", provider="mock") is True
+
+
+def test_every_entry_has_source_and_recent_as_of():
+    today = date.today()
+    for name, p in MODEL_PRICING.items():
+        assert p.source, f"{name} missing source"
+        y, m = (int(x) for x in p.as_of.split("-"))
+        age_months = (today.year - y) * 12 + (today.month - m)
+        assert age_months <= 12, f"{name} pricing is {age_months} months old"

@@ -25,5 +25,8 @@ jobs:
       - name: Lint
         run: ruff check .
 
+      - name: Check pricing table freshness
+        run: python scripts/check_pricing.py
+
       - name: Run test suite
         run: pytest -q

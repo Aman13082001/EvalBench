@@ -337,6 +337,102 @@ async def _check_faithfulness(
     )
 
 
+async def _check_context_recall(
+    a: Assertion, ctx: AssertionContext
+) -> AssertionOutcome:
+    """Fraction of the reference answer's facts present in the context.
+
+    Low score = retrieval missed information needed to answer.
+    """
+    if not ctx.context:
+        return AssertionOutcome(
+            "context-recall", False, 0.0, "needs `context` on the test case"
+        )
+    if not ctx.expected.strip():
+        return AssertionOutcome(
+            "context-recall", False, 0.0,
+            "needs `expected` (the reference answer)",
+        )
+    cutoff = a.threshold if a.threshold is not None else 0.8
+
+    prompt = (
+        "Break the REFERENCE ANSWER into atomic facts. For each, decide "
+        "whether it can be found in the CONTEXT. Output ONLY JSON:\n"
+        '{"facts": [{"fact": "<text>", "in_context": true|false}]}\n\n'
+        f"CONTEXT:\n{_numbered_context(ctx.context)}\n\n"
+        f"REFERENCE ANSWER:\n{ctx.expected}"
+    )
+
+    try:
+        obj = _extract_json_obj(await _ask_judge_raw(ctx, prompt))
+    except Exception as e:  # noqa: BLE001
+        return AssertionOutcome(
+            "context-recall", False, 0.0, f"judge error: {e}"
+        )
+
+    facts = (obj or {}).get("facts") or []
+    if not facts:
+        return AssertionOutcome(
+            "context-recall", True, 1.0, "no facts to recall"
+        )
+
+    found = [f for f in facts if f.get("in_context")]
+    score = round(len(found) / len(facts), 4)
+    missing = [
+        str(f.get("fact", "?")) for f in facts if not f.get("in_context")
+    ]
+    detail = f"{len(found)}/{len(facts)} reference facts in context"
+    if missing:
+        detail += "; missing: " + " | ".join(missing[:3])
+    return AssertionOutcome(
+        "context-recall", score >= cutoff, score, detail
+    )
+
+
+async def _check_context_precision(
+    a: Assertion, ctx: AssertionContext
+) -> AssertionOutcome:
+    """Fraction of retrieved passages that are relevant to the question.
+
+    Low score = the retriever pulled in noise.
+    """
+    if not ctx.context:
+        return AssertionOutcome(
+            "context-precision", False, 0.0, "needs `context` on the test case"
+        )
+    cutoff = a.threshold if a.threshold is not None else 0.6
+
+    prompt = (
+        "For each numbered passage, decide whether it helps answer the "
+        "QUESTION. Output ONLY JSON:\n"
+        '{"passages": [{"n": <int>, "relevant": true|false}]}\n\n'
+        f"QUESTION: {ctx.prompt}\n\n"
+        f"PASSAGES:\n{_numbered_context(ctx.context)}"
+    )
+
+    try:
+        obj = _extract_json_obj(await _ask_judge_raw(ctx, prompt))
+    except Exception as e:  # noqa: BLE001
+        return AssertionOutcome(
+            "context-precision", False, 0.0, f"judge error: {e}"
+        )
+
+    passages = (obj or {}).get("passages") or []
+    if not passages:
+        return AssertionOutcome(
+            "context-precision", False, 0.0, "judge returned no assessment"
+        )
+
+    relevant = sum(1 for p in passages if p.get("relevant"))
+    score = round(relevant / len(passages), 4)
+    return AssertionOutcome(
+        "context-precision",
+        score >= cutoff,
+        score,
+        f"{relevant}/{len(passages)} passages relevant",
+    )
+
+
 _CHECKERS = {
     "exact": _check_exact,
     "equals": _check_equals,
@@ -350,6 +446,8 @@ _CHECKERS = {
     "json-schema": _check_json_schema,
     "llm-rubric": _check_llm_rubric,
     "faithfulness": _check_faithfulness,
+    "context-recall": _check_context_recall,
+    "context-precision": _check_context_precision,
 }
 
 

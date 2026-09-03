@@ -191,6 +191,58 @@ class TestFaithfulness:
         assert o.score == 1.0
 
 
+class TestContextRecallAndPrecision:
+    @pytest.mark.asyncio
+    async def test_recall_needs_context_and_expected(self):
+        o = await check_assertion(
+            Assertion(type="context-recall"), ctx("ans", context=["p"])
+        )
+        assert o.passed is False and "expected" in o.detail
+
+    @pytest.mark.asyncio
+    async def test_recall_scores_facts_found(self):
+        from evalbench.core.providers.mock import MockProvider
+
+        judged = MockProvider(response=(
+            '{"facts": ['
+            '{"fact": "Python released 1991", "in_context": true},'
+            '{"fact": "Created by Guido van Rossum", "in_context": false}]}'
+        ))
+        o = await check_assertion(
+            Assertion(type="context-recall", threshold=0.8),
+            ctx(
+                "irrelevant",
+                expected="Python was released in 1991 by Guido van Rossum.",
+                context=["Python first appeared in 1991."],
+                judge_provider=judged,
+            ),
+        )
+        assert o.score == 0.5
+        assert "missing" in o.detail
+
+    @pytest.mark.asyncio
+    async def test_precision_scores_relevant_passages(self):
+        from evalbench.core.providers.mock import MockProvider
+
+        judged = MockProvider(response=(
+            '{"passages": ['
+            '{"n": 1, "relevant": true},'
+            '{"n": 2, "relevant": false},'
+            '{"n": 3, "relevant": true}]}'
+        ))
+        o = await check_assertion(
+            Assertion(type="context-precision", threshold=0.6),
+            ctx(
+                "answer",
+                prompt="When was Python released?",
+                context=["a", "b", "c"],
+                judge_provider=judged,
+            ),
+        )
+        assert o.score == pytest.approx(0.6667)
+        assert o.passed is True
+
+
 class TestSynthesisAndAggregation:
     def test_explicit_assertions_used_verbatim(self):
         out = build_assertions(

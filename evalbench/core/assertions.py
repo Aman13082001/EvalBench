@@ -231,36 +231,43 @@ async def _check_json_schema(
     return AssertionOutcome("json-schema", True, 1.0, "valid")
 
 
-async def _check_llm_rubric(
-    a: Assertion, ctx: AssertionContext
-) -> AssertionOutcome:
-    from evalbench.core.evaluators.judge import LLMJudgeEvaluator
-
-    criteria = a.criteria or str(a.value or "")
-    cutoff = a.threshold if a.threshold is not None else 0.6
-
-    prompt = (
-        "You are grading an AI response against a rubric.\n\n"
-        f"QUESTION: {ctx.prompt}\n\n"
-        f"RUBRIC: {criteria}\n\n"
-        f"RESPONSE: {ctx.response_text}\n\n"
-        "Think step by step about how well the response meets the rubric, "
-        "then finish with two lines exactly:\n"
-        "SCORE: <integer 1-5>\n"
-        "REASON: <one sentence>"
+async def _ask_and_parse(
+    ctx: AssertionContext, prompt: str
+) -> tuple[float, str]:
+    """Run one judge call and parse it to (score_0_to_1, reason)."""
+    from evalbench.core.evaluators.judge import (
+        LLMJudgeEvaluator,
+        parse_judge_output,
     )
 
     ev = LLMJudgeEvaluator(
         judge_model=ctx.judge_model, provider=ctx.judge_provider
     )
+    raw = await ev._ask_judge(prompt)
+    return parse_judge_output(raw)
+
+
+async def _check_llm_rubric(
+    a: Assertion, ctx: AssertionContext
+) -> AssertionOutcome:
+    criteria = a.criteria or str(a.value or "")
+    cutoff = a.threshold if a.threshold is not None else 0.6
+
+    prompt = (
+        "You are grading an AI response against a rubric. Think step by "
+        "step, then output ONLY a JSON object "
+        '{"score": <1-5>, "reason": "<one sentence>"}.\n\n'
+        f"QUESTION: {ctx.prompt}\n\n"
+        f"RUBRIC: {criteria}\n\n"
+        f"RESPONSE: {ctx.response_text}"
+    )
+
     try:
-        raw = await ev._ask_judge(prompt)
-        score, reason = ev._parse_response(raw)
+        score, reason = await _ask_and_parse(ctx, prompt)
     except Exception as e:  # noqa: BLE001 - judge unavailable
         return AssertionOutcome("llm-rubric", False, 0.0, f"judge error: {e}")
 
-    ok = score >= cutoff
-    return AssertionOutcome("llm-rubric", ok, float(score), reason)
+    return AssertionOutcome("llm-rubric", score >= cutoff, score, reason)
 
 
 _CHECKERS = {

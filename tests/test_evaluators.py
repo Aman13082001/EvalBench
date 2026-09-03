@@ -151,6 +151,48 @@ class TestLLMJudgeEvaluator:
             assert isinstance(score, float)
 
 
+class TestParseJudgeOutput:
+    def test_plain_json(self):
+        from evalbench.core.evaluators.judge import parse_judge_output
+
+        s, r = parse_judge_output('{"score": 4, "reason": "solid answer"}')
+        assert s == 0.8
+        assert r == "solid answer"
+
+    def test_fenced_json(self):
+        from evalbench.core.evaluators.judge import parse_judge_output
+
+        s, r = parse_judge_output('```json\n{"score": 5, "reason": "great"}\n```')
+        assert s == 1.0
+
+    def test_json_embedded_in_prose(self):
+        from evalbench.core.evaluators.judge import parse_judge_output
+
+        s, _ = parse_judge_output(
+            'Here is my rating.\n{"score": 2, "reason": "weak"}\nThanks.'
+        )
+        assert s == 0.4
+
+    def test_already_normalised_score(self):
+        from evalbench.core.evaluators.judge import parse_judge_output
+
+        s, _ = parse_judge_output('{"score": 0.9, "reason": "x"}')
+        assert s == 0.9
+
+    def test_regex_fallback(self):
+        from evalbench.core.evaluators.judge import parse_judge_output
+
+        s, r = parse_judge_output("SCORE: 3\nREASON: middling")
+        assert s == 0.6
+        assert r == "middling"
+
+    def test_bare_digit_fallback(self):
+        from evalbench.core.evaluators.judge import parse_judge_output
+
+        s, _ = parse_judge_output("I would give this a 5 overall.")
+        assert s == 1.0
+
+
 class TestLLMEvaluatorsWithInjectedProvider:
     """judge / security can run their LLM call on any provider, not just Ollama."""
 

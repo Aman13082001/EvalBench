@@ -1,3 +1,4 @@
+import json
 import re
 
 import httpx
@@ -5,6 +6,41 @@ import httpx
 from evalbench.config import settings
 from evalbench.core.evaluators.base import Evaluator
 from evalbench.core.providers.base import Provider
+
+
+def parse_judge_output(text: str) -> tuple[float, str]:
+    """Parse a judge reply into (score_0_to_1, reason).
+
+    Tries JSON first (``{"score": 1-5, "reason": "..."}``), then falls back
+    to scraping ``SCORE:`` / ``REASON:`` lines, then to a bare digit.
+    """
+    raw = text.strip()
+
+    fence = re.search(r"```(?:json)?\s*(.+?)```", raw, re.DOTALL)
+    if fence:
+        raw = fence.group(1).strip()
+    brace = re.search(r"\{.*\}", raw, re.DOTALL)
+    if brace:
+        try:
+            obj = json.loads(brace.group(0))
+            score = float(obj.get("score", obj.get("rating", 3)))
+            reason = str(obj.get("reason", obj.get("explanation", ""))).strip()
+            if score <= 1.0:  # already normalised
+                return round(max(0.0, min(1.0, score)), 4), reason or "n/a"
+            return round(max(1.0, min(5.0, score)) / 5.0, 4), reason or "n/a"
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+    m = re.search(r"SCORE:\s*(\d+(?:\.\d+)?)", text, re.IGNORECASE)
+    if m:
+        score = max(1.0, min(5.0, float(m.group(1))))
+    else:
+        d = re.search(r"\b([1-5](?:\.\d+)?)\b", text)
+        score = float(d.group(1)) if d else 3.0
+
+    r = re.search(r"REASON:\s*(.+?)(?:\n|$)", text, re.IGNORECASE | re.DOTALL)
+    reason = r.group(1).strip() if r else "No reason provided"
+    return round(score / 5.0, 4), reason
 
 
 class LLMJudgeEvaluator(Evaluator):
@@ -67,46 +103,12 @@ Rate on a scale of 1 to 5:
 4 = Correct and complete, minor issues only
 5 = Perfect or near-perfect match
 
-Respond ONLY in this format:
-
-SCORE: [number 1-5]
-
-REASON: [one sentence explanation]"""
+Respond ONLY with a JSON object:
+{{"score": <1-5>, "reason": "<one sentence>"}}"""
 
     def _parse_response(self, text: str) -> tuple[float, str]:
-        score_match = re.search(
-            r"SCORE:\s*(\d+(?:\.\d+)?)",
-            text,
-            re.IGNORECASE,
-        )
-
-        if score_match:
-            score = float(score_match.group(1))
-            score = max(1.0, min(5.0, score))
-        else:
-            fallback = re.search(
-                r"\b([1-5](?:\.\d+)?)\b",
-                text,
-            )
-            score = float(fallback.group(1)) if fallback else 3.0
-
-        reason_match = re.search(
-            r"REASON:\s*(.+?)(?:\n|$)",
-            text,
-            re.IGNORECASE | re.DOTALL,
-        )
-
-        reason = (
-            reason_match.group(1).strip()
-            if reason_match
-            else "No reason provided"
-        )
-
-        # Normalize 1-5 score to 0.0-1.0.
-        # 4/5 = 0.8, which matches EvalBench scoring.
-        normalized = score / 5.0
-
-        return round(normalized, 4), reason
+        # Kept for back-compat; delegates to the shared parser.
+        return parse_judge_output(text)
 
     async def evaluate(
         self,
@@ -129,7 +131,7 @@ REASON: [one sentence explanation]"""
 
         try:
             judge_output = await self._ask_judge(prompt)
-            score, _reason = self._parse_response(judge_output)
+            score, _reason = parse_judge_output(judge_output)
             passed = score >= cutoff
             return passed, score
 

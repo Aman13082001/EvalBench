@@ -314,7 +314,8 @@ Secrets are read from environment / `.env` via `evalbench/config.py` — `SECRET
 
 ```bash
 pip install -e ".[dev]"
-pytest                     # 150+ tests, all mocked (no provider/Mongo needed)
+pytest                     # 180+ tests; units mocked, plus an integration
+                           # layer on a real async Mongo (mongomock-motor)
 ruff check .               # lint config in pyproject.toml ([tool.ruff])
 ```
 
@@ -336,7 +337,7 @@ frontend/       Streamlit UI (fire-and-poll runs)
 suites/         curated example suites
 prometheus/     scrape config + alert rules
 grafana/        provisioned datasource + dashboard
-tests/          pytest suite (fully mocked)
+tests/          pytest suite (mocked units + a real-Mongo integration layer)
 ```
 
 CI (`.github/workflows/eval-check.yml`) runs `ruff check` + `pytest` on every push and PR.

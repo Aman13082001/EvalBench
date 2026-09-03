@@ -57,6 +57,7 @@ runs:
       env:
         ADMIN_API_KEY: ${{ inputs.api-key }}
         SECRET_KEY: ci-secret-not-for-prod
+        EVALBENCH_ALLOW_INSECURE: "1"
         MONGODB_URL: mongodb://localhost:27017
         MONGODB_DB: evalbench
         # Provider keys flow from the caller's job env (secrets).

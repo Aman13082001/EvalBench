@@ -72,6 +72,9 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SECRET_KEY: ${SECRET_KEY:-change-this-to-a-random-32-char-string}
+      # Local dev boots with placeholder secrets. Remove this (and set real
+      # SECRET_KEY / ADMIN_* in .env) before deploying anywhere real.
+      EVALBENCH_ALLOW_INSECURE: "1"
       TOKEN_EXPIRE_MINUTES: ${TOKEN_EXPIRE_MINUTES:-10080}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-in-production}

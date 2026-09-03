@@ -1,6 +1,7 @@
 import csv
 import io
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -27,22 +28,53 @@ from evalbench.metrics import (
 
 logger = logging.getLogger("evalbench")
 
+# Shipped defaults. Booting with any of these is a security hole.
+_PLACEHOLDER_SECRETS = {
+    "secret_key": "change-this-to-a-random-32-char-string",
+    "admin_password": "change-me-in-production",
+    "admin_api_key": "eb_admin_change_me_in_production",
+}
+
+
+def _check_secrets() -> None:
+    """Refuse to start with shipped placeholder secrets.
+
+    Set EVALBENCH_ALLOW_INSECURE=1 for local dev / CI / demos.
+    """
+    stale = [
+        name
+        for name, placeholder in _PLACEHOLDER_SECRETS.items()
+        if getattr(settings, name) == placeholder
+    ]
+    if not stale:
+        return
+
+    if os.getenv("EVALBENCH_ALLOW_INSECURE") == "1":
+        logger.warning(
+            "Running with placeholder %s. EVALBENCH_ALLOW_INSECURE=1 is set "
+            "— fine for dev, never for production.",
+            ", ".join(stale),
+        )
+        return
+
+    raise RuntimeError(
+        f"Refusing to start: {', '.join(stale)} still set to the shipped "
+        f"placeholder. Set real values in .env, or export "
+        f"EVALBENCH_ALLOW_INSECURE=1 for local/CI use."
+    )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
 
     logging.basicConfig(level=settings.log_level.upper())
+    _check_secrets()
 
     # Create default admin if no users exist.
     count = await db.users.count_documents({})
 
     if count == 0:
-        if settings.admin_password == "change-me-in-production":
-            logger.warning(
-                "ADMIN_PASSWORD is still the default placeholder. "
-                "Set a strong ADMIN_PASSWORD before deploying."
-            )
 
         await db.users.insert_one({
             "username": settings.admin_username,

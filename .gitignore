@@ -14,3 +14,4 @@ mongo_data/
 .coverage
 results.csv
 smoke-results.csv
+report.json

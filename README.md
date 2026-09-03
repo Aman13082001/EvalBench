@@ -303,7 +303,8 @@ Every run updates Prometheus metrics exposed at `GET /metrics`:
 
 - **JWT** for interactive use (`evalbench login` → `Authorization: Bearer …`).
 - **API key** for CI (`X-API-Key` header, or `evalbench run --api-key`).
-- Login and mutating endpoints are rate-limited (SlowAPI). List/detail/export endpoints are public for portability.
+- **Every data endpoint requires a user.** Only `/health`, `/live`, `/ready` (and the Prometheus `/metrics` scrape target) are public. `tests/test_auth_coverage.py` asserts this for every route.
+- Mutating endpoints are additionally rate-limited (SlowAPI).
 
 Secrets are read from environment / `.env` via `evalbench/config.py` — `SECRET_KEY`, `TOKEN_EXPIRE_MINUTES`, `OLLAMA_BASE_URL`, `MONGODB_URL`, timeouts, CORS origins, admin bootstrap. Copy `.env.example` to `.env` and fill it in.
 

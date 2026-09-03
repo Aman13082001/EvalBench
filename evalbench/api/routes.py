@@ -43,7 +43,7 @@ async def create_suite(
 
 
 @router.get("")
-async def list_suites():
+async def list_suites(user=Depends(get_current_user)):
     suites = []
 
     async for doc in db.suites.find().sort("created_at", -1).limit(50):
@@ -54,7 +54,10 @@ async def list_suites():
 
 
 @router.get("/models")
-async def list_models(provider: str = "ollama"):
+async def list_models(
+    provider: str = "ollama",
+    user=Depends(get_current_user),
+):
     client = get_provider(provider)
     try:
         return {"provider": provider, "models": await client.list_models()}
@@ -104,7 +107,7 @@ async def create_security_suite(
 
 
 @router.get("/{suite_id}")
-async def get_suite(suite_id: str):
+async def get_suite(suite_id: str, user=Depends(get_current_user)):
     if not ObjectId.is_valid(suite_id):
         raise HTTPException(
             status_code=400,
@@ -127,7 +130,7 @@ async def get_suite(suite_id: str):
 
 
 @router.get("/{suite_id}/export")
-async def export_suite(suite_id: str):
+async def export_suite(suite_id: str, user=Depends(get_current_user)):
     if not ObjectId.is_valid(suite_id):
         raise HTTPException(
             status_code=400,
@@ -298,7 +301,7 @@ async def run_suite(
 
 
 @router.get("/{suite_id}/baseline")
-async def get_baseline(suite_id: str):
+async def get_baseline(suite_id: str, user=Depends(get_current_user)):
     if not ObjectId.is_valid(suite_id):
         raise HTTPException(status_code=400, detail="Invalid suite ID format")
     doc = await db.suites.find_one({"_id": ObjectId(suite_id)})
@@ -430,7 +433,7 @@ async def compare_models(
 
 
 @router.get("/{suite_id}/runs")
-async def list_runs(suite_id: str):
+async def list_runs(suite_id: str, user=Depends(get_current_user)):
     if not ObjectId.is_valid(suite_id):
         raise HTTPException(
             status_code=400,

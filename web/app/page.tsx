@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Disclosure, Metric, Panel, Rule } from "@/components/ui";
+import HeroDemo from "@/components/HeroDemo";
+import { Disclosure, Panel, Rule } from "@/components/ui";
 
 export default function Home() {
   return (
@@ -25,39 +26,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* F2 replaces this block with the animated pipeline demo. */}
       <Rule label="Fig. 1 · A recorded evaluation" />
-      <Panel
-        fig="Fig. 1"
-        title="Reserved for the pipeline demo"
-        caption="Phase F2: prompt → model → response → assertion checks → score → statistics → result, played from a real recorded run."
-      >
-        <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-          <Metric
-            label="Quality"
-            value="91.4"
-            unit="%"
-            caption="Answers that passed every check."
-          />
-          <Metric
-            label="Faithfulness"
-            value="87.2"
-            unit="%"
-            caption="Claims backed by the source material."
-          />
-          <Metric
-            label="Latency"
-            value="0.81"
-            unit="s"
-            caption="Average time to answer."
-          />
-          <Metric
-            label="Cost"
-            value="$0.0002"
-            caption="At the model's list price."
-          />
-        </div>
-      </Panel>
+      <HeroDemo />
 
       <Rule label="§2 · What it measures" />
       <div className="grid gap-4 md:grid-cols-2">

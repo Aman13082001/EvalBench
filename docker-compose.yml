@@ -80,7 +80,7 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-in-production}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-eb_admin_change_me_in_production}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8501,http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8501,http://localhost:3000,http://localhost:3005}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       mongo:

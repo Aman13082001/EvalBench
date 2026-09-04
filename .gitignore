@@ -15,3 +15,5 @@ mongo_data/
 results.csv
 smoke-results.csv
 report.json
+/web/node_modules
+/web/.next

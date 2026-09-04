@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime, timezone
 
 import yaml
@@ -16,10 +15,8 @@ from evalbench.core.providers import get_provider
 from evalbench.core.runner import TestRunner
 from evalbench.db.mongo import db
 from evalbench.db.schemas import TestRun, TestSuite
-from evalbench.metrics import run_status_total
+from evalbench.jobs import submit_run
 from evalbench.security.adversarial_suite import ADVERSARIAL_TESTS
-
-logger = logging.getLogger("evalbench")
 
 router = APIRouter(prefix="/suites", tags=["suites"])
 
@@ -192,59 +189,6 @@ async def import_suite(
     }
 
 
-async def execute_run_job(run_id: str, suite_id: str, suite: TestSuite):
-    """Background worker: run the suite and stream status into the run doc."""
-
-    oid = {"_id": ObjectId(run_id)}
-    await db.test_runs.update_one(
-        oid,
-        {"$set": {
-            "status": "running",
-            "started_at": datetime.now(timezone.utc),
-        }},
-    )
-
-    runner = TestRunner()
-
-    async def _report(done: int, total: int):
-        await db.test_runs.update_one(
-            oid,
-            {"$set": {
-                "completed_tests": done,
-                "progress": round(done / total, 4) if total else 1.0,
-            }},
-        )
-
-    try:
-        run = await runner.run_suite(suite, suite_id, progress_cb=_report)
-        await db.test_runs.update_one(
-            oid,
-            {"$set": {
-                "status": "completed",
-                "progress": 1.0,
-                "completed_tests": len(run.results),
-                "results": [r.model_dump() for r in run.results],
-                "model": run.model,
-                "evaluator": run.evaluator,
-                "finished_at": datetime.now(timezone.utc),
-            }},
-        )
-        run_status_total.labels(status="completed").inc()
-    except Exception as e:  # noqa: BLE001 - record failure, don't crash the worker
-        logger.exception("Run %s failed", run_id)
-        await db.test_runs.update_one(
-            oid,
-            {"$set": {
-                "status": "failed",
-                "error": str(e),
-                "finished_at": datetime.now(timezone.utc),
-            }},
-        )
-        run_status_total.labels(status="failed").inc()
-    finally:
-        await runner.close()
-
-
 @router.post("/{suite_id}/run", status_code=202)
 @limiter.limit("10/minute")
 async def run_suite(
@@ -288,7 +232,7 @@ async def run_suite(
     result = await db.test_runs.insert_one(queued.model_dump())
     run_id = str(result.inserted_id)
 
-    background_tasks.add_task(execute_run_job, run_id, suite_id, suite)
+    submit_run(run_id, suite_id, background_tasks)
 
     return {
         "run_id": run_id,

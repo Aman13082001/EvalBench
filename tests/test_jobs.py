@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from bson import ObjectId
 
-from evalbench.db.schemas import TestCase, TestRun, TestSuite
+from evalbench.db.schemas import TestRun
 
 RUN_ID = "507f1f77bcf86cd799439011"
 SUITE_ID = "507f191e810c19729de860ea"
@@ -32,9 +32,7 @@ class TestRunEndpointIsAsync:
         mock_db.suites.find_one.return_value = _suite_doc()
         mock_db.test_runs.insert_one.return_value.inserted_id = ObjectId(RUN_ID)
 
-        with patch(
-            "evalbench.api.routes.execute_run_job", new_callable=AsyncMock
-        ) as job:
+        with patch("evalbench.api.routes.submit_run") as submit:
             resp = client.post(f"/suites/{SUITE_ID}/run")
 
         assert resp.status_code == 202
@@ -48,7 +46,8 @@ class TestRunEndpointIsAsync:
         assert persisted["total_tests"] == 2
         assert persisted["progress"] == 0.0
 
-        job.assert_called_once()
+        submit.assert_called_once()
+        assert submit.call_args[0][:2] == (RUN_ID, SUITE_ID)
 
     def test_run_unknown_suite_404(self, client, mock_db):
         mock_db.suites.find_one.return_value = None
@@ -138,20 +137,22 @@ class TestAssertionRollup:
         assert at["latency"] == {"passed": 1, "failed": 1}
 
 
+def _suite_model():
+    return {
+        "_id": ObjectId(SUITE_ID),
+        "name": "S", "provider": "mock", "model": "m", "evaluator": "exact",
+        "tests": [{"name": "t1", "prompt": "p", "expected": "e"}],
+    }
+
+
 class TestExecuteRunJob:
     @pytest.mark.asyncio
     async def test_marks_running_then_completed(self, mock_db):
-        from evalbench.api.routes import execute_run_job
+        from evalbench.jobs import execute_run_job
 
-        suite = TestSuite(
-            name="S",
-            provider="mock",
-            model="m",
-            evaluator="exact",
-            tests=[TestCase(name="t1", prompt="p", expected="e")],
-        )
+        mock_db.suites.find_one.return_value = _suite_model()
         fake_run = TestRun(
-            suite_id="s",
+            suite_id=SUITE_ID,
             model="m",
             evaluator="exact",
             results=[],
@@ -161,11 +162,11 @@ class TestExecuteRunJob:
             completed_tests=1,
         )
 
-        with patch("evalbench.api.routes.TestRunner") as RunnerCls:
+        with patch("evalbench.jobs.TestRunner") as RunnerCls:
             inst = RunnerCls.return_value
             inst.run_suite = AsyncMock(return_value=fake_run)
             inst.close = AsyncMock()
-            await execute_run_job(RUN_ID, "s", suite)
+            await execute_run_job(RUN_ID, SUITE_ID)
 
         sets = [c[0][1]["$set"] for c in mock_db.test_runs.update_one.call_args_list]
         assert sets[0]["status"] == "running"
@@ -175,23 +176,28 @@ class TestExecuteRunJob:
 
     @pytest.mark.asyncio
     async def test_marks_failed_on_exception(self, mock_db):
-        from evalbench.api.routes import execute_run_job
+        from evalbench.jobs import execute_run_job
 
-        suite = TestSuite(
-            name="S",
-            provider="mock",
-            model="m",
-            evaluator="exact",
-            tests=[TestCase(name="t1", prompt="p", expected="e")],
-        )
+        mock_db.suites.find_one.return_value = _suite_model()
 
-        with patch("evalbench.api.routes.TestRunner") as RunnerCls:
+        with patch("evalbench.jobs.TestRunner") as RunnerCls:
             inst = RunnerCls.return_value
             inst.run_suite = AsyncMock(side_effect=RuntimeError("boom"))
             inst.close = AsyncMock()
-            await execute_run_job(RUN_ID, "s", suite)
+            await execute_run_job(RUN_ID, SUITE_ID)
 
         last_set = mock_db.test_runs.update_one.call_args_list[-1][0][1]["$set"]
         assert last_set["status"] == "failed"
         assert "boom" in last_set["error"]
         inst.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_missing_suite_marks_failed(self, mock_db):
+        from evalbench.jobs import execute_run_job
+
+        mock_db.suites.find_one.return_value = None
+        await execute_run_job(RUN_ID, SUITE_ID)
+
+        last_set = mock_db.test_runs.update_one.call_args_list[-1][0][1]["$set"]
+        assert last_set["status"] == "failed"
+        assert "suite not found" in last_set["error"]

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 # The API refuses to start with placeholder secrets unless this is set.
 os.environ.setdefault("EVALBENCH_ALLOW_INSECURE", "1")
 
+from evalbench import jobs as jobs_module  # noqa: E402
 from evalbench.api import auth_routes as auth_routes_module  # noqa: E402
 from evalbench.api import main as main_module  # noqa: E402
 from evalbench.api import routes as routes_module  # noqa: E402
@@ -88,6 +89,11 @@ def mock_db():
         ),
         patch.object(
             routes_module,
+            "db",
+            mock
+        ),
+        patch.object(
+            jobs_module,
             "db",
             mock
         ),

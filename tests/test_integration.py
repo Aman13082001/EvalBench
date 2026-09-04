@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from mongomock_motor import AsyncMongoMockClient
 
+from evalbench import jobs as jobs_module
 from evalbench.api import auth_routes as auth_routes_module
 from evalbench.api import deps as deps_module
 from evalbench.api import main as main_module
@@ -53,6 +54,7 @@ def live_client():
         patch.object(main_module, "db", real_db),
         patch.object(main_module, "client", dummy_client),
         patch.object(routes_module, "db", real_db),
+        patch.object(jobs_module, "db", real_db),
         patch.object(auth_routes_module, "db", real_db),
         patch.object(deps_module, "db", real_db),
         TestClient(app) as client,

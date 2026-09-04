@@ -27,8 +27,11 @@ class Settings(BaseSettings):
     default_request_timeout: int = 120
     suite_run_timeout: int = 900
 
-    # Redis
+    # Redis + job queue
     redis_url: str = "redis://localhost:6379/0"
+    # inline = FastAPI BackgroundTasks (default, no worker needed);
+    # rq = enqueue to Redis, executed by `python -m evalbench.worker`.
+    job_backend: str = "inline"
 
     # Authentication
     secret_key: str = "change-this-to-a-random-32-char-string"

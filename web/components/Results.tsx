@@ -1,34 +1,9 @@
 import { RunSummary } from "@/lib/api";
 import { explainAssertion, explainRun } from "@/lib/explain";
+import { Disclosure, Metric, Panel, Rule, Status } from "@/components/ui";
 
 function pct(x: number): string {
   return `${(x * 100).toFixed(1)}%`;
-}
-
-function ci(pair: [number, number] | null): string {
-  if (!pair) return "";
-  return ` [${pct(pair[0])}–${pct(pair[1])}]`;
-}
-
-function Stat({
-  label,
-  value,
-  sub,
-  caption,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  caption: string;
-}) {
-  return (
-    <div className="card p-3">
-      <div className="text-xs uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-1 text-xl font-bold">{value}</div>
-      {sub && <div className="text-xs text-slate-400">{sub}</div>}
-      <div className="mt-1 text-xs text-slate-500">{caption}</div>
-    </div>
-  );
 }
 
 export default function Results({ r }: { r: RunSummary }) {
@@ -36,132 +11,163 @@ export default function Results({ r }: { r: RunSummary }) {
   const atypes = Object.entries(r.assertion_types);
 
   return (
-    <div className="space-y-4">
-      <div className="card border-accent/40 p-4">
-        <p className="text-base">{explainRun(r)}</p>
-      </div>
+    <div className="space-y-6">
+      <Panel fig="Result">
+        <p className="font-display text-lg leading-snug">{explainRun(r)}</p>
+        {r.pass_rate_ci && (
+          <p className="mt-1 font-mono text-xs text-muted tnum">
+            95% CI {pct(r.pass_rate_ci[0])}–{pct(r.pass_rate_ci[1])} · n=
+            {r.scored_tests}
+          </p>
+        )}
+      </Panel>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat
+      <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+        <Metric
           label="Pass rate"
           value={pct(r.pass_rate)}
-          sub={`${r.passed}/${r.scored_tests}${ci(r.pass_rate_ci)}`}
-          caption="Share of answers that passed every check."
+          sub={`${r.passed}/${r.scored_tests}`}
+          caption="Answers that passed every check."
+          tone={r.pass_rate >= 0.8 ? "success" : "error"}
         />
-        <Stat
+        <Metric
           label="Avg score"
           value={r.avg_score.toFixed(3)}
-          caption="0 = failed, 1 = perfect. Averaged across all answers."
+          caption="0 = failed, 1 = perfect."
         />
-        <Stat
+        <Metric
           label="Est. cost"
           value={r.total_cost_usd ? `$${r.total_cost_usd.toFixed(5)}` : "$0"}
           sub={`${r.total_prompt_tokens}/${r.total_completion_tokens} tok`}
-          caption="What this run would cost at the model's list price."
+          caption="At the model's list price."
+          tone="accent"
         />
-        <Stat
+        <Metric
           label="Avg latency"
-          value={`${Math.round(r.avg_latency_ms)} ms`}
-          caption="Average time the model took to answer."
+          value={String(Math.round(r.avg_latency_ms))}
+          unit="ms"
+          caption="Average time to answer."
         />
       </div>
 
       {(r.errors > 0 || r.rate_limited_samples > 0) && (
-        <p className="text-sm text-warn">
-          {r.errors > 0 && `${r.errors} test(s) errored (infrastructure issue, not a wrong answer). `}
+        <p className="font-mono text-xs text-warning">
+          {r.errors > 0 &&
+            `${r.errors} test(s) errored — infrastructure issue, not a wrong answer. `}
           {r.rate_limited_samples > 0 &&
-            `${r.rate_limited_samples} sample(s) were rate-limited by the provider — try again shortly.`}
+            `${r.rate_limited_samples} sample(s) rate-limited by the provider.`}
         </p>
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
         {cats.length > 1 && (
-          <div className="card p-3">
-            <h3 className="mb-1 text-sm font-semibold">By category</h3>
-            <p className="mb-2 text-xs text-slate-500">
-              Where the model is strong vs. weak, grouped by the `category` tag on each test.
-            </p>
+          <Panel
+            title="By category"
+            fig="A"
+            caption="Where the model is strong or weak, grouped by each test's category tag."
+          >
             <table className="w-full text-sm">
               <tbody>
                 {cats.map(([name, s]) => (
-                  <tr key={name} className="border-t border-line/50">
-                    <td className="py-1">{name}</td>
-                    <td className="py-1 text-right text-slate-400">{s.total}</td>
-                    <td className="py-1 text-right">{pct(s.pass_rate)}</td>
+                  <tr key={name} className="border-t border-line first:border-0">
+                    <td className="py-1.5">{name}</td>
+                    <td className="py-1.5 text-right font-mono text-xs text-muted tnum">
+                      {s.total}
+                    </td>
+                    <td className="py-1.5 text-right font-mono text-sm tnum">
+                      {pct(s.pass_rate)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </Panel>
         )}
 
         {atypes.length > 0 && (
-          <div className="card p-3">
-            <h3 className="mb-1 text-sm font-semibold">Checks run</h3>
-            <p className="mb-2 text-xs text-slate-500">
-              Every kind of check used across all answers, and how many passed.
-            </p>
-            <table className="w-full text-sm">
-              <tbody>
-                {atypes.map(([t, c]) => (
-                  <tr key={t} className="border-t border-line/50">
-                    <td className="py-1" title={t}>
-                      {explainAssertion({ type: t, passed: true, score: 1, detail: "" })}
-                    </td>
-                    <td className="py-1 text-right text-good">{c.passed}✓</td>
-                    <td className="py-1 text-right text-bad">
-                      {c.failed ? `${c.failed}✗` : ""}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Panel
+            title="Checks run"
+            fig="B"
+            caption="Every kind of check used across all answers, and how many passed."
+          >
+            <ul className="space-y-2 text-sm">
+              {atypes.map(([t, c]) => (
+                <li key={t} className="flex items-baseline justify-between gap-3">
+                  <span className="flex-1">
+                    {explainAssertion({
+                      type: t,
+                      passed: true,
+                      score: 1,
+                      detail: "",
+                    })}
+                  </span>
+                  <span className="shrink-0 font-mono text-xs tnum">
+                    <span className="text-success">{c.passed}✓</span>
+                    {c.failed > 0 && (
+                      <span className="ml-1.5 text-error">{c.failed}✗</span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
         )}
       </div>
 
-      <div className="space-y-2">
+      <Rule label="Per test" />
+      <div className="space-y-3">
         {r.results.map((t) => (
-          <div key={t.test_name} className="card p-3">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">
-                {t.passed ? (
-                  <span className="text-good">PASS</span>
-                ) : (
-                  <span className="text-bad">FAIL</span>
-                )}{" "}
-                {t.test_name}
+          <Panel
+            key={t.test_name}
+            title={t.test_name}
+            right={
+              <span className="flex items-center gap-2">
+                <span className="font-mono text-[11px] text-muted tnum">
+                  {t.score ?? 0} · {Math.round(t.latency_ms)}ms
+                </span>
+                <Status state={t.passed ? "pass" : "fail"} />
               </span>
-              <span className="text-xs text-slate-400">
-                score {t.score ?? 0} · {Math.round(t.latency_ms)} ms
-              </span>
-            </div>
+            }
+          >
             {t.assertions && t.assertions.length > 0 && (
-              <ul className="mt-2 space-y-1.5 text-sm">
+              <ul className="space-y-2 text-sm">
                 {t.assertions.map((a, i) => (
                   <li key={i}>
-                    <div>
-                      <span className={a.passed ? "text-good" : "text-bad"}>
-                        {a.passed ? "✓ " : "✗ "}
+                    {a.detail ? (
+                      <Disclosure
+                        plain={
+                          <span>
+                            <span
+                              className={a.passed ? "text-success" : "text-error"}
+                            >
+                              {a.passed ? "✓ " : "✗ "}
+                            </span>
+                            {explainAssertion(a)}
+                          </span>
+                        }
+                        technical={`${a.type}: ${a.detail}`}
+                      />
+                    ) : (
+                      <span>
+                        <span className={a.passed ? "text-success" : "text-error"}>
+                          {a.passed ? "✓ " : "✗ "}
+                        </span>
+                        {explainAssertion(a)}
                       </span>
-                      {explainAssertion(a)}
-                    </div>
-                    {a.detail && (
-                      <div className="pl-4 text-xs text-slate-500">
-                        {a.type}: {a.detail}
-                      </div>
                     )}
                   </li>
                 ))}
               </ul>
             )}
-            <details className="mt-2 text-xs text-slate-400">
-              <summary className="cursor-pointer">model's actual response</summary>
-              <pre className="mt-1 whitespace-pre-wrap break-words text-slate-300">
+            <details className="mt-3">
+              <summary className="label-xs cursor-pointer">
+                model&rsquo;s actual response
+              </summary>
+              <pre className="mt-2 whitespace-pre-wrap break-words border-l-2 border-line pl-3 font-mono text-xs text-muted">
                 {t.actual || t.error || "(empty)"}
               </pre>
             </details>
-          </div>
+          </Panel>
         ))}
       </div>
     </div>

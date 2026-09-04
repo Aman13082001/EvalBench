@@ -53,54 +53,74 @@ function RunPage() {
   }, [text, key]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <div className="space-y-3">
-        <label className="block text-sm font-semibold">Suite (YAML)</label>
-        <textarea
-          className="field h-[28rem] resize-y font-mono text-xs leading-relaxed"
-          spellCheck={false}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-        <input
-          className="field"
-          type="password"
-          placeholder="Your provider API key (e.g. free Groq key) — not stored"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-        />
-        <div className="flex items-center gap-3">
-          <button className="btn" onClick={run} disabled={busy}>
-            {busy ? "Running…" : "Run suite"}
-          </button>
-          {result && (
-            <a
-              className="text-sm text-accent hover:underline"
-              href={`/run?id=${result.run_id}`}
-            >
-              permalink
-            </a>
-          )}
-        </div>
-        <p className="text-xs text-slate-500">
-          Get a free key at console.groq.com (no card). Capped at 12 tests, 3
-          samples. Results expire after 24h.
+    <div className="space-y-6">
+      <header className="space-y-1">
+        <p className="label-xs">§ Playground</p>
+        <h1 className="font-display text-3xl">Run an evaluation</h1>
+        <p className="max-w-2xl text-sm text-muted">
+          Your key, your models, nothing stored. Capped at 12 tests and 3
+          samples; results expire after 24 hours.
         </p>
-      </div>
+      </header>
 
-      <div>
-        {error && (
-          <div className="card border-bad p-3 text-sm text-bad">{error}</div>
-        )}
-        {!error && !result && !busy && (
-          <div className="card p-6 text-sm text-slate-400">
-            Results will appear here.
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-3">
+          <label className="label-xs block" htmlFor="suite">
+            Suite definition (YAML)
+          </label>
+          <textarea
+            id="suite"
+            className="field h-[26rem] resize-y font-mono text-xs leading-relaxed"
+            spellCheck={false}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <input
+            className="field font-mono text-xs"
+            type="password"
+            placeholder="provider API key — never stored"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+          />
+          <div className="flex items-center gap-3">
+            <button className="btn btn-primary" onClick={run} disabled={busy}>
+              {busy ? "Running…" : "Run suite"}
+            </button>
+            {result && (
+              <a
+                className="font-mono text-xs text-accent hover:underline"
+                href={`/run?id=${result.run_id}`}
+              >
+                permalink
+              </a>
+            )}
           </div>
-        )}
-        {busy && !result && (
-          <div className="card p-6 text-sm text-slate-400">Running…</div>
-        )}
-        {result && <Results r={result} />}
+          <p className="text-xs text-muted">
+            Free key, no card:{" "}
+            <a className="text-accent hover:underline" href="https://console.groq.com">
+              console.groq.com
+            </a>
+          </p>
+        </div>
+
+        <div>
+          {error && (
+            <div className="panel border-error p-4 text-sm text-error">
+              {error}
+            </div>
+          )}
+          {!error && !result && !busy && (
+            <div className="panel p-6 text-sm text-muted">
+              Results will appear here.
+            </div>
+          )}
+          {busy && !result && (
+            <div className="panel p-6 font-mono text-sm text-muted">
+              measuring…
+            </div>
+          )}
+          {result && <Results r={result} />}
+        </div>
       </div>
     </div>
   );

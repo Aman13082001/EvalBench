@@ -2,25 +2,160 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ──────────────────────────────────────────────────────────────
+   Design tokens — "Laboratory Notebook"
+   Warm neutrals, ink typography, pine + oxide. Deliberately not
+   the cool blue/purple palette every AI product ships with.
+   Values are space-separated RGB so Tailwind can apply alpha.
+   ────────────────────────────────────────────────────────────── */
+
 :root {
+  --bg: 245 242 234; /* parchment */
+  --surface: 255 253 247; /* paper */
+  --surface-sunk: 238 234 223; /* recessed panel */
+  --line: 214 208 194; /* hairline rule */
+  --line-strong: 176 168 150;
+
+  --text: 26 24 21; /* warm ink */
+  --muted: 107 101 90; /* captions, units */
+
+  --primary: 31 71 57; /* deep pine */
+  --primary-soft: 226 234 229;
+  --accent: 193 84 31; /* burnt oxide */
+  --accent-soft: 246 231 220;
+
+  --success: 47 107 79;
+  --warning: 166 124 26;
+  --error: 155 51 36;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: 20 18 15;
+    --surface: 30 27 22;
+    --surface-sunk: 24 21 17;
+    --line: 61 55 46;
+    --line-strong: 92 84 71;
+
+    --text: 237 232 220;
+    --muted: 154 146 132;
+
+    --primary: 78 143 116;
+    --primary-soft: 28 44 38;
+    --accent: 226 122 63;
+    --accent-soft: 54 35 24;
+
+    --success: 94 163 126;
+    --warning: 214 166 60;
+    --error: 210 99 78;
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: 20 18 15;
+  --surface: 30 27 22;
+  --surface-sunk: 24 21 17;
+  --line: 61 55 46;
+  --line-strong: 92 84 71;
+
+  --text: 237 232 220;
+  --muted: 154 146 132;
+
+  --primary: 78 143 116;
+  --primary-soft: 28 44 38;
+  --accent: 226 122 63;
+  --accent-soft: 54 35 24;
+
+  --success: 94 163 126;
+  --warning: 214 166 60;
+  --error: 210 99 78;
+
   color-scheme: dark;
 }
 
 body {
-  background: #0b1220;
-  color: #e6edf7;
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+  font-feature-settings: "kern" 1;
 }
 
-.card {
-  @apply rounded-lg border border-line bg-panel;
+/* Every number in this product is tabular. */
+.tnum,
+code,
+kbd,
+pre {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Signature element: the tick rule ───────────────────────────
+   A hairline divider with measurement ticks, like a printed
+   instrument scale. Used between sections.                       */
+.tick-rule {
+  height: 9px;
+  border-top: 1px solid rgb(var(--line));
+  background-image: repeating-linear-gradient(
+    to right,
+    rgb(var(--line)) 0 1px,
+    transparent 1px 12px
+  );
+  background-repeat: repeat-x;
+  background-size: 12px 5px;
+  background-position: top left;
+}
+
+/* ── Primitives ───────────────────────────────────────────────── */
+
+.panel {
+  @apply border border-line bg-surface;
+  border-radius: 2px;
+}
+
+.label-xs {
+  @apply text-[10px] uppercase tracking-[0.14em] text-muted;
 }
 
 .btn {
-  @apply rounded-md bg-accent px-4 py-2 font-medium text-ink transition
-         hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center gap-2 border px-4 py-2 text-sm font-medium
+         transition-colors disabled:cursor-not-allowed disabled:opacity-45;
+  border-radius: 2px;
+}
+.btn-primary {
+  @apply border-primary bg-primary text-surface hover:bg-transparent hover:text-primary;
+}
+.btn-secondary {
+  @apply border-line-strong bg-transparent text-text hover:border-primary hover:text-primary;
+}
+.btn-ghost {
+  @apply border-transparent bg-transparent text-muted hover:text-text;
 }
 
 .field {
-  @apply w-full rounded-md border border-line bg-ink px-3 py-2 text-sm
-         outline-none focus:border-accent;
+  @apply w-full border border-line bg-surface-sunk px-3 py-2 text-sm
+         text-text outline-none placeholder:text-muted focus:border-accent;
+  border-radius: 2px;
+}
+
+/* Mechanical motion: things step and settle, they don't float. */
+@keyframes tick-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tick-in {
+  animation: tick-in 140ms steps(4, end) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tick-in {
+    animation: none;
+  }
 }

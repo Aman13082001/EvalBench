@@ -288,7 +288,7 @@ async def get_run_status(
             detail="Run not found",
         )
 
-    return {
+    out = {
         "run_id": run_id,
         "status": doc.get("status", "completed"),
         "progress": doc.get("progress", 1.0),
@@ -299,6 +299,16 @@ async def get_run_status(
         "started_at": doc.get("started_at"),
         "finished_at": doc.get("finished_at"),
     }
+
+    if settings.job_backend == "rq" and out["status"] == "queued":
+        try:
+            from evalbench.jobs_rq import queue_position
+
+            out["queue_position"] = queue_position(run_id)
+        except Exception:  # noqa: BLE001
+            pass
+
+    return out
 
 
 @app.get("/runs/{run_id}/summary")

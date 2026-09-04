@@ -5,6 +5,16 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Added — Phase C: real job queue
+- Run execution extracted to `evalbench/jobs.py` (`execute_run_job` now
+  takes just `run_id` + `suite_id` and loads the suite itself).
+- `JOB_BACKEND` setting: `inline` (default — FastAPI BackgroundTasks, no
+  Redis) or `rq` (enqueue to Redis, run by `python -m evalbench.worker`).
+  RQ jobs retry twice on transient failure and survive an API restart;
+  add workers with `docker compose up --scale worker=N`.
+- `docker compose` gains a `worker` service and defaults to `rq`.
+- `/runs/{id}/status` includes `queue_position` while queued (rq).
+
 ### Added — Phase D: statistical depth
 - `evalbench/core/stats.py`: percentile bootstrap CI, exact McNemar test,
   paired Cohen's d, power-based min-sample estimate.

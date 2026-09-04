@@ -251,7 +251,16 @@ Suite-level:
 
 ### Async job model
 
-`POST /suites/{id}/run` returns **202** with `{run_id, status: "queued"}` in well under a second, then executes in a background task. `GET /runs/{id}/status` reports `queued → running → completed | failed` with `progress` and `completed_tests`. The CLI and Streamlit UI both poll it with a progress bar. On startup the API **reaps** any run left `queued`/`running` by a crash and marks it `failed`.
+`POST /suites/{id}/run` returns **202** with `{run_id, status: "queued"}` in well under a second; the run then executes out of band. `GET /runs/{id}/status` reports `queued → running → completed | failed` with `progress` and `completed_tests` (and `queue_position` when queued). The CLI and Streamlit UI poll it with a progress bar. On startup the API **reaps** any run left `queued`/`running` by a crash and marks it `failed`.
+
+Two backends, chosen by `JOB_BACKEND`:
+
+| `JOB_BACKEND` | Execution | Use for |
+|---|---|---|
+| `inline` *(default)* | FastAPI `BackgroundTasks` in the API process | local dev, CI, the GitHub Action — no Redis or worker needed |
+| `rq` | enqueued to Redis, run by `python -m evalbench.worker` | the Docker stack — jobs survive an API restart, add workers to scale, transient failures retry (`Retry(max=2)`) |
+
+`docker compose up` runs one `worker` service on `rq`; scale it with `docker compose up -d --scale worker=3`.
 
 ### Regression detection & baselines
 

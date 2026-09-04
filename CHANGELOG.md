@@ -5,6 +5,11 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Removed
+- The Streamlit UI (`frontend/`) and its compose service. The Next.js app
+  in `web/` replaces it; until its authenticated pages land, use the CLI
+  for suite/run management.
+
 ### Added — Phase C: real job queue
 - Run execution extracted to `evalbench/jobs.py` (`execute_run_job` now
   takes just `run_id` + `suite_id` and loads the suite itself).

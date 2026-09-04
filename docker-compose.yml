@@ -80,7 +80,7 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-in-production}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-eb_admin_change_me_in_production}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8501,http://localhost:3000,http://localhost:3005}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3005}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       mongo:
@@ -125,28 +125,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - evalbench-net
-
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    container_name: evalbench-frontend
-    restart: unless-stopped
-    ports:
-      - "8501:8501"
-    environment:
-      EVALBENCH_API_URL: http://api:8000
-    depends_on:
-      api:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
     networks:
       - evalbench-net
 

@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     admin_api_key: str = "eb_admin_change_me_in_production"
 
     # CORS
-    cors_origins: str = "http://localhost:8501,http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,http://localhost:3005"
 
     # Application
     log_level: str = "INFO"

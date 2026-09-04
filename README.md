@@ -30,7 +30,7 @@ EvalBench is built around that question:
 ```mermaid
 flowchart LR
     CLI["evalbench CLI\n(Typer)"] -->|"REST + JWT / API key"| API
-    UI["Streamlit UI"] --> API
+    UI["Web app (Next.js)"] --> API
     subgraph stack["docker compose"]
       API["FastAPI\n/suites /runs /regression /baseline /metrics"] --> MONGO[("MongoDB\nsuites + runs")]
       API --> PROV["Providers\nOllama · Groq · Gemini · OpenAI · ..."]
@@ -49,7 +49,7 @@ flowchart LR
 | **Pricing** (`evalbench/pricing.py`) | per-model token rates (each with `source` + `as_of`) → estimated USD per run; `scripts/check_pricing.py` fails CI on stale entries |
 | **MongoDB** | stores suites and run results |
 | **Prometheus + Grafana** | scrape `/metrics`, alert rules, "EvalBench — Production Overview" dashboard |
-| **Streamlit UI** (`frontend/app.py`) | browse suites, fire-and-poll runs, inspect results, compare runs |
+| **Web app** (`web/`) | Next.js front end — public playground (bring-your-own-key), results viewer |
 | **CLI** (`evalbench/cli.py`) | `login`, `run`, `compare`, `baseline`, `security`, `models`, `init`, `export` |
 
 ---
@@ -80,7 +80,7 @@ Endpoints once the stack is up:
 | Service | URL | Notes |
 |---|---|---|
 | API docs | http://localhost:8000/docs | OpenAPI / Swagger |
-| Streamlit UI | http://localhost:8501 | |
+| Web app | http://localhost:3005 | `cd web && npm install && npm run dev` |
 | Prometheus | http://localhost:9090 | `/alerts` for rule state |
 | Grafana | http://localhost:3000 | `admin` / `evalbench` → Dashboards → *EvalBench* |
 
@@ -251,7 +251,7 @@ Suite-level:
 
 ### Async job model
 
-`POST /suites/{id}/run` returns **202** with `{run_id, status: "queued"}` in well under a second; the run then executes out of band. `GET /runs/{id}/status` reports `queued → running → completed | failed` with `progress` and `completed_tests` (and `queue_position` when queued). The CLI and Streamlit UI poll it with a progress bar. On startup the API **reaps** any run left `queued`/`running` by a crash and marks it `failed`.
+`POST /suites/{id}/run` returns **202** with `{run_id, status: "queued"}` in well under a second; the run then executes out of band. `GET /runs/{id}/status` reports `queued → running → completed | failed` with `progress` and `completed_tests` (and `queue_position` when queued). The CLI polls it with a progress bar. On startup the API **reaps** any run left `queued`/`running` by a crash and marks it `failed`.
 
 Two backends, chosen by `JOB_BACKEND`:
 
@@ -369,7 +369,7 @@ evalbench/
   security/     built-in adversarial prompt set
   metrics.py    Prometheus metric definitions
   cli.py        Typer CLI
-frontend/       Streamlit UI (fire-and-poll runs)
+web/            Next.js front end (playground, results viewer)
 suites/         curated example suites
 prometheus/     scrape config + alert rules
 grafana/        provisioned datasource + dashboard
@@ -388,7 +388,7 @@ Also shipped: a **GitHub Action** (`.github/actions/evalbench`) that gates PRs o
 
 Also shipped: **RAG assertions** (`faithfulness`, `context-recall`, `context-precision`) and a **richer statistical engine** (bootstrap CIs, exact McNemar, Cohen's d, power estimate).
 
-Planned next: a React frontend, a job queue (Celery/RQ) for multi-worker execution, and publishing the Action to the Marketplace.
+Planned next: the authenticated web app (login, suite management, run history, embedded dashboard), per-user ownership on the API, and publishing the Action to the Marketplace.
 
 ## License
 

@@ -1,0 +1,120 @@
+{
+  "suite_id": null,
+  "model": "openai/gpt-oss-20b",
+  "evaluator": "exact",
+  "status": "completed",
+  "progress": 1.0,
+  "total_tests": 1,
+  "scored_tests": 1,
+  "errors": 0,
+  "passed": 0,
+  "failed": 1,
+  "pass_rate": 0.0,
+  "avg_score": 0.772,
+  "pass_rate_ci": null,
+  "avg_score_ci": null,
+  "avg_latency_ms": 796.13,
+  "total_tokens": 252,
+  "total_prompt_tokens": 91,
+  "total_completion_tokens": 252,
+  "total_cost_usd": 0.000135,
+  "rate_limited_samples": 0,
+  "by_category": {
+    "concurrency": {
+      "total": 1,
+      "passed": 0,
+      "errors": 0,
+      "pass_rate": 0.0,
+      "avg_score": 0.772
+    }
+  },
+  "assertion_types": {
+    "icontains": {
+      "passed": 1,
+      "failed": 0
+    },
+    "semantic": {
+      "passed": 1,
+      "failed": 0
+    },
+    "llm-rubric": {
+      "passed": 1,
+      "failed": 0
+    },
+    "faithfulness": {
+      "passed": 0,
+      "failed": 1
+    },
+    "latency": {
+      "passed": 1,
+      "failed": 0
+    },
+    "cost": {
+      "passed": 1,
+      "failed": 0
+    }
+  },
+  "results": [
+    {
+      "test_name": "race-condition",
+      "prompt": "Using only the context below, explain a race condition to a junior developer in two or three sentences.\n",
+      "expected": "A race condition happens when two threads change the same shared data at the same time and the final result depends on their timing.\n",
+      "actual": "A race condition happens when two or more threads or processes try to read or modify the same data at the same time, and at least one of them changes it. Because the exact order of those accesses depends on timing, the program can end up in an unpredictable state that\u2019s hard to reproduce.",
+      "latency_ms": 796.13,
+      "tokens": 252,
+      "prompt_tokens": 91,
+      "completion_tokens": 252,
+      "cost_usd": 0.000135,
+      "error": null,
+      "passed": false,
+      "score": 0.772,
+      "timestamp": "2026-09-04 14:32:56.850960+00:00",
+      "evaluator": "exact",
+      "category": "concurrency",
+      "difficulty": null,
+      "runs": 1,
+      "pass_count": 0,
+      "rate_limited": 0,
+      "score_std": 0.0,
+      "assertions": [
+        {
+          "type": "icontains",
+          "passed": true,
+          "score": 1.0,
+          "detail": ""
+        },
+        {
+          "type": "semantic",
+          "passed": true,
+          "score": 0.6987,
+          "detail": "cosine=0.699"
+        },
+        {
+          "type": "llm-rubric",
+          "passed": true,
+          "score": 0.6,
+          "detail": "It defines a race condition and is clear, but fails to provide a concrete example as required by the rubric."
+        },
+        {
+          "type": "faithfulness",
+          "passed": false,
+          "score": 0.3333,
+          "detail": "1/3 claims grounded; unsupported: The exact order of those accesses depends on timing. | The program can end up in an unpredictable state that\u2019s hard to reproduce."
+        },
+        {
+          "type": "latency",
+          "passed": true,
+          "score": 1.0,
+          "detail": "796ms vs 15000ms budget"
+        },
+        {
+          "type": "cost",
+          "passed": true,
+          "score": 1.0,
+          "detail": "$0.000135 vs $0.001000 budget"
+        }
+      ]
+    }
+  ],
+  "_captured_from": "suites/hero.yaml"
+}

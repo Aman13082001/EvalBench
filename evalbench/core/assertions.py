@@ -268,6 +268,18 @@ def _numbered_context(passages: list[str]) -> str:
     return "\n\n".join(f"[{i + 1}] {p}" for i, p in enumerate(passages))
 
 
+def _is_grounded(claim: dict) -> bool:
+    """A claim counts as grounded if the judge cited a passage for it.
+
+    Accepts the citation shape (``source``) and the older boolean shapes
+    (``supported`` / ``in_context``) so a judge that ignores the format
+    instruction still parses.
+    """
+    if "source" in claim:
+        return claim["source"] is not None
+    return bool(claim.get("supported", claim.get("in_context", False)))
+
+
 async def _check_llm_rubric(
     a: Assertion, ctx: AssertionContext
 ) -> AssertionOutcome:
@@ -302,14 +314,21 @@ async def _check_faithfulness(
         )
     cutoff = a.threshold if a.threshold is not None else 0.8
 
+    # Judges default to "unsupported" when the task is vague. Forcing them
+    # to cite the passage number makes them actually look, which corrects a
+    # strong false-negative bias.
     prompt = (
-        "Break the ANSWER into atomic factual claims about the world. For "
-        "each, decide whether the CONTEXT supports it; a claim the context "
-        "does not address counts as unsupported. If the ANSWER is a "
-        "refusal, a non-answer, or contains no factual claims, return an "
-        "empty list. Output ONLY JSON:\n"
-        '{"claims": [{"claim": "<text>", "supported": true|false}]}\n\n'
-        f"CONTEXT:\n{_numbered_context(ctx.context)}\n\n"
+        "You are checking whether an ANSWER is grounded in a CONTEXT.\n\n"
+        "Split the ANSWER into atomic factual claims. For each claim, find "
+        "the numbered context passage that states or entails it and put its "
+        "number in \"source\". Paraphrase and reworded restatements DO count "
+        "as supported. Set \"source\": null only when no passage states or "
+        "implies the claim.\n"
+        "If the ANSWER is a refusal or contains no factual claims, return an "
+        "empty list.\n\n"
+        "Output ONLY JSON:\n"
+        '{"claims": [{"claim": "<text>", "source": <passage number or null>}]}'
+        f"\n\nCONTEXT:\n{_numbered_context(ctx.context)}\n\n"
         f"ANSWER:\n{ctx.response_text}"
     )
 
@@ -326,10 +345,10 @@ async def _check_faithfulness(
             "faithfulness", True, 1.0, "no verifiable claims in the answer"
         )
 
-    supported = [c for c in claims if c.get("supported")]
+    supported = [c for c in claims if _is_grounded(c)]
     score = round(len(supported) / len(claims), 4)
     unsupported = [
-        str(c.get("claim", "?")) for c in claims if not c.get("supported")
+        str(c.get("claim", "?")) for c in claims if not _is_grounded(c)
     ]
     detail = f"{len(supported)}/{len(claims)} claims grounded"
     if unsupported:
@@ -357,11 +376,16 @@ async def _check_context_recall(
         )
     cutoff = a.threshold if a.threshold is not None else 0.8
 
+    # Same citation trick as faithfulness — asking for a passage number
+    # stops the judge defaulting to "not found".
     prompt = (
-        "Break the REFERENCE ANSWER into atomic facts. For each, decide "
-        "whether it can be found in the CONTEXT. Output ONLY JSON:\n"
-        '{"facts": [{"fact": "<text>", "in_context": true|false}]}\n\n'
-        f"CONTEXT:\n{_numbered_context(ctx.context)}\n\n"
+        "Split the REFERENCE ANSWER into atomic facts. For each fact, find "
+        "the numbered context passage that states or entails it and put its "
+        "number in \"source\". Paraphrase counts. Set \"source\": null only "
+        "when no passage covers the fact.\n\n"
+        "Output ONLY JSON:\n"
+        '{"claims": [{"claim": "<text>", "source": <passage number or null>}]}'
+        f"\n\nCONTEXT:\n{_numbered_context(ctx.context)}\n\n"
         f"REFERENCE ANSWER:\n{ctx.expected}"
     )
 
@@ -372,16 +396,19 @@ async def _check_context_recall(
             "context-recall", False, 0.0, f"judge error: {e}"
         )
 
-    facts = (obj or {}).get("facts") or []
+    obj = obj or {}
+    facts = obj.get("claims") or obj.get("facts") or []
     if not facts:
         return AssertionOutcome(
             "context-recall", True, 1.0, "no facts to recall"
         )
 
-    found = [f for f in facts if f.get("in_context")]
+    found = [f for f in facts if _is_grounded(f)]
     score = round(len(found) / len(facts), 4)
     missing = [
-        str(f.get("fact", "?")) for f in facts if not f.get("in_context")
+        str(f.get("claim", f.get("fact", "?")))
+        for f in facts
+        if not _is_grounded(f)
     ]
     detail = f"{len(found)}/{len(facts)} reference facts in context"
     if missing:

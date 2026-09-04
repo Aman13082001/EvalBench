@@ -176,6 +176,49 @@ class TestFaithfulness:
         assert "unsupported" in o.detail
 
     @pytest.mark.asyncio
+    async def test_citation_shape_counts_cited_claims_as_grounded(self):
+        """A judge citing a passage number means grounded; null means not."""
+        from evalbench.core.providers.mock import MockProvider
+
+        judged = MockProvider(response=(
+            '{"claims": ['
+            '{"claim": "Threads racing on shared data", "source": 1},'
+            '{"claim": "Hard to reproduce", "source": null}]}'
+        ))
+        o = await check_assertion(
+            Assertion(type="faithfulness", threshold=0.7),
+            ctx(
+                "answer",
+                context=["Two threads changing shared data at once."],
+                judge_provider=judged,
+            ),
+        )
+        assert o.score == 0.5
+        assert o.passed is False
+        assert "Hard to reproduce" in o.detail
+
+    @pytest.mark.asyncio
+    async def test_recall_accepts_citation_shape(self):
+        from evalbench.core.providers.mock import MockProvider
+
+        judged = MockProvider(response=(
+            '{"claims": ['
+            '{"claim": "Released 1991", "source": 1},'
+            '{"claim": "By Guido", "source": 2}]}'
+        ))
+        o = await check_assertion(
+            Assertion(type="context-recall", threshold=0.8),
+            ctx(
+                "x",
+                expected="Python was released in 1991 by Guido.",
+                context=["Python appeared in 1991.", "Created by Guido."],
+                judge_provider=judged,
+            ),
+        )
+        assert o.score == 1.0
+        assert o.passed is True
+
+    @pytest.mark.asyncio
     async def test_no_claims_is_vacuously_faithful(self):
         from evalbench.core.providers.mock import MockProvider
 

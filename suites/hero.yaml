@@ -1,0 +1,46 @@
+# The evaluation played on the EvalBench homepage.
+#
+# One test, six different kinds of check — the point being that a single
+# answer is judged on correctness, meaning, rubric quality, groundedness,
+# speed and cost all at once. Captured to web/lib/fixtures/hero-run.json
+# by scripts/capture_hero.py; the homepage replays that recording.
+
+name: Hero
+provider: groq
+model: openai/gpt-oss-20b
+judge_provider: groq
+judge_model: openai/gpt-oss-120b
+temperature: 0.0
+samples: 1
+
+tests:
+  - name: race-condition
+    category: concurrency
+    prompt: >
+      Using only the context below, explain a race condition to a junior
+      developer in two or three sentences.
+    expected: >
+      A race condition happens when two threads change the same shared data at
+      the same time and the final result depends on their timing.
+    context:
+      - "A race condition occurs when two or more threads access shared data and try to change it at the same time."
+      - "Classic example: two threads each read a bank balance of 100, each add 50, and both write back 150 — one update is silently lost."
+      - "The fix is to serialise access with a lock, a mutex, or an atomic operation."
+    assert:
+      - type: icontains
+        value: "race condition"
+      - type: semantic
+        value: "Two threads changing the same shared data at once, where the outcome depends on timing."
+        threshold: 0.45
+      - type: llm-rubric
+        criteria: >
+          Defines a race condition in terms of concurrent access to shared
+          state, gives a concrete example, and stays understandable to someone
+          without a computer science background.
+        threshold: 0.6
+      - type: faithfulness
+        threshold: 0.7
+      - type: latency
+        max_ms: 15000
+      - type: cost
+        max_usd: 0.001

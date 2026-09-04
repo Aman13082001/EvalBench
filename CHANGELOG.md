@@ -5,6 +5,16 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Added — Phase D: statistical depth
+- `evalbench/core/stats.py`: percentile bootstrap CI, exact McNemar test,
+  paired Cohen's d, power-based min-sample estimate.
+- `/runs/{id}/summary` returns `pass_rate_ci` / `avg_score_ci` (95%
+  bootstrap) — every headline number now has an interval.
+- Regression output gains `mcnemar` (the correct test for paired
+  pass/fail), `effect_size` (Cohen's d), and `min_samples_for_5pt_mde`
+  (is the suite big enough to trust a 5-point move?). Surfaced in
+  `evalbench compare` / `--compare-to-baseline`.
+
 ### Added — Phase B: RAG evaluation
 - `TestCase.context: list[str]` — retrieved passages, threaded to assertions.
 - **`faithfulness`** — grounded fraction of the answer's atomic claims

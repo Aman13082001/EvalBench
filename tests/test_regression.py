@@ -92,6 +92,21 @@ class TestRegressionDetector:
         result = detector.compare(make_run([0.9, 0.8]), make_run([0.5]))
         assert result["per_test"] == []
 
+    def test_reports_mcnemar_effect_size_and_power_hint(self, detector):
+        baseline = make_run([0.9, 0.9, 0.9, 0.9, 0.9, 0.9])
+        current = make_run([0.4, 0.4, 0.4, 0.4, 0.9, 0.9])  # 4 pass -> fail
+
+        result = detector.compare(baseline, current)
+
+        assert result["mcnemar"]["regressions"] == 4
+        assert result["mcnemar"]["fixes"] == 0
+        assert result["effect_size"] < 0
+        assert result["min_samples_for_5pt_mde"] >= 2
+
+    def test_no_extra_stats_on_count_mismatch(self, detector):
+        result = detector.compare(make_run([0.9, 0.8]), make_run([0.5]))
+        assert "mcnemar" not in result
+
     def test_compare_runs_chain(self, detector):
         runs = [
             make_run([0.9, 0.9]),

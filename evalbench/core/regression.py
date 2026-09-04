@@ -2,6 +2,7 @@ import math
 
 from scipy import stats
 
+from evalbench.core.stats import cohens_d, mcnemar, samples_for_mde
 from evalbench.db.schemas import TestRun
 
 
@@ -43,8 +44,30 @@ class RegressionDetector:
             })
         return rows
 
+    def _extra_stats(self, baseline: TestRun, current: TestRun) -> dict:
+        """McNemar (correct test for pass/fail), effect size, power hint."""
+        if len(baseline.results) != len(current.results):
+            return {}
+
+        pairs = list(zip(baseline.results, current.results, strict=True))
+        b_pass = [bool(x.passed) for x, _ in pairs]
+        c_pass = [bool(y.passed) for _, y in pairs]
+        b_score = [x.score for x, _ in pairs if x.score is not None]
+        c_score = [y.score for _, y in pairs if y.score is not None]
+
+        out: dict = {"mcnemar": mcnemar(b_pass, c_pass)}
+
+        if len(b_score) == len(c_score) and len(b_score) >= 2:
+            out["effect_size"] = cohens_d(b_score, c_score)
+            diffs = [c - b for b, c in zip(b_score, c_score, strict=True)]
+            mean = sum(diffs) / len(diffs)
+            var = sum((d - mean) ** 2 for d in diffs) / (len(diffs) - 1)
+            out["min_samples_for_5pt_mde"] = samples_for_mde(var ** 0.5)
+        return out
+
     def compare(self, baseline: TestRun, current: TestRun) -> dict:
         per_test = self._per_test(baseline, current)
+        extra = self._extra_stats(baseline, current)
 
         baseline_scores = [
             r.score
@@ -149,6 +172,7 @@ class RegressionDetector:
                 "test_count": len(baseline_scores),
                 "reason": reason,
                 "per_test": per_test,
+                **extra,
             }
 
         # Normal case: paired t-test
@@ -188,6 +212,7 @@ class RegressionDetector:
             "test_count": len(baseline_scores),
             "reason": reason,
             "per_test": per_test,
+            **extra,
         }
 
     def compare_runs(self, runs: list[TestRun]) -> list[dict]:

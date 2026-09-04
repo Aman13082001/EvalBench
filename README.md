@@ -257,6 +257,8 @@ Suite-level:
 
 `POST /regression` (CLI: `evalbench compare <baseline_run_id> <current_run_id>`) runs a **paired t-test** on the two runs' per-test score vectors. It reports `mean_diff`, `t_statistic`, `p_value`, a `per_test` breakdown with a `regressed` flag on each case, and flags a run-level regression when the mean score dropped by more than 0.05 **and** `p < 0.05` (a uniform decrease across all tests is caught separately).
 
+It also returns, for context: **`mcnemar`** — the exact test for paired *pass/fail* outcomes (regressions vs fixes, with a p-value) — **`effect_size`** (paired Cohen's d, so "significant but tiny" is distinguishable from "significant and large"), and **`min_samples_for_5pt_mde`** — roughly how many tests you'd need to reliably detect a 5-point move at the current variance. Run summaries carry `pass_rate_ci` / `avg_score_ci` (95% bootstrap).
+
 Promote a good run as a suite's baseline with `evalbench baseline <suite_id> <run_id>` (or `POST /suites/{id}/baseline`). Then `evalbench run <suite.yaml> --compare-to-baseline` runs the check automatically and **exits non-zero on a detected regression** — a CI gate on quality, not just pass rate.
 
 ---
@@ -375,7 +377,9 @@ Shipped in **v0.4.0**: provider abstraction (Ollama + hosted), per-run cost/toke
 
 Also shipped: a **GitHub Action** (`.github/actions/evalbench`) that gates PRs on a suite and posts a result comment.
 
-Planned next (Phase 2): a React frontend, a job queue (Celery) for multi-worker execution, RAG-specific evaluators (faithfulness, context recall), a richer statistical engine (bootstrap CIs, McNemar's test), and publishing the Action to the Marketplace.
+Also shipped: **RAG assertions** (`faithfulness`, `context-recall`, `context-precision`) and a **richer statistical engine** (bootstrap CIs, exact McNemar, Cohen's d, power estimate).
+
+Planned next: a React frontend, a job queue (Celery/RQ) for multi-worker execution, and publishing the Action to the Marketplace.
 
 ## License
 

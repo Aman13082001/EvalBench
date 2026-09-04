@@ -154,7 +154,20 @@ def _check_regression(
     table.add_row("Baseline mean", str(comp.get("baseline_mean")))
     table.add_row("Current mean", str(comp.get("current_mean")))
     table.add_row("Mean diff", str(comp.get("mean_diff")))
-    table.add_row("P-value", str(comp.get("p_value")))
+    table.add_row("P-value (paired t)", str(comp.get("p_value")))
+    if comp.get("effect_size") is not None:
+        table.add_row("Effect size (d)", str(comp["effect_size"]))
+    mc = comp.get("mcnemar")
+    if mc:
+        table.add_row(
+            "McNemar",
+            f"{mc['regressions']} regressed / {mc['fixes']} fixed, "
+            f"p={mc['p_value']}",
+        )
+    if comp.get("min_samples_for_5pt_mde"):
+        table.add_row(
+            "Samples for 5pt MDE", str(comp["min_samples_for_5pt_mde"])
+        )
     console.print(table)
 
     regressed_tests = [

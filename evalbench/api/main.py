@@ -17,6 +17,7 @@ from evalbench.api.deps import get_current_user, limiter
 from evalbench.api.routes import router as suites_router
 from evalbench.config import settings
 from evalbench.core.regression import RegressionDetector
+from evalbench.core.stats import bootstrap_ci
 from evalbench.db.mongo import client, db
 from evalbench.db.schemas import TestRun
 from evalbench.metrics import (
@@ -337,6 +338,7 @@ async def get_run_summary(
     passed = sum(1 for r in scored if r.get("passed"))
 
     scores = [r.get("score", 0) or 0 for r in scored]
+    pass_flags = [1 if r.get("passed") else 0 for r in scored]
     latencies = [r.get("latency_ms", 0) for r in results]
     tokens = [r.get("tokens", 0) for r in results]
     prompt_tokens = [r.get("prompt_tokens", 0) for r in results]
@@ -401,6 +403,9 @@ async def get_run_summary(
             if scores
             else 0
         ),
+        # 95% percentile-bootstrap CIs — None when < 2 scored tests.
+        "pass_rate_ci": bootstrap_ci(pass_flags),
+        "avg_score_ci": bootstrap_ci(scores),
         "avg_latency_ms": (
             round(
                 sum(latencies) / len(latencies),

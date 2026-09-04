@@ -51,11 +51,19 @@ from evalbench.pricing import estimate_cost
 
 
 class TestRunner:
-    def __init__(self):
+    def __init__(self, provider_key: str | None = None):
         self.provider: Provider | None = None
         # Lazily built when a suite uses the judge / security evaluator.
         self._judge_provider: Provider | None = None
         self._evaluator_cache: dict = {}
+        # Optional per-run API key (playground / bring-your-own-key). When
+        # set it overrides the key resolved from settings/env.
+        self._provider_key = provider_key
+
+    def _make_provider(self, name: str) -> Provider:
+        if self._provider_key:
+            return get_provider(name, api_key=self._provider_key)
+        return get_provider(name)
 
     def _get_evaluator(self, name: str, suite: TestSuite):
         if name in ("judge", "security"):
@@ -76,7 +84,7 @@ class TestRunner:
             return cls()
 
         if self._judge_provider is None:
-            self._judge_provider = get_provider(jp)
+            self._judge_provider = self._make_provider(jp)
         judge_model = suite.judge_model or (
             "llama3.1" if jp == "ollama" else suite.model
         )
@@ -93,7 +101,7 @@ class TestRunner:
         if jp == "ollama" and not explicit:
             return None, suite.judge_model or "llama3.1"
         if self._judge_provider is None:
-            self._judge_provider = get_provider(jp)
+            self._judge_provider = self._make_provider(jp)
         model = suite.judge_model or (
             "llama3.1" if jp == "ollama" else suite.model
         )
@@ -286,7 +294,7 @@ class TestRunner:
         progress_cb: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> TestRun:
 
-        self.provider = get_provider(suite.provider)
+        self.provider = self._make_provider(suite.provider)
         await self.validate_model(suite.model)
 
         suite_start = time.time()

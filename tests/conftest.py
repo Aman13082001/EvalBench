@@ -12,10 +12,14 @@ os.environ.setdefault("EVALBENCH_ALLOW_INSECURE", "1")
 from evalbench import jobs as jobs_module  # noqa: E402
 from evalbench.api import auth_routes as auth_routes_module  # noqa: E402
 from evalbench.api import main as main_module  # noqa: E402
+from evalbench.api import playground as playground_module  # noqa: E402
 from evalbench.api import routes as routes_module  # noqa: E402
-from evalbench.api.deps import get_current_user  # noqa: E402
+from evalbench.api.deps import get_current_user, limiter  # noqa: E402
 from evalbench.api.main import app  # noqa: E402
 from evalbench.db import mongo as mongo_module  # noqa: E402
+
+# Rate limiting is not what unit tests should exercise.
+limiter.enabled = False
 
 
 # ── Override auth for all route tests ──
@@ -61,6 +65,12 @@ def mock_db():
     mock.test_runs.find = MagicMock()
     mock.test_runs.create_index = AsyncMock()
 
+    # Playground runs collection
+    mock.playground_runs = MagicMock()
+    mock.playground_runs.insert_one = AsyncMock()
+    mock.playground_runs.find_one = AsyncMock()
+    mock.playground_runs.create_index = AsyncMock()
+
     # Users collection
     mock.users = MagicMock()
     mock.users.find_one = AsyncMock()
@@ -94,6 +104,11 @@ def mock_db():
         ),
         patch.object(
             jobs_module,
+            "db",
+            mock
+        ),
+        patch.object(
+            playground_module,
             "db",
             mock
         ),

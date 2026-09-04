@@ -14,10 +14,11 @@ from slowapi.errors import RateLimitExceeded
 from evalbench.api.auth import get_password_hash
 from evalbench.api.auth_routes import router as auth_router
 from evalbench.api.deps import get_current_user, limiter
+from evalbench.api.playground import router as playground_router
 from evalbench.api.routes import router as suites_router
+from evalbench.api.summary import summarize_run
 from evalbench.config import settings
 from evalbench.core.regression import RegressionDetector
-from evalbench.core.stats import bootstrap_ci
 from evalbench.db.mongo import client, db
 from evalbench.db.schemas import TestRun
 from evalbench.metrics import (
@@ -75,6 +76,10 @@ async def _ensure_indexes() -> None:
     await db.test_runs.create_index([("suite_id", 1), ("created_at", -1)])
     # The startup reaper queries status $in [queued, running].
     await db.test_runs.create_index("status")
+    # Playground runs auto-expire after 24h.
+    await db.playground_runs.create_index(
+        "created_at", expireAfterSeconds=86400
+    )
 
 
 @asynccontextmanager
@@ -171,6 +176,7 @@ init_metrics(app)
 
 app.include_router(auth_router)
 app.include_router(suites_router)
+app.include_router(playground_router)
 
 
 # ─────────────────────────────────────────────
@@ -332,106 +338,7 @@ async def get_run_summary(
             detail="Run not found",
         )
 
-    results = doc.get("results", [])
-
-    total = len(results)
-
-    def _errored(r: dict) -> bool:
-        # A test counts as an infrastructure error (excluded from the
-        # pass rate) only when no sample produced a score.
-        return bool(r.get("error")) and not r.get("runs", 0)
-
-    scored = [r for r in results if not _errored(r)]
-    errors = total - len(scored)
-    total_scored = len(scored)
-
-    passed = sum(1 for r in scored if r.get("passed"))
-
-    scores = [r.get("score", 0) or 0 for r in scored]
-    pass_flags = [1 if r.get("passed") else 0 for r in scored]
-    latencies = [r.get("latency_ms", 0) for r in results]
-    tokens = [r.get("tokens", 0) for r in results]
-    prompt_tokens = [r.get("prompt_tokens", 0) for r in results]
-    completion_tokens = [r.get("completion_tokens", 0) for r in results]
-    costs = [r.get("cost_usd", 0) or 0 for r in results]
-    rate_limited = sum(r.get("rate_limited", 0) for r in results)
-
-    # ── Per-assertion-type rollup ──
-    assertion_types: dict = {}
-    for r in results:
-        for a in r.get("assertions") or []:
-            bucket = assertion_types.setdefault(
-                a.get("type", "?"), {"passed": 0, "failed": 0}
-            )
-            bucket["passed" if a.get("passed") else "failed"] += 1
-
-    # ── Per-category breakdown ──
-    by_category: dict = {}
-    for r in results:
-        cat = r.get("category") or "uncategorized"
-        bucket = by_category.setdefault(
-            cat,
-            {"total": 0, "passed": 0, "errors": 0, "_score_sum": 0.0},
-        )
-        bucket["total"] += 1
-        if _errored(r):
-            bucket["errors"] += 1
-            continue
-        if r.get("passed"):
-            bucket["passed"] += 1
-        bucket["_score_sum"] += r.get("score", 0) or 0
-
-    for bucket in by_category.values():
-        n_scored = bucket["total"] - bucket["errors"]
-        bucket["pass_rate"] = (
-            round(bucket["passed"] / n_scored, 4) if n_scored else 0
-        )
-        bucket["avg_score"] = (
-            round(bucket["_score_sum"] / n_scored, 4) if n_scored else 0
-        )
-        del bucket["_score_sum"]
-
-    return {
-        "run_id": run_id,
-        "suite_id": doc.get("suite_id"),
-        "model": doc.get("model"),
-        "evaluator": doc.get("evaluator"),
-        "status": doc.get("status", "completed"),
-        "progress": doc.get("progress", 1.0),
-        "total_tests": total,
-        "scored_tests": total_scored,
-        "errors": errors,
-        "passed": passed,
-        "failed": total_scored - passed,
-        "pass_rate": (
-            round(passed / total_scored, 4)
-            if total_scored
-            else 0
-        ),
-        "avg_score": (
-            round(sum(scores) / len(scores), 4)
-            if scores
-            else 0
-        ),
-        # 95% percentile-bootstrap CIs — None when < 2 scored tests.
-        "pass_rate_ci": bootstrap_ci(pass_flags),
-        "avg_score_ci": bootstrap_ci(scores),
-        "avg_latency_ms": (
-            round(
-                sum(latencies) / len(latencies),
-                2,
-            )
-            if latencies
-            else 0
-        ),
-        "total_tokens": sum(tokens),
-        "total_prompt_tokens": sum(prompt_tokens),
-        "total_completion_tokens": sum(completion_tokens),
-        "total_cost_usd": round(sum(costs), 6),
-        "rate_limited_samples": rate_limited,
-        "by_category": by_category,
-        "assertion_types": assertion_types,
-    }
+    return {"run_id": run_id, **summarize_run(doc)}
 
 
 # ─────────────────────────────────────────────

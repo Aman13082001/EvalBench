@@ -102,7 +102,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: evalbench-worker
+    # No container_name — scale with `docker compose up -d --scale worker=N`.
     restart: unless-stopped
     command: ["python", "-m", "evalbench.worker"]
     environment:

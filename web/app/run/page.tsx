@@ -9,6 +9,7 @@ import {
   RunSummary,
 } from "@/lib/api";
 import { EXAMPLE_SUITE } from "@/lib/example";
+import { PRESETS } from "@/lib/presets";
 import Results from "@/components/Results";
 
 function RunPage() {
@@ -65,9 +66,28 @@ function RunPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-3">
-          <label className="label-xs block" htmlFor="suite">
-            Suite definition (YAML)
-          </label>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="label-xs" htmlFor="suite">
+              Suite definition (YAML)
+            </label>
+            <div className="flex flex-wrap gap-1">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  title={p.blurb}
+                  onClick={() => {
+                    setText(p.yaml);
+                    setResult(null);
+                    setError(null);
+                  }}
+                  className="border border-line px-2 py-0.5 font-mono text-[11px] text-muted transition-colors hover:border-primary hover:text-text"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <textarea
             id="suite"
             className="field h-[26rem] resize-y font-mono text-xs leading-relaxed"

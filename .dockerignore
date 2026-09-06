@@ -1,17 +1,36 @@
+# Keep the build context small. The image only needs pyproject.toml,
+# README.md and evalbench/ — everything else here is either huge
+# (node_modules, model caches) or irrelevant to the API/worker.
+
+# Python
 .venv/
 __pycache__/
 *.pyc
-.env
-.git/
-.gitignore
 *.egg-info/
 dist/
 build/
 .mypy_cache/
 .pytest_cache/
+.ruff_cache/
+
+# Secrets and local state
+.env
+.git/
+.gitignore
 mongo_data/
-frontend/Dockerfile
+
+# The web app — never copied into the image, and node_modules/.next
+# would otherwise be transferred to the daemon on every build.
+web/
+node_modules/
+.next/
+
+# Not needed at runtime
 .github/
 tests/
 suites/
 docs/
+research/
+scripts/
+grafana/
+prometheus/

@@ -1,0 +1,231 @@
+{
+  "generated": "2026-09-07",
+  "suite": "Research \u2014 Power Study",
+  "n_tests": 30,
+  "baseline_model": "openai/gpt-oss-120b",
+  "candidate_model": "allam-2-7b",
+  "baseline_mean": 0.8378,
+  "candidate_mean": 0.6076,
+  "mean_diff": -0.2302,
+  "diff_sd": 0.5478,
+  "effect_size": -0.4202,
+  "observed_p_value": 0.028729,
+  "min_samples_for_5pt_mde": 943,
+  "resamples": 2000,
+  "n_for_80_power": 60,
+  "power_at_10": 0.2135,
+  "curve": [
+    {
+      "n": 4,
+      "power": 0.013,
+      "significant_rate": 0.013
+    },
+    {
+      "n": 6,
+      "power": 0.067,
+      "significant_rate": 0.067
+    },
+    {
+      "n": 8,
+      "power": 0.1495,
+      "significant_rate": 0.151
+    },
+    {
+      "n": 10,
+      "power": 0.2135,
+      "significant_rate": 0.2145
+    },
+    {
+      "n": 12,
+      "power": 0.2785,
+      "significant_rate": 0.2795
+    },
+    {
+      "n": 15,
+      "power": 0.3555,
+      "significant_rate": 0.356
+    },
+    {
+      "n": 20,
+      "power": 0.435,
+      "significant_rate": 0.435
+    },
+    {
+      "n": 25,
+      "power": 0.527,
+      "significant_rate": 0.5275
+    },
+    {
+      "n": 30,
+      "power": 0.594,
+      "significant_rate": 0.594
+    },
+    {
+      "n": 40,
+      "power": 0.7465,
+      "significant_rate": 0.7465
+    },
+    {
+      "n": 60,
+      "power": 0.9105,
+      "significant_rate": 0.9105
+    },
+    {
+      "n": 100,
+      "power": 0.9865,
+      "significant_rate": 0.9865
+    }
+  ],
+  "pairs": [
+    {
+      "test": "cap-japan",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "cap-france",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "cap-egypt",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "cap-canada",
+      "baseline": 0.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "cap-australia",
+      "baseline": 0.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "moon-year",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "mult-1",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "mult-2",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "sub-1",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "pct-1",
+      "baseline": 1.0,
+      "candidate": 0.0
+    },
+    {
+      "test": "ooo-1",
+      "baseline": 1.0,
+      "candidate": 0.0
+    },
+    {
+      "test": "sqrt-1",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "reason-age",
+      "baseline": 1.0,
+      "candidate": 0.0
+    },
+    {
+      "test": "reason-trains",
+      "baseline": 1.0,
+      "candidate": 0.0
+    },
+    {
+      "test": "reason-change",
+      "baseline": 1.0,
+      "candidate": 0.0
+    },
+    {
+      "test": "reason-seq",
+      "baseline": 1.0,
+      "candidate": 0.0
+    },
+    {
+      "test": "reason-ratio",
+      "baseline": 1.0,
+      "candidate": 0.0
+    },
+    {
+      "test": "reason-days",
+      "baseline": 1.0,
+      "candidate": 0.0
+    },
+    {
+      "test": "json-person",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "json-book",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "phone-fmt",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "date-fmt",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "csv-fmt",
+      "baseline": 1.0,
+      "candidate": 1.0
+    },
+    {
+      "test": "list-fmt",
+      "baseline": 1.0,
+      "candidate": 0.5
+    },
+    {
+      "test": "def-index",
+      "baseline": 0.6227,
+      "candidate": 0.5501
+    },
+    {
+      "test": "def-recursion",
+      "baseline": 0.4066,
+      "candidate": 0.3839
+    },
+    {
+      "test": "def-race",
+      "baseline": 0.4823,
+      "candidate": 0.4447
+    },
+    {
+      "test": "def-cache",
+      "baseline": 0.533,
+      "candidate": 0.4367
+    },
+    {
+      "test": "def-idempotent",
+      "baseline": 0.6123,
+      "candidate": 0.4464
+    },
+    {
+      "test": "def-deadlock",
+      "baseline": 0.4774,
+      "candidate": 0.4658
+    }
+  ]
+}

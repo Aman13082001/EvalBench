@@ -1,0 +1,103 @@
+# Suite for the sample-size study (research/REPORT.md).
+#
+# 30 tests, deliberately spread from trivial to hard so two models of
+# different capability actually separate. Only cheap, deterministic
+# assertion types are used — no LLM judge — so the measured variance
+# comes from the model under test, not from a grader.
+
+name: Research — Power Study
+provider: groq
+model: openai/gpt-oss-120b
+temperature: 0.0
+samples: 1
+concurrency: 4
+
+tests:
+  # ── factual recall (easy) ──
+  - { name: cap-japan, category: factual, prompt: "Capital of Japan? One word.", expected: "Tokyo" }
+  - { name: cap-france, category: factual, prompt: "Capital of France? One word.", expected: "Paris" }
+  - { name: cap-egypt, category: factual, prompt: "Capital of Egypt? One word.", expected: "Cairo" }
+  - { name: cap-canada, category: factual, prompt: "Capital of Canada? One word.", expected: "Ottawa" }
+  - { name: cap-australia, category: factual, prompt: "Capital of Australia? One word.", expected: "Canberra" }
+  - { name: moon-year, category: factual, prompt: "Year Apollo 11 landed on the Moon? Number only.", expected: "1969" }
+
+  # ── arithmetic (easy to medium) ──
+  - { name: mult-1, category: arithmetic, prompt: "What is 17 * 23? Number only.", expected: "391" }
+  - { name: mult-2, category: arithmetic, prompt: "What is 12 * 12? Number only.", expected: "144" }
+  - { name: sub-1, category: arithmetic, prompt: "What is 100 - 37? Number only.", expected: "63" }
+  - { name: pct-1, category: arithmetic, prompt: "What is 35% of 240? Number only.", expected: "84" }
+  - { name: ooo-1, category: arithmetic, prompt: "Compute 6 + 4 * 3 - 8 / 2. Number only.", expected: "14" }
+  - { name: sqrt-1, category: arithmetic, prompt: "What is 15 squared? Number only.", expected: "225" }
+
+  # ── multi-step reasoning (harder — where models separate) ──
+  - { name: reason-age, category: reasoning, prompt: "Tom is 4 years older than Sara. Sara is half of Ben's age. Ben is 20. How old is Tom? Number only.", expected: "14" }
+  - { name: reason-trains, category: reasoning, prompt: "A train leaves at 14:20 and takes 95 minutes. What time does it arrive? Answer as HH:MM.", expected: "15:55" }
+  - { name: reason-change, category: reasoning, prompt: "You buy items costing 3.40 and 5.85 and pay with a 20 note. What is the change? Number with two decimals only.", expected: "10.75" }
+  - { name: reason-seq, category: reasoning, prompt: "What is the next number: 2, 6, 12, 20, 30, ? Number only.", expected: "42" }
+  - { name: reason-ratio, category: reasoning, prompt: "If 3 machines make 3 widgets in 3 minutes, how many minutes for 100 machines to make 100 widgets? Number only.", expected: "3" }
+  - { name: reason-days, category: reasoning, prompt: "If today is Wednesday, what day is it 100 days from now? One word.", expected: "Friday" }
+
+  # ── structured output (format discipline) ──
+  - name: json-person
+    category: structured
+    prompt: 'Return JSON with keys "name" (string) and "age" (integer) for Ada, age 36. JSON only.'
+    assert:
+      - { type: json-schema, value: { type: object, required: [name, age], properties: { age: { type: integer } } } }
+  - name: json-book
+    category: structured
+    prompt: 'Return JSON with keys "title" (string) and "year" (integer) for Dune, 1965. JSON only.'
+    assert:
+      - { type: json-schema, value: { type: object, required: [title, year], properties: { year: { type: integer } } } }
+  - name: phone-fmt
+    category: structured
+    prompt: "Output a fake US phone number in exactly the format XXX-XXX-XXXX. Nothing else."
+    assert:
+      - { type: regex, value: '^\D*\d{3}-\d{3}-\d{4}\D*$' }
+  - name: date-fmt
+    category: structured
+    prompt: "Output the date 3 March 2021 in exactly YYYY-MM-DD format. Nothing else."
+    assert:
+      - { type: regex, value: '2021-03-03' }
+  - name: csv-fmt
+    category: structured
+    prompt: "Output exactly three comma-separated primes, ascending, nothing else."
+    assert:
+      - { type: regex, value: '\d+\s*,\s*\d+\s*,\s*\d+' }
+  - name: list-fmt
+    category: structured
+    prompt: "List exactly three primary colours separated by commas. Nothing else."
+    assert:
+      - { type: icontains, value: "red" }
+      - { type: regex, value: ',' }
+
+  # ── definitions (semantic — graded locally, no judge) ──
+  - name: def-index
+    category: definitions
+    prompt: "In one sentence, what does a database index do?"
+    assert:
+      - { type: semantic, value: "It speeds up lookups by letting the database avoid scanning the whole table.", threshold: 0.45 }
+  - name: def-recursion
+    category: definitions
+    prompt: "In one sentence, what is recursion?"
+    assert:
+      - { type: semantic, value: "A function that calls itself on a smaller input until it reaches a base case.", threshold: 0.45 }
+  - name: def-race
+    category: definitions
+    prompt: "In one sentence, what is a race condition?"
+    assert:
+      - { type: semantic, value: "Two threads changing shared data at the same time, where the result depends on timing.", threshold: 0.45 }
+  - name: def-cache
+    category: definitions
+    prompt: "In one sentence, what is a cache?"
+    assert:
+      - { type: semantic, value: "A fast store holding copies of data so repeat requests avoid the slower source.", threshold: 0.45 }
+  - name: def-idempotent
+    category: definitions
+    prompt: "In one sentence, what does idempotent mean?"
+    assert:
+      - { type: semantic, value: "An operation that produces the same result whether applied once or many times.", threshold: 0.45 }
+  - name: def-deadlock
+    category: definitions
+    prompt: "In one sentence, what is a deadlock?"
+    assert:
+      - { type: semantic, value: "Two or more processes each waiting on a resource the other holds, so none proceed.", threshold: 0.45 }

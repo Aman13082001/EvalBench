@@ -23,9 +23,10 @@ export const metadata: Metadata = {
     "Run evaluation suites against any model. Composable assertions, RAG faithfulness, cost tracking, and statistical regression detection.",
 };
 
-// Only routes that exist. /example and /research land in F5 / F6.
+// Only routes that exist. /research lands in F6.
 const NAV = [
   { href: "/run", label: "Try" },
+  { href: "/example", label: "Example" },
   { href: "/styleguide", label: "Design" },
 ];
 

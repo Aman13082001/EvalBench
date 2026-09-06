@@ -1,0 +1,812 @@
+{
+  "suite_name": "Capability Showcase",
+  "baseline": {
+    "suite_id": null,
+    "model": "openai/gpt-oss-120b",
+    "evaluator": "exact",
+    "status": "completed",
+    "progress": 1.0,
+    "total_tests": 8,
+    "scored_tests": 8,
+    "errors": 0,
+    "passed": 7,
+    "failed": 1,
+    "pass_rate": 0.875,
+    "avg_score": 0.9048,
+    "pass_rate_ci": [
+      0.625,
+      1.0
+    ],
+    "avg_score_ci": [
+      0.7858,
+      1.0
+    ],
+    "avg_latency_ms": 633.58,
+    "total_tokens": 580,
+    "total_prompt_tokens": 713,
+    "total_completion_tokens": 580,
+    "total_cost_usd": 0.000542,
+    "rate_limited_samples": 0,
+    "by_category": {
+      "factual": {
+        "total": 2,
+        "passed": 2,
+        "errors": 0,
+        "pass_rate": 1.0,
+        "avg_score": 1.0
+      },
+      "reasoning": {
+        "total": 2,
+        "passed": 2,
+        "errors": 0,
+        "pass_rate": 1.0,
+        "avg_score": 1.0
+      },
+      "structured": {
+        "total": 2,
+        "passed": 2,
+        "errors": 0,
+        "pass_rate": 1.0,
+        "avg_score": 1.0
+      },
+      "rag": {
+        "total": 1,
+        "passed": 0,
+        "errors": 0,
+        "pass_rate": 0.0,
+        "avg_score": 0.6667
+      },
+      "quality": {
+        "total": 1,
+        "passed": 1,
+        "errors": 0,
+        "pass_rate": 1.0,
+        "avg_score": 0.5717
+      }
+    },
+    "assertion_types": {
+      "exact": {
+        "passed": 4,
+        "failed": 0
+      },
+      "json-schema": {
+        "passed": 1,
+        "failed": 0
+      },
+      "icontains": {
+        "passed": 1,
+        "failed": 1
+      },
+      "regex": {
+        "passed": 1,
+        "failed": 0
+      },
+      "faithfulness": {
+        "passed": 1,
+        "failed": 0
+      },
+      "context-recall": {
+        "passed": 1,
+        "failed": 0
+      },
+      "semantic": {
+        "passed": 1,
+        "failed": 0
+      },
+      "llm-rubric": {
+        "passed": 1,
+        "failed": 0
+      }
+    },
+    "results": [
+      {
+        "test_name": "capital-japan",
+        "prompt": "What is the capital of Japan? Answer with one word.",
+        "expected": "Tokyo",
+        "actual": "Tokyo",
+        "latency_ms": 381.8,
+        "tokens": 43,
+        "prompt_tokens": 83,
+        "completion_tokens": 43,
+        "cost_usd": 4.5e-05,
+        "error": null,
+        "passed": true,
+        "score": 1.0,
+        "timestamp": "2026-09-06 20:58:27.629714+00:00",
+        "evaluator": "exact",
+        "category": "factual",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "exact",
+            "passed": true,
+            "score": 1.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "moon-landing",
+        "prompt": "In what year did Apollo 11 land on the Moon? Number only.",
+        "expected": "1969",
+        "actual": "1969",
+        "latency_ms": 584.2,
+        "tokens": 49,
+        "prompt_tokens": 86,
+        "completion_tokens": 49,
+        "cost_usd": 5e-05,
+        "error": null,
+        "passed": true,
+        "score": 1.0,
+        "timestamp": "2026-09-06 20:58:27.833465+00:00",
+        "evaluator": "exact",
+        "category": "factual",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "exact",
+            "passed": true,
+            "score": 1.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "arithmetic",
+        "prompt": "What is 17 multiplied by 23? Reply with the number only.",
+        "expected": "391",
+        "actual": "391",
+        "latency_ms": 544.5,
+        "tokens": 42,
+        "prompt_tokens": 86,
+        "completion_tokens": 42,
+        "cost_usd": 4.4e-05,
+        "error": null,
+        "passed": true,
+        "score": 1.0,
+        "timestamp": "2026-09-06 20:58:27.795098+00:00",
+        "evaluator": "exact",
+        "category": "reasoning",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "exact",
+            "passed": true,
+            "score": 1.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "order-of-operations",
+        "prompt": "Compute 6 + 4 * 3 - 8 / 2. Number only.",
+        "expected": "14",
+        "actual": "14",
+        "latency_ms": 545.63,
+        "tokens": 98,
+        "prompt_tokens": 90,
+        "completion_tokens": 98,
+        "cost_usd": 8.7e-05,
+        "error": null,
+        "passed": true,
+        "score": 1.0,
+        "timestamp": "2026-09-06 20:58:27.796887+00:00",
+        "evaluator": "exact",
+        "category": "reasoning",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "exact",
+            "passed": true,
+            "score": 1.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "json-record",
+        "prompt": "Return a JSON object with keys \"language\" (string) and \"year\" (integer) for Python, first released in 1991. JSON only, no prose.\n",
+        "expected": "",
+        "actual": "{\n  \"language\": \"Python\",\n  \"year\": 1991\n}",
+        "latency_ms": 379.12,
+        "tokens": 83,
+        "prompt_tokens": 106,
+        "completion_tokens": 83,
+        "cost_usd": 7.8e-05,
+        "error": null,
+        "passed": true,
+        "score": 1.0,
+        "timestamp": "2026-09-06 20:58:28.680741+00:00",
+        "evaluator": "exact",
+        "category": "structured",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "json-schema",
+            "passed": true,
+            "score": 1.0,
+            "detail": "valid"
+          },
+          {
+            "type": "icontains",
+            "passed": true,
+            "score": 1.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "phone-format",
+        "prompt": "Output a fake US phone number in exactly the format XXX-XXX-XXXX.",
+        "expected": "",
+        "actual": "555-123-4567",
+        "latency_ms": 888.9,
+        "tokens": 63,
+        "prompt_tokens": 87,
+        "completion_tokens": 63,
+        "cost_usd": 6e-05,
+        "error": null,
+        "passed": true,
+        "score": 1.0,
+        "timestamp": "2026-09-06 20:58:28.686108+00:00",
+        "evaluator": "exact",
+        "category": "structured",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "regex",
+            "passed": true,
+            "score": 1.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "grounded-summary",
+        "prompt": "Using only the context below, say when the Eiffel Tower was completed and roughly how tall it is.\n",
+        "expected": "The Eiffel Tower was completed in 1889 and stands about 330 metres tall.",
+        "actual": "I\u2019m sorry, but I don\u2019t have the necessary context to answer that question.",
+        "latency_ms": 887.96,
+        "tokens": 112,
+        "prompt_tokens": 91,
+        "completion_tokens": 112,
+        "cost_usd": 9.8e-05,
+        "error": null,
+        "passed": false,
+        "score": 0.6667,
+        "timestamp": "2026-09-06 20:58:30.380248+00:00",
+        "evaluator": "exact",
+        "category": "rag",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 0,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "faithfulness",
+            "passed": true,
+            "score": 1.0,
+            "detail": "no verifiable claims in the answer"
+          },
+          {
+            "type": "context-recall",
+            "passed": true,
+            "score": 1.0,
+            "detail": "2/2 reference facts in context"
+          },
+          {
+            "type": "icontains",
+            "passed": false,
+            "score": 0.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "explain-clearly",
+        "prompt": "In two sentences, explain what an index does in a database.",
+        "expected": "An index is a data structure that lets the database find rows matching a query without scanning the whole table, at the cost of extra storage and slower writes.\n",
+        "actual": "An index is a data structure that stores a sorted copy of one or more columns, allowing the database to quickly locate rows matching a query without scanning the entire table. By mapping indexed values to their corresponding row pointers, it dramatically speeds up search, join, and ordering operations.",
+        "latency_ms": 856.49,
+        "tokens": 90,
+        "prompt_tokens": 84,
+        "completion_tokens": 90,
+        "cost_usd": 8e-05,
+        "error": null,
+        "passed": true,
+        "score": 0.5717,
+        "timestamp": "2026-09-06 20:58:35.966235+00:00",
+        "evaluator": "exact",
+        "category": "quality",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "semantic",
+            "passed": true,
+            "score": 0.5435,
+            "detail": "cosine=0.543"
+          },
+          {
+            "type": "llm-rubric",
+            "passed": true,
+            "score": 0.6,
+            "detail": "Explains the speed benefit but fails to mention any storage or write cost trade-off."
+          }
+        ]
+      }
+    ]
+  },
+  "candidate": {
+    "suite_id": null,
+    "model": "allam-2-7b",
+    "evaluator": "exact",
+    "status": "completed",
+    "progress": 1.0,
+    "total_tests": 8,
+    "scored_tests": 8,
+    "errors": 0,
+    "passed": 5,
+    "failed": 3,
+    "pass_rate": 0.625,
+    "avg_score": 0.6713,
+    "pass_rate_ci": [
+      0.25,
+      0.875
+    ],
+    "avg_score_ci": [
+      0.3663,
+      0.9451
+    ],
+    "avg_latency_ms": 2559.8,
+    "total_tokens": 374,
+    "total_prompt_tokens": 214,
+    "total_completion_tokens": 374,
+    "total_cost_usd": 0,
+    "rate_limited_samples": 0,
+    "by_category": {
+      "factual": {
+        "total": 2,
+        "passed": 2,
+        "errors": 0,
+        "pass_rate": 1.0,
+        "avg_score": 1.0
+      },
+      "reasoning": {
+        "total": 2,
+        "passed": 1,
+        "errors": 0,
+        "pass_rate": 0.5,
+        "avg_score": 0.5
+      },
+      "structured": {
+        "total": 2,
+        "passed": 1,
+        "errors": 0,
+        "pass_rate": 0.5,
+        "avg_score": 0.5
+      },
+      "rag": {
+        "total": 1,
+        "passed": 0,
+        "errors": 0,
+        "pass_rate": 0.0,
+        "avg_score": 0.8095
+      },
+      "quality": {
+        "total": 1,
+        "passed": 1,
+        "errors": 0,
+        "pass_rate": 1.0,
+        "avg_score": 0.5605
+      }
+    },
+    "assertion_types": {
+      "exact": {
+        "passed": 3,
+        "failed": 1
+      },
+      "json-schema": {
+        "passed": 1,
+        "failed": 0
+      },
+      "icontains": {
+        "passed": 2,
+        "failed": 0
+      },
+      "regex": {
+        "passed": 0,
+        "failed": 1
+      },
+      "faithfulness": {
+        "passed": 0,
+        "failed": 1
+      },
+      "context-recall": {
+        "passed": 1,
+        "failed": 0
+      },
+      "semantic": {
+        "passed": 1,
+        "failed": 0
+      },
+      "llm-rubric": {
+        "passed": 1,
+        "failed": 0
+      }
+    },
+    "results": [
+      {
+        "test_name": "capital-japan",
+        "prompt": "What is the capital of Japan? Answer with one word.",
+        "expected": "Tokyo",
+        "actual": "Tokyo",
+        "latency_ms": 96.75,
+        "tokens": 3,
+        "prompt_tokens": 20,
+        "completion_tokens": 3,
+        "cost_usd": 0.0,
+        "error": null,
+        "passed": true,
+        "score": 1.0,
+        "timestamp": "2026-09-06 20:58:37.258815+00:00",
+        "evaluator": "exact",
+        "category": "factual",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "exact",
+            "passed": true,
+            "score": 1.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "moon-landing",
+        "prompt": "In what year did Apollo 11 land on the Moon? Number only.",
+        "expected": "1969",
+        "actual": "1969",
+        "latency_ms": 210.03,
+        "tokens": 7,
+        "prompt_tokens": 24,
+        "completion_tokens": 7,
+        "cost_usd": 0.0,
+        "error": null,
+        "passed": true,
+        "score": 1.0,
+        "timestamp": "2026-09-06 20:58:37.373341+00:00",
+        "evaluator": "exact",
+        "category": "factual",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "exact",
+            "passed": true,
+            "score": 1.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "arithmetic",
+        "prompt": "What is 17 multiplied by 23? Reply with the number only.",
+        "expected": "391",
+        "actual": "391",
+        "latency_ms": 162.9,
+        "tokens": 6,
+        "prompt_tokens": 25,
+        "completion_tokens": 6,
+        "cost_usd": 0.0,
+        "error": null,
+        "passed": true,
+        "score": 1.0,
+        "timestamp": "2026-09-06 20:58:37.327868+00:00",
+        "evaluator": "exact",
+        "category": "reasoning",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "exact",
+            "passed": true,
+            "score": 1.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "order-of-operations",
+        "prompt": "Compute 6 + 4 * 3 - 8 / 2. Number only.",
+        "expected": "14",
+        "actual": "14. \u0627\u0644\u0625\u062c\u0627\u0628\u0629 \u062a\u0645\u062b\u0644 \u0627\u0644\u0646\u062a\u064a\u062c\u0629 \u0643\u0639\u062f\u062f \u0635\u062d\u064a\u062d \u062f\u0648\u0646 \u0623\u062c\u0632\u0627\u0621 \u0645\u0646 \u0645\u0626\u0629.",
+        "latency_ms": 167.46,
+        "tokens": 17,
+        "prompt_tokens": 27,
+        "completion_tokens": 17,
+        "cost_usd": 0.0,
+        "error": null,
+        "passed": false,
+        "score": 0.0,
+        "timestamp": "2026-09-06 20:58:37.333368+00:00",
+        "evaluator": "exact",
+        "category": "reasoning",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 0,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "exact",
+            "passed": false,
+            "score": 0.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "json-record",
+        "prompt": "Return a JSON object with keys \"language\" (string) and \"year\" (integer) for Python, first released in 1991. JSON only, no prose.\n",
+        "expected": "",
+        "actual": "{\"language\": \"Python\", \"year\": 1991}",
+        "latency_ms": 19320.8,
+        "tokens": 18,
+        "prompt_tokens": 45,
+        "completion_tokens": 18,
+        "cost_usd": 0.0,
+        "error": null,
+        "passed": true,
+        "score": 1.0,
+        "timestamp": "2026-09-06 20:58:56.581894+00:00",
+        "evaluator": "exact",
+        "category": "structured",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "json-schema",
+            "passed": true,
+            "score": 1.0,
+            "detail": "valid"
+          },
+          {
+            "type": "icontains",
+            "passed": true,
+            "score": 1.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "phone-format",
+        "prompt": "Output a fake US phone number in exactly the format XXX-XXX-XXXX.",
+        "expected": "",
+        "actual": "Sure, here is a randomly generated phone number in the US format: (555) 123-4567 \ud83d\udcde Please note that I have provided the numbers solely for illustrative purposes and should not be considered a real phone number.",
+        "latency_ms": 137.5,
+        "tokens": 58,
+        "prompt_tokens": 24,
+        "completion_tokens": 58,
+        "cost_usd": 0.0,
+        "error": null,
+        "passed": false,
+        "score": 0.0,
+        "timestamp": "2026-09-06 20:58:37.467162+00:00",
+        "evaluator": "exact",
+        "category": "structured",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 0,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "regex",
+            "passed": false,
+            "score": 0.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "grounded-summary",
+        "prompt": "Using only the context below, say when the Eiffel Tower was completed and roughly how tall it is.\n",
+        "expected": "The Eiffel Tower was completed in 1889 and stands about 330 metres tall.",
+        "actual": "The Eiffel Tower was completed in 1889. Approximately, the tower is 324 meters tall. \n\nTo provide a brief explanation on how I arrived at this answer: The context given mentions two significant dates related to the Eiffel Tower's history. The first is 1889, which is the year the tower was constructed for the World's Fair in Paris. The second date is 1931, when the tower was almost demolished but was saved to be used as a radio tower.\n\nBy focusing on the year 1889, we can confidently state that the Eiffel Tower was completed that year. Regarding the height, the context provides an approximate measurement of the tower's height, which is 300 meters (324 yards) at the time of its completion in 1889.",
+        "latency_ms": 230.67,
+        "tokens": 189,
+        "prompt_tokens": 29,
+        "completion_tokens": 189,
+        "cost_usd": 0.0,
+        "error": null,
+        "passed": false,
+        "score": 0.8095,
+        "timestamp": "2026-09-06 20:58:41.322452+00:00",
+        "evaluator": "exact",
+        "category": "rag",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 0,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "faithfulness",
+            "passed": false,
+            "score": 0.4286,
+            "detail": "3/7 claims grounded; unsupported: Approximately, the tower is 324 meters tall. | The context mentions two significant dates related to the Eiffel Tower's history. | The second date is 1931, when the tower was almost demolished but was saved to be used as a radio tower."
+          },
+          {
+            "type": "context-recall",
+            "passed": true,
+            "score": 1.0,
+            "detail": "2/2 reference facts in context"
+          },
+          {
+            "type": "icontains",
+            "passed": true,
+            "score": 1.0,
+            "detail": ""
+          }
+        ]
+      },
+      {
+        "test_name": "explain-clearly",
+        "prompt": "In two sentences, explain what an index does in a database.",
+        "expected": "An index is a data structure that lets the database find rows matching a query without scanning the whole table, at the cost of extra storage and slower writes.\n",
+        "actual": "An index in a database is a data structure that helps to quickly locate and retrieve data based on specific criteria. It works by creating a separate table that contains pointers or references to the actual data records, allowing database systems to search and sort data more efficiently. By using an index, queries can be executed faster, improving the overall performance and responsiveness of the database.",
+        "latency_ms": 152.3,
+        "tokens": 76,
+        "prompt_tokens": 20,
+        "completion_tokens": 76,
+        "cost_usd": 0.0,
+        "error": null,
+        "passed": true,
+        "score": 0.5605,
+        "timestamp": "2026-09-06 20:58:38.144368+00:00",
+        "evaluator": "exact",
+        "category": "quality",
+        "difficulty": null,
+        "runs": 1,
+        "pass_count": 1,
+        "rate_limited": 0,
+        "score_std": 0.0,
+        "assertions": [
+          {
+            "type": "semantic",
+            "passed": true,
+            "score": 0.521,
+            "detail": "cosine=0.521"
+          },
+          {
+            "type": "llm-rubric",
+            "passed": true,
+            "score": 0.6,
+            "detail": "Explains speed benefits but does not mention any storage or write cost trade\u2011off."
+          }
+        ]
+      }
+    ]
+  },
+  "comparison": {
+    "regression_detected": false,
+    "baseline_mean": 0.9048,
+    "current_mean": 0.67125,
+    "mean_diff": -0.23355,
+    "t_statistic": 1.388594,
+    "p_value": 0.207536,
+    "significant": false,
+    "test_count": 8,
+    "reason": null,
+    "per_test": [
+      {
+        "test_name": "capital-japan",
+        "baseline_score": 1.0,
+        "current_score": 1.0,
+        "delta": 0.0,
+        "regressed": false
+      },
+      {
+        "test_name": "moon-landing",
+        "baseline_score": 1.0,
+        "current_score": 1.0,
+        "delta": 0.0,
+        "regressed": false
+      },
+      {
+        "test_name": "arithmetic",
+        "baseline_score": 1.0,
+        "current_score": 1.0,
+        "delta": 0.0,
+        "regressed": false
+      },
+      {
+        "test_name": "order-of-operations",
+        "baseline_score": 1.0,
+        "current_score": 0.0,
+        "delta": -1.0,
+        "regressed": true
+      },
+      {
+        "test_name": "json-record",
+        "baseline_score": 1.0,
+        "current_score": 1.0,
+        "delta": 0.0,
+        "regressed": false
+      },
+      {
+        "test_name": "phone-format",
+        "baseline_score": 1.0,
+        "current_score": 0.0,
+        "delta": -1.0,
+        "regressed": true
+      },
+      {
+        "test_name": "grounded-summary",
+        "baseline_score": 0.6667,
+        "current_score": 0.8095,
+        "delta": 0.1428,
+        "regressed": false
+      },
+      {
+        "test_name": "explain-clearly",
+        "baseline_score": 0.5717,
+        "current_score": 0.5605,
+        "delta": -0.0112,
+        "regressed": false
+      }
+    ],
+    "mcnemar": {
+      "regressions": 2,
+      "fixes": 0,
+      "discordant": 2,
+      "p_value": 0.5,
+      "net_change": -2
+    },
+    "effect_size": -0.4909,
+    "min_samples_for_5pt_mde": 711
+  },
+  "_captured_from": "suites/showcase.yaml"
+}

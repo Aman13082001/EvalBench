@@ -1,0 +1,97 @@
+# The suite behind the public /example report.
+#
+# Deliberately mixed: factual recall, arithmetic, structured output,
+# grounded RAG answering, and open-ended quality. Enough tests for a real
+# bootstrap confidence interval, and spread across categories so the
+# per-capability breakdown says something.
+#
+# Captured by scripts/capture_example.py against two models so the page
+# can show a genuine regression verdict, not a staged one.
+
+name: Capability Showcase
+provider: groq
+model: openai/gpt-oss-120b
+judge_provider: groq
+judge_model: openai/gpt-oss-120b
+temperature: 0.0
+samples: 1
+concurrency: 4
+
+tests:
+  - name: capital-japan
+    category: factual
+    prompt: "What is the capital of Japan? Answer with one word."
+    expected: "Tokyo"
+
+  - name: moon-landing
+    category: factual
+    prompt: "In what year did Apollo 11 land on the Moon? Number only."
+    expected: "1969"
+
+  - name: arithmetic
+    category: reasoning
+    prompt: "What is 17 multiplied by 23? Reply with the number only."
+    expected: "391"
+
+  - name: order-of-operations
+    category: reasoning
+    prompt: "Compute 6 + 4 * 3 - 8 / 2. Number only."
+    expected: "14"
+
+  - name: json-record
+    category: structured
+    prompt: >
+      Return a JSON object with keys "language" (string) and "year"
+      (integer) for Python, first released in 1991. JSON only, no prose.
+    assert:
+      - type: json-schema
+        value:
+          type: object
+          required: [language, year]
+          properties:
+            language: { type: string }
+            year: { type: integer }
+      - type: icontains
+        value: python
+
+  - name: phone-format
+    category: structured
+    prompt: "Output a fake US phone number in exactly the format XXX-XXX-XXXX."
+    assert:
+      - type: regex
+        value: '\d{3}-\d{3}-\d{4}'
+
+  - name: grounded-summary
+    category: rag
+    prompt: >
+      Using only the context below, say when the Eiffel Tower was completed
+      and roughly how tall it is.
+    expected: "The Eiffel Tower was completed in 1889 and stands about 330 metres tall."
+    context:
+      - "Construction of the Eiffel Tower finished in 1889 for the World's Fair in Paris."
+      - "The tower stands about 330 metres tall including its antennas."
+      - "It was the tallest man-made structure in the world until 1930."
+    assert:
+      - type: faithfulness
+        threshold: 0.7
+      - type: context-recall
+        threshold: 0.7
+      - type: icontains
+        value: "1889"
+
+  - name: explain-clearly
+    category: quality
+    prompt: "In two sentences, explain what an index does in a database."
+    expected: >
+      An index is a data structure that lets the database find rows matching a
+      query without scanning the whole table, at the cost of extra storage and
+      slower writes.
+    assert:
+      - type: semantic
+        value: "A structure that speeds up lookups by avoiding a full table scan, costing storage and write speed."
+        threshold: 0.45
+      - type: llm-rubric
+        criteria: >
+          Explains that an index speeds up reads by avoiding a full scan, and
+          mentions at least one trade-off (storage or write cost).
+        threshold: 0.6

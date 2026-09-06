@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Newsreader } from "next/font/google";
 import Link from "next/link";
-import StatusStrip from "@/components/StatusStrip";
-import ThemeToggle from "@/components/ThemeToggle";
+import { AuthProvider } from "@/components/AuthProvider";
+import Nav from "@/components/Nav";
 import "./globals.css";
 
 const display = Newsreader({
@@ -23,12 +23,6 @@ export const metadata: Metadata = {
     "Run evaluation suites against any model. Composable assertions, RAG faithfulness, cost tracking, and statistical regression detection.",
 };
 
-const NAV = [
-  { href: "/run", label: "Try" },
-  { href: "/example", label: "Example" },
-  { href: "/research", label: "Research" },
-  { href: "/styleguide", label: "Design" },
-];
 
 export default function RootLayout({
   children,
@@ -38,6 +32,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${display.variable} ${mono.variable}`}>
       <body className="min-h-screen font-display antialiased">
+        <AuthProvider>
         <header className="border-b border-line">
           <div className="mx-auto flex max-w-page items-center justify-between gap-4 px-5 py-3">
             <Link href="/" className="flex items-baseline gap-2">
@@ -48,19 +43,7 @@ export default function RootLayout({
                 instrument for LLM measurement
               </span>
             </Link>
-            <nav className="flex items-center gap-4">
-              {NAV.map((n) => (
-                <Link
-                  key={n.href}
-                  href={n.href}
-                  className="font-mono text-xs text-muted transition-colors hover:text-text"
-                >
-                  {n.label}
-                </Link>
-              ))}
-              <StatusStrip />
-              <ThemeToggle />
-            </nav>
+            <Nav />
           </div>
         </header>
 
@@ -77,6 +60,7 @@ export default function RootLayout({
             </a>
           </div>
         </footer>
+        </AuthProvider>
       </body>
     </html>
   );

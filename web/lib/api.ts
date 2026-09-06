@@ -1,3 +1,5 @@
+import { authed } from "./auth";
+
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -93,3 +95,117 @@ export function getPlaygroundRun(id: string): Promise<RunSummary> {
     j<RunSummary>(r)
   );
 }
+
+/* ────────────────────────────────────────────────────────────────
+   Authenticated endpoints. These mirror the API exactly — see
+   `evalbench/api/routes.py`, `main.py` and `admin.py`.
+   ──────────────────────────────────────────────────────────────── */
+
+
+export interface SuiteDoc {
+  _id: string;
+  name: string;
+  provider?: string;
+  model: string;
+  evaluator: string;
+  concurrency?: number;
+  samples?: number;
+  baseline_run_id?: string | null;
+  created_at?: string;
+  created_by?: string;
+  tests: unknown[];
+}
+
+export interface RunDoc {
+  _id: string;
+  suite_id: string;
+  model: string;
+  status: string;
+  progress: number;
+  total_tests: number;
+  completed_tests: number;
+  created_at?: string;
+  error?: string | null;
+}
+
+export interface RunStatus {
+  run_id: string;
+  status: "queued" | "running" | "completed" | "failed";
+  progress: number;
+  completed_tests: number;
+  total_tests: number;
+  error: string | null;
+  queue_position?: number | null;
+}
+
+export const listSuites = () => authed<SuiteDoc[]>("/suites");
+
+export const getSuite = (id: string) => authed<SuiteDoc>(`/suites/${id}`);
+
+export const importSuite = (suite: unknown) =>
+  authed<{ id: string }>("/suites/import", {
+    method: "POST",
+    body: JSON.stringify(suite),
+  });
+
+export const startRun = (suiteId: string) =>
+  authed<{ run_id: string; test_count: number }>(`/suites/${suiteId}/run`, {
+    method: "POST",
+  });
+
+export const listRuns = (suiteId: string) =>
+  authed<RunDoc[]>(`/suites/${suiteId}/runs`);
+
+export const getRunStatus = (id: string) =>
+  authed<RunStatus>(`/runs/${id}/status`);
+
+export const getRunSummary = (id: string) =>
+  authed<RunSummary>(`/runs/${id}/summary`);
+
+export const getRun = (id: string) =>
+  authed<{ results: TestResult[] }>(`/runs/${id}`);
+
+export const setBaseline = (suiteId: string, runId: string) =>
+  authed<{ baseline_run_id: string }>(`/suites/${suiteId}/baseline`, {
+    method: "POST",
+    body: JSON.stringify({ run_id: runId }),
+  });
+
+export const compareRuns = (baselineId: string, currentId: string) =>
+  authed<Record<string, unknown>>("/regression", {
+    method: "POST",
+    body: JSON.stringify({
+      baseline_run_id: baselineId,
+      current_run_id: currentId,
+    }),
+  });
+
+/* ── admin ── */
+
+export interface AdminUser {
+  _id: string;
+  username: string;
+  role: string;
+  active: boolean;
+  created_at?: string;
+}
+
+export interface AdminStats {
+  users: number;
+  suites: number;
+  runs: number;
+  runs_by_status: Record<string, number>;
+  total_cost_usd: number;
+  as_of: string;
+}
+
+export const adminUsers = () =>
+  authed<{ users: AdminUser[]; count: number }>("/admin/users");
+
+export const adminStats = () => authed<AdminStats>("/admin/stats");
+
+export const adminSetActive = (username: string, active: boolean) =>
+  authed<{ username: string; active: boolean }>(
+    `/admin/users/${username}/${active ? "activate" : "deactivate"}`,
+    { method: "POST" }
+  );

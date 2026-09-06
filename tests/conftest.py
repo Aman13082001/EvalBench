@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("EVALBENCH_ALLOW_INSECURE", "1")
 
 from evalbench import jobs as jobs_module  # noqa: E402
+from evalbench.api import admin as admin_module  # noqa: E402
 from evalbench.api import auth_routes as auth_routes_module  # noqa: E402
 from evalbench.api import main as main_module  # noqa: E402
 from evalbench.api import playground as playground_module  # noqa: E402
@@ -64,6 +65,7 @@ def mock_db():
     )
     mock.test_runs.find = MagicMock()
     mock.test_runs.create_index = AsyncMock()
+    mock.test_runs.count_documents = AsyncMock(return_value=0)
 
     # Playground runs collection
     mock.playground_runs = MagicMock()
@@ -80,6 +82,7 @@ def mock_db():
         return_value=1
     )
     mock.users.create_index = AsyncMock()
+    mock.users.find = MagicMock()
 
     mock.command = AsyncMock(
         return_value={"ok": 1}
@@ -109,6 +112,11 @@ def mock_db():
         ),
         patch.object(
             playground_module,
+            "db",
+            mock
+        ),
+        patch.object(
+            admin_module,
             "db",
             mock
         ),

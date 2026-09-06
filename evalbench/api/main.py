@@ -11,9 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from evalbench.api.admin import router as admin_router
 from evalbench.api.auth import get_password_hash
 from evalbench.api.auth_routes import router as auth_router
-from evalbench.api.deps import get_current_user, limiter
+from evalbench.api.deps import get_current_user, limiter, require_owner
 from evalbench.api.playground import router as playground_router
 from evalbench.api.routes import router as suites_router
 from evalbench.api.summary import summarize_run
@@ -177,6 +178,7 @@ init_metrics(app)
 app.include_router(auth_router)
 app.include_router(suites_router)
 app.include_router(playground_router)
+app.include_router(admin_router)
 
 
 # ─────────────────────────────────────────────
@@ -265,6 +267,8 @@ async def get_run(
             detail="Run not found",
         )
 
+    require_owner(doc, user, "Run")
+
     doc["_id"] = str(doc["_id"])
 
     return doc
@@ -293,6 +297,8 @@ async def get_run_status(
             status_code=404,
             detail="Run not found",
         )
+
+    require_owner(doc, user, "Run")
 
     out = {
         "run_id": run_id,
@@ -338,6 +344,8 @@ async def get_run_summary(
             detail="Run not found",
         )
 
+    require_owner(doc, user, "Run")
+
     return {"run_id": run_id, **summarize_run(doc)}
 
 
@@ -374,6 +382,8 @@ async def export_run(
             status_code=404,
             detail="Run not found",
         )
+
+    require_owner(doc, user, "Run")
 
     results = doc.get("results", [])
 
@@ -513,11 +523,15 @@ async def check_regression(
             detail="Baseline run not found",
         )
 
+    require_owner(baseline_doc, user, "Baseline run")
+
     if not current_doc:
         raise HTTPException(
             status_code=404,
             detail="Current run not found",
         )
+
+    require_owner(current_doc, user, "Current run")
 
     baseline_doc["_id"] = str(
         baseline_doc["_id"]

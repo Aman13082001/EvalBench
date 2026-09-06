@@ -131,6 +131,35 @@ def test_full_flow_register_run_baseline_regression(live_client):
 
 
 @pytest.mark.integration
+def test_users_cannot_see_each_others_suites(live_client):
+    """Ownership isolation, proven against a real database."""
+    c = live_client
+
+    a = c.post(
+        "/auth/register", json={"username": "owner_a", "password": "pw12345"}
+    ).json()["api_key"]
+    b = c.post(
+        "/auth/register", json={"username": "owner_b", "password": "pw12345"}
+    ).json()["api_key"]
+    ha, hb = {"X-API-Key": a}, {"X-API-Key": b}
+
+    suite_a = c.post("/suites/import", json=SUITE, headers=ha).json()["id"]
+
+    # A sees it; B does not, and gets 404 rather than 403.
+    assert c.get(f"/suites/{suite_a}", headers=ha).status_code == 200
+    assert c.get(f"/suites/{suite_a}", headers=hb).status_code == 404
+    assert c.post(f"/suites/{suite_a}/run", headers=hb).status_code == 404
+
+    names_b = [s["name"] for s in c.get("/suites", headers=hb).json()]
+    assert SUITE["name"] not in names_b
+
+    # A's run is invisible to B too.
+    run_a = c.post(f"/suites/{suite_a}/run", headers=ha).json()["run_id"]
+    assert c.get(f"/runs/{run_a}/summary", headers=ha).status_code == 200
+    assert c.get(f"/runs/{run_a}/summary", headers=hb).status_code == 404
+
+
+@pytest.mark.integration
 def test_run_persists_and_lists(live_client):
     c = live_client
     key = c.post(

@@ -172,4 +172,7 @@ class User(BaseModel):
 
     role: str = "user"  # admin | user
 
+    # Deactivated users keep their data but cannot authenticate.
+    active: bool = True
+
     created_at: datetime

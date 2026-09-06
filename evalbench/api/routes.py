@@ -10,7 +10,13 @@ from fastapi import (
     Request,
 )
 
-from evalbench.api.deps import get_current_user, limiter
+from evalbench.api.deps import (
+    get_current_user,
+    limiter,
+    owner_filter,
+    owner_of,
+    require_owner,
+)
 from evalbench.core.providers import get_provider
 from evalbench.core.runner import TestRunner
 from evalbench.db.mongo import db
@@ -30,6 +36,7 @@ async def create_suite(
 ):
     doc = suite.model_dump()
     doc["created_at"] = datetime.now(timezone.utc)
+    doc["created_by"] = owner_of(user)
 
     result = await db.suites.insert_one(doc)
 
@@ -43,7 +50,9 @@ async def create_suite(
 async def list_suites(user=Depends(get_current_user)):
     suites = []
 
-    async for doc in db.suites.find().sort("created_at", -1).limit(50):
+    async for doc in (
+        db.suites.find(owner_filter(user)).sort("created_at", -1).limit(50)
+    ):
         doc["_id"] = str(doc["_id"])
         suites.append(doc)
 
@@ -90,6 +99,7 @@ async def create_security_suite(
 
     doc = suite_obj.model_dump()
     doc["created_at"] = datetime.now(timezone.utc)
+    doc["created_by"] = owner_of(user)
 
     result = await db.suites.insert_one(doc)
 
@@ -121,6 +131,8 @@ async def get_suite(suite_id: str, user=Depends(get_current_user)):
             detail="Suite not found"
         )
 
+    require_owner(doc, user, "Suite")
+
     doc["_id"] = str(doc["_id"])
 
     return doc
@@ -143,6 +155,8 @@ async def export_suite(suite_id: str, user=Depends(get_current_user)):
             status_code=404,
             detail="Suite not found"
         )
+
+    require_owner(doc, user, "Suite")
 
     export_data = {
         "name": doc["name"],
@@ -180,6 +194,7 @@ async def import_suite(
 
     doc = suite.model_dump()
     doc["created_at"] = datetime.now(timezone.utc)
+    doc["created_by"] = owner_of(user)
 
     result = await db.suites.insert_one(doc)
 
@@ -213,6 +228,8 @@ async def run_suite(
             detail="Suite not found"
         )
 
+    require_owner(doc, user, "Suite")
+
     doc["_id"] = str(doc["_id"])
 
     suite = TestSuite(**doc)
@@ -229,7 +246,9 @@ async def run_suite(
         completed_tests=0,
     )
 
-    result = await db.test_runs.insert_one(queued.model_dump())
+    run_doc = queued.model_dump()
+    run_doc["created_by"] = owner_of(user)
+    result = await db.test_runs.insert_one(run_doc)
     run_id = str(result.inserted_id)
 
     submit_run(run_id, suite_id, background_tasks)
@@ -251,6 +270,7 @@ async def get_baseline(suite_id: str, user=Depends(get_current_user)):
     doc = await db.suites.find_one({"_id": ObjectId(suite_id)})
     if not doc:
         raise HTTPException(status_code=404, detail="Suite not found")
+    require_owner(doc, user, "Suite")
     return {
         "suite_id": suite_id,
         "baseline_run_id": doc.get("baseline_run_id"),
@@ -278,6 +298,7 @@ async def set_baseline(
     suite = await db.suites.find_one({"_id": ObjectId(suite_id)})
     if not suite:
         raise HTTPException(status_code=404, detail="Suite not found")
+    require_owner(suite, user, "Suite")
 
     run = await db.test_runs.find_one({"_id": ObjectId(run_id)})
     if not run:
@@ -319,6 +340,8 @@ async def compare_models(
             status_code=404,
             detail="Suite not found"
         )
+
+    require_owner(doc, user, "Suite")
 
     models = payload.get("models", [])
 
@@ -387,7 +410,7 @@ async def list_runs(suite_id: str, user=Depends(get_current_user)):
     runs = []
 
     async for doc in db.test_runs.find(
-        {"suite_id": suite_id}
+        {"suite_id": suite_id, **owner_filter(user)}
     ).sort(
         "created_at",
         -1

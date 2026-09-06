@@ -33,7 +33,7 @@ it actually take before a real regression is reliably caught?
 
 ![Power curve](power-curve.svg)
 
-| tests (n) | power | significant |
+| tests (n) | detector power | t-test significant |
 |---:|---:|---:|
 | 4 | 1% | 1% |
 | 6 | 7% | 7% |
@@ -48,7 +48,15 @@ it actually take before a real regression is reliably caught?
 | 60 | 91% | 91% |
 | 100 | 99% | 99% |
 
-**Power reaches 80% at roughly n = 60.**
+**Power reaches 80% at the smallest measured size n = 60** (the grid
+jumps 40 → 60, so the true crossing sits between them).
+
+The two columns are identical at every size, which is itself a result:
+the detector gates on *both* `p < 0.05` and a mean drop of more than
+0.05, and for an effect this large the magnitude gate never binds. Every
+resample the t-test called significant was also large enough to flag.
+Power here is therefore bounded purely by sample size, not by the
+detector's threshold.
 
 ## Findings
 

@@ -6,7 +6,7 @@ import { Disclosure, Metric, Panel, Rule } from "@/components/ui";
 export const metadata = {
   title: "How many tests does an eval suite need? — EvalBench",
   description:
-    "An empirical power analysis of LLM regression detection. Power is 21% at ten tests and reaches 80% around sixty.",
+    "An empirical power analysis of LLM regression detection. Power is 21% at ten tests and does not cross 80% until between forty and sixty.",
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

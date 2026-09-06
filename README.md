@@ -286,6 +286,8 @@ Promote a good run as a suite's baseline with `evalbench baseline <suite_id> <ru
 ```
 evalbench login  -u <user>                 # store a JWT
 evalbench register -u <user>               # create an account, store its API key
+evalbench whoami                           # who the stored credential belongs to
+evalbench logout                           # discard the stored credential
 evalbench run <suite.yaml> [--model M] [--evaluator E] [--concurrency N]
               [--fail-under 0.75] [--compare-to-baseline] [--baseline-run ID]
               [--report report.json] [--api-key K]
@@ -422,8 +424,9 @@ bootstrap-resample *n* test-pairs 2,000 times per suite size and run the
 actual `RegressionDetector` on each resample. The fraction of resamples
 where it fires is the detector's statistical **power** at that size.
 
-**Finding.** Power is **~21% at n = 10** and only reaches 80% around
-**n ≈ 60**. A ten-prompt suite — a very common size — misses a real
+**Finding.** Power is **~21% at n = 10** and does not cross 80% until
+somewhere between **n = 40 (75%) and n = 60 (91%)**. A ten-prompt suite —
+a very common size — misses a real
 regression roughly four times in five. Worse, the failure is asymmetric:
 it fails toward *false confidence*, which is precisely the wrong direction
 for something wired to a deploy gate.

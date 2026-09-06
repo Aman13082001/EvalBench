@@ -3,12 +3,69 @@
 All notable changes to EvalBench. Versions follow the shape of
 [Keep a Changelog](https://keepachangelog.com/); dates are release dates.
 
-## [Unreleased]
+## [0.5.0] — 2026-09-07
 
-### Removed
-- The Streamlit UI (`frontend/`) and its compose service. The Next.js app
-  in `web/` replaces it; until its authenticated pages land, use the CLI
-  for suite/run management.
+The release that turned a CLI + API into a product: a web app anyone can
+use, per-user ownership, and an original research study.
+
+### Added — Phase F: the web app (`web/`)
+- A Next.js 14 app replacing the Streamlit dashboard. Design system
+  **"Laboratory Notebook"** — parchment/ink palette, serif display face,
+  tabular monospace numerals, 1px hairlines, `steps()` motion. No
+  gradients, no glassmorphism, no shadows. Documented at `/styleguide`.
+- **The homepage demonstrates instead of explaining.** `HeroDemo` replays
+  a real recorded run as a seven-stage animation: prompt → dispatch →
+  streaming response → assertion checks one at a time → aggregate → score
+  → statistics. Honours `prefers-reduced-motion`.
+- **Plain language first.** `web/lib/explain.ts` renders every assertion,
+  score and statistic as a sentence a non-engineer can read, with the raw
+  term and threshold behind a disclosure. Written after the observation
+  that `pass_rate_ci` and `cosine=0.625` wall off most visitors.
+- Pages: `/` demo, `/example` recorded run, `/run` playground with four
+  starter presets (quick / every assertion type / RAG / safety),
+  `/research` the study, `/login`, `/suites` + `/suites/[id]`,
+  `/runs/[id]`, `/dashboard` (embedded Grafana), `/admin`.
+- Recorded fixtures rather than live calls on public pages — honest,
+  instant, and cannot fail in front of a visitor
+  ([ADR 0004](docs/adr/0004-recorded-fixtures-on-the-homepage.md)).
+
+### Added — Phase B7: ownership & administration
+- `created_by` on suites and runs; `owner_filter` / `owns` /
+  `require_owner` in `evalbench/api/deps.py`. Users see only their own
+  resources; admins see everything.
+- Someone else's id returns **404, not 403** — the API never confirms the
+  existence of a resource it will not serve.
+- `evalbench/api/admin.py`: `GET /admin/users` (never returns
+  `hashed_password` or `api_key`), activate/deactivate, `GET
+  /admin/stats`. An admin cannot deactivate their own account.
+- Deactivated users are rejected at authentication with 403.
+
+### Added — research
+- `research/REPORT.md`: a bootstrap power analysis of regression
+  detection on real paired model outputs. **Power is ~21% at n = 10 and
+  reaches 80% only near n ≈ 60** — a ten-prompt suite misses a genuine
+  regression about four times in five, failing asymmetrically toward
+  false confidence.
+- `scripts/run_study_power.py` reproduces it end to end and hand-renders
+  the power curve as SVG (no plotting dependency).
+- Surfaced in the product as `min_samples_for_5pt_mde` and the bootstrap
+  CIs on every run summary.
+
+### Added — documentation
+- Four architecture decision records in `docs/adr/`: MongoDB over
+  Postgres, an assertion list over a rule DSL, RQ over Celery, and
+  recorded fixtures on the homepage.
+- `docs/DEPLOY.md`: Vercel + Fly/Railway + Atlas + Upstash, secret
+  generation, and the cold-start and Grafana-embedding caveats.
+- README rewritten around the web app, ownership and the study.
+
+### Fixed
+- **Judge false negatives in `faithfulness` and `context-recall`.** The
+  parser treated a missing support field as unsupported, so a grounded
+  answer could score 0/3. Judges are now asked to *cite* the numbered
+  passage that supports each claim (`"source": <n>`), and the parser
+  accepts the citation shape as well as the older booleans. A near-
+  verbatim grounded answer scored 0/3 before, correct after.
 
 ### Added — Phase C: real job queue
 - Run execution extracted to `evalbench/jobs.py` (`execute_run_job` now
@@ -73,6 +130,10 @@ All notable changes to EvalBench. Versions follow the shape of
   suite, fails the check on a low pass rate or a regression, and posts the
   comment. Example workflow `.github/workflows/pr-eval.yml`; hosted CI
   suite `suites/ci-hosted.yaml` (no local model needed).
+
+### Removed
+- The Streamlit UI (`frontend/`) and its compose service, superseded by
+  the Next.js app.
 
 ## [0.4.0] — provider abstraction, cost, async jobs, assertions, baselines
 

@@ -1,10 +1,15 @@
 # EvalBench
 
-**A platform for evaluating LLMs, catching quality regressions, and monitoring safety — with real statistics, cost tracking, and a production monitoring stack.**
+**A platform for evaluating LLMs, catching quality regressions, and monitoring safety — with real statistics, cost tracking, a production monitoring stack, and a web app you can hand to someone who has never opened a terminal.**
 
 EvalBench runs versioned test suites against a model — local via [Ollama](https://ollama.com) or hosted (Groq, Gemini, OpenAI, GitHub Models, OpenRouter) — checks every response against one or more **composable assertions**, aggregates results **per capability category**, estimates the **USD cost** of the run, and tells you — with a paired statistical test against a promoted **baseline** — whether a prompt or model change actually made things *worse*. Runs execute **concurrently** as **async jobs**; every run emits Prometheus metrics and lands on a Grafana dashboard.
 
 Think of it as **`pytest` + CI quality gates for LLM behaviour**.
+
+There is a CLI, a REST API, a GitHub Action, a Grafana stack, a Next.js
+web app with a public playground — and [a research study](research/REPORT.md)
+showing that most eval suites are too small to detect the regressions they
+were built to catch.
 
 ---
 
@@ -34,7 +39,8 @@ flowchart LR
     subgraph stack["docker compose"]
       API["FastAPI\n/suites /runs /regression /baseline /metrics"] --> MONGO[("MongoDB\nsuites + runs")]
       API --> PROV["Providers\nOllama · Groq · Gemini · OpenAI · ..."]
-      API --> REDIS[("Redis\n(reserved: queue/cache)")]
+      API --> REDIS[("Redis\njob queue")]
+      REDIS --> WORKER["RQ worker\nscale with --scale worker=N"]
       PROM["Prometheus\nscrape /metrics + alert rules"] --> API
       GRAF["Grafana\nProduction Overview dashboard"] --> PROM
     end
@@ -45,12 +51,15 @@ flowchart LR
 | **FastAPI** (`evalbench/api`) | suite CRUD, async run jobs, regression analysis, baseline promotion, auth, `/metrics` |
 | **Runner** (`evalbench/core/runner.py`) | executes a suite: concurrent sampling, assertion checks, aggregation, cost, metric emission |
 | **Providers** (`evalbench/core/providers`) | one interface over Ollama + any OpenAI-compatible host (Groq, Gemini, OpenAI, GitHub Models, OpenRouter) |
-| **Assertions** (`evalbench/core/assertions.py`) | `exact`, `equals`, `contains`, `icontains`, `regex`, `semantic`, `judge`, `json-schema`, `llm-rubric`, `latency`, `cost` |
+| **Assertions** (`evalbench/core/assertions.py`) | 14 composable check types - string, regex, semantic, JSON-schema, LLM-judge, latency/cost budgets, and three RAG groundedness checks |
+| **Statistics** (`evalbench/core/stats.py`) | bootstrap CIs, exact McNemar, paired Cohen's d, minimum-sample-size estimate |
 | **Pricing** (`evalbench/pricing.py`) | per-model token rates (each with `source` + `as_of`) → estimated USD per run; `scripts/check_pricing.py` fails CI on stale entries |
 | **MongoDB** | stores suites and run results |
 | **Prometheus + Grafana** | scrape `/metrics`, alert rules, "EvalBench — Production Overview" dashboard |
-| **Web app** (`web/`) | Next.js front end — public playground (bring-your-own-key), results viewer |
-| **CLI** (`evalbench/cli.py`) | `login`, `run`, `compare`, `baseline`, `security`, `models`, `init`, `export` |
+| **Web app** (`web/`) | Next.js front end — public demo + playground, suites, run history, admin, embedded Grafana |
+| **CLI** (`evalbench/cli.py`) | `login`, `run`, `compare`, `baseline`, `pr-comment`, `security`, `models`, `init`, `export` |
+| **Jobs** (`evalbench/jobs.py`) | inline `BackgroundTasks` or an RQ queue with a scalable worker |
+| **Research** (`research/`) | an empirical power study of regression detection, reproducible from `scripts/` |
 
 ---
 
@@ -79,8 +88,8 @@ Endpoints once the stack is up:
 
 | Service | URL | Notes |
 |---|---|---|
-| API docs | http://localhost:8000/docs | OpenAPI / Swagger |
 | Web app | http://localhost:3005 | `cd web && npm install && npm run dev` |
+| API docs | http://localhost:8000/docs | OpenAPI / Swagger |
 | Prometheus | http://localhost:9090 | `/alerts` for rule state |
 | Grafana | http://localhost:3000 | `admin` / `evalbench` → Dashboards → *EvalBench* |
 
@@ -314,6 +323,50 @@ jobs:
 
 ---
 
+## The web app
+
+`web/` is a Next.js 14 app (App Router, TypeScript, Tailwind). It is the
+front door for people who will never install the CLI, and the day-to-day
+console for people who have.
+
+| Route | Auth | What it does |
+|---|---|---|
+| `/` | public | the homepage **runs a miniature evaluation in front of you** — prompt → model → response → assertion checks → score → statistics |
+| `/example` | public | a full recorded run, expandable check by check |
+| `/run` | public | the **playground**: paste a suite, bring your own provider key, get a permalink |
+| `/research` | public | the power study, its figure, and how to reproduce it |
+| `/login` | public | sign in or register |
+| `/suites`, `/suites/[id]` | user | suite list, detail, launch a run, promote a baseline |
+| `/runs/[id]` | user | run results with per-test assertion detail |
+| `/dashboard` | user | the Grafana dashboard, embedded |
+| `/admin` | admin | users, activate/deactivate, instance stats |
+| `/styleguide` | public | the design system, for contributors |
+
+Two deliberate choices:
+
+- **Plain language first, jargon on demand.** Every score, assertion and
+  statistic renders as a sentence a non-engineer can read
+  ("*Stuck to facts backed by the source material — no made-up claims*"),
+  with the raw term, threshold and value one click away. See
+  `web/lib/explain.ts`.
+- **The homepage replays a real recorded run**, not a live one and not a
+  fake one. The fixture in `web/lib/fixtures/` is captured output from an
+  actual evaluation, so the demo is honest, instant, and cannot fail in
+  front of a visitor because a provider is down. Reasoning in
+  [`docs/adr/0004`](docs/adr/0004-recorded-fixtures-on-the-homepage.md).
+
+```bash
+cd web
+npm install
+cp .env.local.example .env.local     # NEXT_PUBLIC_API_URL=http://localhost:8000
+npm run dev                          # http://localhost:3005
+```
+
+The design system is documented in `web/app/globals.css` and rendered at
+`/styleguide`.
+
+---
+
 ## Monitoring
 
 Every run updates Prometheus metrics exposed at `GET /metrics`:
@@ -342,7 +395,53 @@ Every run updates Prometheus metrics exposed at `GET /metrics`:
 - **Every data endpoint requires a user.** Only `/health`, `/live`, `/ready` (and the Prometheus `/metrics` scrape target) are public. `tests/test_auth_coverage.py` asserts this for every route.
 - Mutating endpoints are additionally rate-limited (SlowAPI).
 
+### Ownership
+
+Suites and runs record a `created_by`. A normal user sees and mutates only
+their own; an admin sees everything. A request for someone else's resource
+returns **404, not 403** — the API never confirms the existence of an id it
+will not serve.
+
+`/admin/*` (users, activate/deactivate, instance stats) requires
+`role: admin`. Deactivated users are rejected at authentication with 403,
+and an admin cannot deactivate their own account.
+
 Secrets are read from environment / `.env` via `evalbench/config.py` — `SECRET_KEY`, `TOKEN_EXPIRE_MINUTES`, `OLLAMA_BASE_URL`, `MONGODB_URL`, timeouts, CORS origins, admin bootstrap. Copy `.env.example` to `.env` and fill it in.
+
+---
+
+## Research: how many tests does a regression gate actually need?
+
+EvalBench exists to answer "did this change make things worse?" — so the
+obvious question is whether a typical eval suite is even large enough to
+answer it. `research/REPORT.md` is an empirical study of that, run on this
+codebase.
+
+**Method.** Collect real paired outputs from two models on 30 prompts, then
+bootstrap-resample *n* test-pairs 2,000 times per suite size and run the
+actual `RegressionDetector` on each resample. The fraction of resamples
+where it fires is the detector's statistical **power** at that size.
+
+**Finding.** Power is **~21% at n = 10** and only reaches 80% around
+**n ≈ 60**. A ten-prompt suite — a very common size — misses a real
+regression roughly four times in five. Worse, the failure is asymmetric:
+it fails toward *false confidence*, which is precisely the wrong direction
+for something wired to a deploy gate.
+
+**Why it matters in the product.** This is why run summaries carry
+bootstrap confidence intervals rather than a bare pass rate, and why
+`/regression` returns `min_samples_for_5pt_mde` — so the tool tells you
+when your suite is too small to trust its own verdict, instead of quietly
+reporting "no regression detected."
+
+Reproduce it:
+
+```bash
+python scripts/run_study_power.py      # writes research/*.json, *.svg, REPORT.md
+```
+
+Full write-up and the power curve: [`research/REPORT.md`](research/REPORT.md).
+Rendered on the site at `/research`.
 
 ---
 
@@ -350,7 +449,7 @@ Secrets are read from environment / `.env` via `evalbench/config.py` — `SECRET
 
 ```bash
 pip install -e ".[dev]"
-pytest                     # 180+ tests; units mocked, plus an integration
+pytest                     # 253 tests; units mocked, plus an integration
                            # layer on a real async Mongo (mongomock-motor)
 ruff check .               # lint config in pyproject.toml ([tool.ruff])
 ```
@@ -360,7 +459,8 @@ evalbench/
   api/          FastAPI app, async run jobs, routes, auth, dependencies
   core/
     runner.py       concurrent suite execution + aggregation + cost + metrics
-    assertions.py   composable assertion engine (11 types)
+    assertions.py   composable assertion engine (14 types)
+    stats.py        bootstrap CI, McNemar, Cohen's d, sample-size
     regression.py   paired-test regression detector + per-test flags
     providers/      ollama | openai-compatible | mock + preset registry
     evaluators/     exact | contains | semantic | judge | security
@@ -368,8 +468,13 @@ evalbench/
   db/           Mongo client + Pydantic schemas
   security/     built-in adversarial prompt set
   metrics.py    Prometheus metric definitions
+  jobs.py       run-job dispatch (inline BackgroundTasks | RQ)
+  worker.py     RQ worker entrypoint
   cli.py        Typer CLI
-web/            Next.js front end (playground, results viewer)
+web/            Next.js front end (demo, playground, suites, admin, dashboard)
+research/       the power study: REPORT.md, data, generated figure
+docs/adr/       architecture decision records
+scripts/        pricing freshness check, the power-study runner
 suites/         curated example suites
 prometheus/     scrape config + alert rules
 grafana/        provisioned datasource + dashboard
@@ -380,15 +485,25 @@ CI (`.github/workflows/eval-check.yml`) runs `ruff check` + `pytest` on every pu
 
 ---
 
-## Roadmap
+## Status
 
-Shipped in **v0.4.0**: provider abstraction (Ollama + hosted), per-run cost/token tracking, concurrent execution, an async job model with a crash reaper, an 11-type composable assertion engine, and baseline promotion with regression-as-a-CI-gate.
+**v0.5.0.** What is built and working:
 
-Also shipped: a **GitHub Action** (`.github/actions/evalbench`) that gates PRs on a suite and posts a result comment.
+| | |
+|---|---|
+| **Evaluation** | 14 composable assertion types, repeated sampling, per-category aggregation, RAG groundedness, safety in both directions (refusal *and* over-refusal) |
+| **Statistics** | paired t-test, exact McNemar, Cohen's d, bootstrap CIs, minimum-sample-size estimate |
+| **Execution** | concurrent runs, async job model, inline or RQ backend, horizontally scalable workers, crash reaper |
+| **Providers** | Ollama + five hosted providers behind one interface, with per-provider concurrency ceilings and token/cost normalization |
+| **CI** | `--fail-under` and `--compare-to-baseline` gates, a composite **GitHub Action** that runs the suite and posts a PR comment |
+| **Ops** | Prometheus metrics, 9 alert rules, a provisioned Grafana dashboard |
+| **Product** | a Next.js app: demonstrating homepage, public playground, suites, runs, admin, embedded dashboard |
+| **Research** | an original power study of regression detection, reproducible from `scripts/` |
+| **Quality** | 253 tests, ruff-clean, auth coverage asserted per-route, four ADRs |
 
-Also shipped: **RAG assertions** (`faithfulness`, `context-recall`, `context-precision`) and a **richer statistical engine** (bootstrap CIs, exact McNemar, Cohen's d, power estimate).
-
-Planned next: the authenticated web app (login, suite management, run history, embedded dashboard), per-user ownership on the API, and publishing the Action to the Marketplace.
+Not done yet: a hosted public deployment (see [`docs/DEPLOY.md`](docs/DEPLOY.md)),
+publishing the Action to the GitHub Marketplace, and multi-turn / agentic
+evaluation (today a test is one prompt and one response).
 
 ## License
 

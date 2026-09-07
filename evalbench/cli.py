@@ -1013,5 +1013,107 @@ def export(
     )
 
 
+@app.command("reset-password")
+def reset_password(
+    username: str = typer.Option(..., "--username", "-u"),
+    password: str = typer.Option(
+        ...,
+        "--password",
+        "-p",
+        prompt="New password",
+        hide_input=True,
+        confirmation_prompt=True,
+    ),
+):
+    """Reset a user's password by talking to the database directly.
+
+    Recovery for the case that has no other way out: an admin who does
+    not know the admin password is locked out of /admin entirely, since
+    the web app only accepts a username and password. There was no way
+    back short of dropping the users collection.
+
+    Deliberately not an API endpoint. This writes straight to MongoDB, so
+    it can only be run by someone with database access — which is the
+    right proof of authority for resetting an account, and means no
+    unauthenticated reset route exists to attack.
+    """
+    import asyncio
+
+    from motor.motor_asyncio import AsyncIOMotorClient
+
+    from evalbench.api.auth import get_password_hash
+
+    async def _reset() -> tuple[str | None, list[str]]:
+        client = AsyncIOMotorClient(settings.mongodb_url)
+        try:
+            db = client[settings.mongodb_db]
+            user = await db.users.find_one({"username": username})
+            if not user:
+                # Name every account that *does* live here. A machine can
+                # easily have a second MongoDB — a locally installed
+                # service alongside the one Docker publishes on the same
+                # port — and then "no such user" really means "right
+                # command, wrong database". Showing the occupants makes
+                # that obvious instead of baffling.
+                others = [
+                    u["username"]
+                    async for u in db.users.find({}, {"username": 1})
+                ]
+                return None, others
+            await db.users.update_one(
+                {"username": username},
+                {"$set": {
+                    "hashed_password": get_password_hash(password),
+                    # A locked-out account is often also a disabled one.
+                    "active": True,
+                }},
+            )
+            return user.get("role", "user"), []
+        finally:
+            client.close()
+
+    # Say which database is being written to before writing to it.
+    console.print(
+        f"[dim]Database: {settings.mongodb_url} / "
+        f"{settings.mongodb_db}[/dim]"
+    )
+
+    try:
+        role, others = asyncio.run(_reset())
+    except Exception as e:  # noqa: BLE001
+        console.print(
+            f"[bold red]✗[/bold red] Couldn't reach the database at "
+            f"[cyan]{settings.mongodb_url}[/cyan]: {e}\n"
+            "[dim]Is the stack up? Try: docker compose up -d mongo[/dim]"
+        )
+        raise typer.Exit(1) from e
+
+    if role is None:
+        console.print(
+            f"[bold red]✗[/bold red] No user named [cyan]{username}[/cyan] "
+            f"in this database."
+        )
+        if others:
+            console.print(
+                f"[dim]It holds: {', '.join(sorted(others))}[/dim]"
+            )
+        else:
+            console.print("[dim]It has no users at all.[/dim]")
+        console.print(
+            "[dim]If you expected a different set, you are pointed at the "
+            "wrong MongoDB — a locally installed server can occupy the "
+            "same port Docker publishes. To target the stack's database:\n"
+            "  docker compose exec api evalbench reset-password -u "
+            f"{username}[/dim]"
+        )
+        raise typer.Exit(1)
+
+    console.print(
+        f"[bold green]✓[/bold green] Password reset for "
+        f"[cyan]{username}[/cyan] (role: {role}). "
+        "You can sign in to the web app now."
+    )
+
+
 if __name__ == "__main__":
     app()

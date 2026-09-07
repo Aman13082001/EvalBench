@@ -105,6 +105,15 @@ Created once, on the first API startup, from these settings (see `.env.example`)
 | `ADMIN_PASSWORD` | `change-me-in-production` |
 | `ADMIN_API_KEY` | `eb_admin_change_me_in_production` |
 
+Locked out? `evalbench reset-password -u admin` writes straight to
+MongoDB, so it needs database access rather than a password — there is
+deliberately no reset endpoint on the API. Run it against the stack's
+database with `docker compose exec api evalbench reset-password -u admin`;
+if a MongoDB is also installed natively on your machine it can occupy the
+same port Docker publishes, and the host CLI will edit the wrong one. The
+command prints which database it is using and, on a miss, names the
+accounts that database holds.
+
 Set real values in `.env` **before** the first `docker compose up`. If the DB already has a user, changing the env vars has no effect — rotate via `POST /auth/api-key/rotate` or drop the `users` collection.
 
 ---
@@ -306,6 +315,7 @@ evalbench security [--model M]             # run the built-in adversarial suite
 evalbench models [--provider P]            # list a provider's models
 evalbench init [-o suite.yaml]             # scaffold a suite
 evalbench export <run_id> [--format json|csv] [-o file]
+evalbench reset-password -u <user>          # recover a locked-out account
 ```
 
 `run` exits non-zero when the pass rate is below `--fail-under` (default 0.75) **or**, with `--compare-to-baseline`, when a regression is detected against the suite's `baseline_run_id`. It polls the async job and shows a progress bar. `--report` writes a machine-readable JSON (`summary` + `regression` + `gate`) for CI. `EVALBENCH_API_URL` overrides the API location (default `http://localhost:8000`).

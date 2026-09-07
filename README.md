@@ -492,6 +492,18 @@ tests/          pytest suite (mocked units + a real-Mongo integration layer)
 
 CI (`.github/workflows/eval-check.yml`) runs `ruff check` + `pytest` on every push and PR.
 
+### Design decisions
+
+The reasoning behind the choices people ask about, each with the
+alternative that was rejected and why:
+
+| ADR | Decision |
+|---|---|
+| [0001](docs/adr/0001-mongodb-over-postgres.md) | MongoDB over Postgres |
+| [0002](docs/adr/0002-assertion-list-not-rule-dsl.md) | An assertion list, not a rule DSL |
+| [0003](docs/adr/0003-rq-over-celery.md) | RQ over Celery |
+| [0004](docs/adr/0004-recorded-fixtures-on-the-homepage.md) | Recorded fixtures on the homepage |
+
 ---
 
 ## Status

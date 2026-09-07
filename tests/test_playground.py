@@ -80,6 +80,23 @@ class TestPlaygroundGet:
         resp = client.get(f"/playground/runs/{RUN_ID}")
         assert resp.status_code == 404
 
+    def test_providers_advertises_limits_and_assertion_types(
+        self, client, mock_db
+    ):
+        """The playground UI reads its limits and the list of valid
+        `type:` values from here. If this contract drops a field the page
+        renders stale copy, so pin it."""
+        from evalbench.core.assertions import available_assertion_types
+
+        body = client.get("/playground/providers").json()
+        assert body["max_tests"] > 0
+        assert body["max_samples"] > 0
+        assert body["assertion_types"] == available_assertion_types()
+        # the engine's real types, not a hand-maintained copy
+        assert {"icontains", "faithfulness", "json-schema"} <= set(
+            body["assertion_types"]
+        )
+
     def test_providers_list_excludes_local(self, client, mock_db):
         resp = client.get("/playground/providers")
         body = resp.json()

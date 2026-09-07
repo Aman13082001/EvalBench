@@ -4,7 +4,9 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import yaml from "js-yaml";
 import {
+  getPlaygroundInfo,
   getPlaygroundRun,
+  PlaygroundInfo,
   runPlayground,
   RunSummary,
 } from "@/lib/api";
@@ -21,6 +23,15 @@ function RunPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RunSummary | null>(null);
+  const [info, setInfo] = useState<PlaygroundInfo | null>(null);
+
+  /* Limits and the provider list come from the API. Hardcoding them in
+     the copy here means they silently go stale when the server changes. */
+  useEffect(() => {
+    getPlaygroundInfo()
+      .then(setInfo)
+      .catch(() => setInfo(null));
+  }, []);
 
   useEffect(() => {
     if (!permalinkId) return;
@@ -59,9 +70,17 @@ function RunPage() {
         <p className="label-xs">§ Playground</p>
         <h1 className="font-display text-3xl">Run an evaluation</h1>
         <p className="max-w-2xl text-sm text-muted">
-          Your key, your models, nothing stored. Capped at 12 tests and 3
-          samples; results expire after 24 hours.
+          Your key, your models, nothing stored.
+          {info
+            ? ` Capped at ${info.max_tests} tests and ${info.max_samples} samples;`
+            : " Capped;"}{" "}
+          results expire after 24 hours.
         </p>
+        {info && (
+          <p className="font-mono text-[11px] text-muted">
+            providers: {info.providers.join(" · ")}
+          </p>
+        )}
       </header>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -95,6 +114,12 @@ function RunPage() {
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
+          {info && (
+            <p className="font-mono text-[11px] leading-relaxed text-muted">
+              <span className="text-text">assert types:</span>{" "}
+              {info.assertion_types.join(" · ")}
+            </p>
+          )}
           <input
             className="field font-mono text-xs"
             type="password"

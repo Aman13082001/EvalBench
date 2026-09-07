@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # inline = FastAPI BackgroundTasks (default, no worker needed);
     # rq = enqueue to Redis, executed by `python -m evalbench.worker`.
     job_backend: str = "inline"
+    worker_metrics_port: int = 9100
 
     # Authentication
     secret_key: str = "change-this-to-a-random-32-char-string"

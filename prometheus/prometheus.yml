@@ -16,3 +16,15 @@ scrape_configs:
       - targets: ["api:8000"]
     metrics_path: /metrics
     scrape_interval: 5s
+
+  # With JOB_BACKEND=rq the runner executes in the worker, so run metrics
+  # are emitted there, not in the API. DNS service discovery rather than a
+  # static target: compose returns one A record per replica, so
+  # `--scale worker=N` is picked up without editing this file.
+  - job_name: "evalbench-worker"
+    dns_sd_configs:
+      - names: ["worker"]
+        type: A
+        port: 9100
+    metrics_path: /metrics
+    scrape_interval: 5s

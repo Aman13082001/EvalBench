@@ -111,6 +111,7 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       REDIS_URL: redis://redis:6379/0
       JOB_BACKEND: rq
+      WORKER_METRICS_PORT: 9100
       EVALBENCH_ALLOW_INSECURE: "1"
       SECRET_KEY: ${SECRET_KEY:-change-this-to-a-random-32-char-string}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-eb_admin_change_me_in_production}

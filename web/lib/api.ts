@@ -58,6 +58,7 @@ export interface PlaygroundInfo {
   providers: string[];
   max_tests: number;
   max_samples: number;
+  assertion_types: string[];
 }
 
 async function j<T>(res: Response): Promise<T> {

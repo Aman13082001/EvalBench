@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from evalbench.api.deps import limiter
 from evalbench.api.summary import summarize_run
+from evalbench.core.assertions import available_assertion_types
 from evalbench.core.providers import available_providers
 from evalbench.core.runner import TestRunner
 from evalbench.db.mongo import db
@@ -122,8 +123,12 @@ async def playground_get(run_id: str):
 
 @router.get("/providers")
 async def playground_providers():
+    """What the playground will accept. The UI reads its limits from
+    here rather than hardcoding them, so MAX_TESTS can change in one
+    place without the page copy quietly becoming a lie."""
     return {
         "providers": [p for p in available_providers() if p not in _LOCAL],
         "max_tests": MAX_TESTS,
         "max_samples": MAX_SAMPLES,
+        "assertion_types": available_assertion_types(),
     }

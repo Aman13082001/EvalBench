@@ -18,6 +18,11 @@ from rich.progress import (
 from rich.table import Table
 
 from evalbench.config import settings
+from evalbench.explain import (
+    explain_assertion,
+    explain_comparison,
+    explain_run,
+)
 
 # Legacy Windows consoles default to cp1252 and choke on the ✓/⚠ glyphs
 # Rich emits. Force UTF-8 (with a safe fallback) so the CLI never crashes
@@ -187,6 +192,8 @@ def _check_regression(
                 f"{t['delta']:+.3f}",
             )
         console.print(rt)
+
+    console.print(f"[dim]{explain_comparison(comp)}[/dim]\n")
 
     if comp.get("regression_detected"):
         console.print("[bold red]✗ REGRESSION DETECTED vs baseline[/bold red]")
@@ -493,6 +500,7 @@ def run(
     )
 
     console.print(table)
+    console.print(f"[dim]{explain_run(summary)}[/dim]\n")
 
     by_category = summary.get("by_category") or {}
     if len(by_category) > 1:
@@ -520,12 +528,16 @@ def run(
         a_table.add_column("Type", style="cyan")
         a_table.add_column("Passed", style="green")
         a_table.add_column("Failed", style="red")
+        # The type names are jargon; say what each one actually checked.
+        a_table.add_column("What it checks", style="dim")
 
         for a_type, counts in sorted(assertion_types.items()):
+            failed = counts.get("failed", 0)
             a_table.add_row(
                 a_type,
                 str(counts.get("passed", 0)),
-                str(counts.get("failed", 0)),
+                str(failed),
+                explain_assertion(a_type, passed=not failed),
             )
 
         console.print(a_table)
@@ -736,6 +748,7 @@ def compare(
     )
 
     console.print(table)
+    console.print(f"[dim]{explain_comparison(comp)}[/dim]")
 
     if comp.get("regression_detected"):
         console.print(

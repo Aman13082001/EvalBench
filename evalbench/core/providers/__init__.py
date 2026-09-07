@@ -22,10 +22,14 @@ from evalbench.core.providers.base import LLMResponse, Provider
 from evalbench.core.providers.mock import MockProvider
 from evalbench.core.providers.ollama import OllamaProvider
 from evalbench.core.providers.openai_compat import OpenAICompatibleProvider
+from evalbench.core.providers.replay import ReplayProvider
 
 _PROVIDERS: dict[str, type[Provider]] = {
     "ollama": OllamaProvider,
     "mock": MockProvider,
+    # Replays recorded answers so the public playground works with no
+    # API key at all. See providers/replay.py.
+    "demo": ReplayProvider,
 }
 
 # name -> (base_url, api-key env var). Key is also read from the matching

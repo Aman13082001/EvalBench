@@ -24,7 +24,14 @@ router = APIRouter(prefix="/playground", tags=["playground"])
 
 MAX_TESTS = 12
 MAX_SAMPLES = 3
+
+# Not reachable from a public deployment, so never offered.
 _LOCAL = {"ollama", "mock"}
+
+# Replays recorded answers, so it needs no key and costs nothing. This is
+# what a visitor without a provider account actually runs — without it the
+# playground is a form a stranger cannot submit.
+DEMO_PROVIDER = "demo"
 
 
 class PlaygroundRunRequest(BaseModel):
@@ -49,6 +56,9 @@ def _validate(suite: TestSuite, key: str) -> None:
         )
 
     provider = suite.provider.lower()
+    if provider == DEMO_PROVIDER:
+        # Nothing to authenticate and nothing to spend.
+        return
     if provider == "ollama":
         raise HTTPException(
             status_code=400,
@@ -128,6 +138,7 @@ async def playground_providers():
     place without the page copy quietly becoming a lie."""
     return {
         "providers": [p for p in available_providers() if p not in _LOCAL],
+        "demo_provider": DEMO_PROVIDER,
         "max_tests": MAX_TESTS,
         "max_samples": MAX_SAMPLES,
         "assertion_types": available_assertion_types(),

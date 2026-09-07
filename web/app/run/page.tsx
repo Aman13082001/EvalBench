@@ -11,7 +11,7 @@ import {
   RunSummary,
 } from "@/lib/api";
 import { EXAMPLE_SUITE } from "@/lib/example";
-import { PRESETS } from "@/lib/presets";
+import { DEMO_SUITE, PRESETS } from "@/lib/presets";
 import Results from "@/components/Results";
 
 function RunPage() {
@@ -64,13 +64,33 @@ function RunPage() {
     }
   }, [text, key]);
 
+  /* Load the demo into the editor and run it, so the visitor can see and
+     edit exactly what produced the result rather than being shown a
+     black box. */
+  const runDemo = useCallback(async () => {
+    setError(null);
+    setResult(null);
+    setText(DEMO_SUITE);
+    setBusy(true);
+    try {
+      const r = await runPlayground(yaml.load(DEMO_SUITE), "");
+      setResult(r);
+      window.history.replaceState(null, "", `/run?id=${r.run_id}`);
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
         <p className="label-xs">§ Playground</p>
         <h1 className="font-display text-3xl">Run an evaluation</h1>
         <p className="max-w-2xl text-sm text-muted">
-          Your key, your models, nothing stored.
+          Run it right now with no account and no API key, or point it at
+          your own model.
           {info
             ? ` Capped at ${info.max_tests} tests and ${info.max_samples} samples;`
             : " Capped;"}{" "}
@@ -82,6 +102,29 @@ function RunPage() {
           </p>
         )}
       </header>
+
+      {/* The no-key path, first and unmissable. Without it a visitor
+          without a provider account lands on a form they cannot submit. */}
+      <div className="panel flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="max-w-xl space-y-1">
+          <p className="text-sm">
+            <span className="font-medium">No API key?</span> Run the sample
+            evaluation — six tests, every kind of check.
+          </p>
+          <p className="text-xs text-muted">
+            The model&rsquo;s answers are replayed from a recorded run, so
+            nothing is called and nothing is charged. Every check —
+            including the AI judge — executes live against that text.
+          </p>
+        </div>
+        <button
+          className="btn btn-primary whitespace-nowrap"
+          onClick={runDemo}
+          disabled={busy}
+        >
+          {busy ? "Running…" : "Run the demo"}
+        </button>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-3">

@@ -187,6 +187,36 @@ services:
     networks:
       - evalbench-net
 
+  # The website. Was missing entirely: when the Streamlit UI was removed
+  # its compose service went with it, and the Next.js app that replaced
+  # it was never containerized — so `docker compose up` brought up the
+  # whole backend and no front end.
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        # Baked into the client bundle at build time, and used by the
+        # visitor's BROWSER — so it must be the published host address,
+        # not the in-network "http://api:8000".
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_GRAFANA_URL: ${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3000}
+    container_name: evalbench-web
+    restart: unless-stopped
+    ports:
+      - "3005:3005"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3005/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - evalbench-net
+
 volumes:
   mongo_data:
   ollama_data:

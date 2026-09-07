@@ -40,11 +40,20 @@ def _scrape_targets() -> set[str]:
 
 
 def _services_running_evalbench() -> set[str]:
-    """Compose services built from the repo image, i.e. able to run a
-    suite and therefore able to emit run metrics."""
+    """Compose services built from the *root* Dockerfile — the Python
+    image — which are the ones that can execute a suite and therefore
+    emit run metrics.
+
+    Keyed on the build context rather than "has a build:" because the
+    web app also builds from a Dockerfile and cannot run anything; it
+    has no metrics to expose and must not be demanded as a target.
+    """
     out = set()
     for name, svc in (COMPOSE.get("services") or {}).items():
-        if svc.get("build") is not None:
+        build = svc.get("build")
+        if isinstance(build, dict) and build.get("context") == ".":
+            out.add(name)
+        elif build == ".":
             out.add(name)
     return out
 
@@ -79,6 +88,26 @@ def test_worker_is_discovered_by_dns_so_scaling_works():
     ], "the scrape port and the worker's configured port have drifted apart"
 
 
+def test_worker_does_not_fork_or_the_metrics_endpoint_is_pointless():
+    """rq.Worker forks a work horse per job. The runner would emit every
+    metric into that child, the child would exit, and the endpoint this
+    process serves would show nothing but build_info — which is precisely
+    the bug that motivated this file. SimpleWorker runs in-process, so
+    the metrics land in the registry we expose."""
+    import rq
+
+    from evalbench import worker as worker_module
+
+    assert getattr(worker_module, "SimpleWorker", None) is rq.SimpleWorker, (
+        "the worker must use rq.SimpleWorker: metrics emitted in a forked "
+        "work horse die with it, leaving /metrics empty"
+    )
+    # rq.Worker must not have been imported here by a later edit.
+    assert "Worker" not in [
+        n for n in vars(worker_module) if n == "Worker"
+    ], "rq.Worker forks; importing it here invites the old bug back"
+
+
 def test_worker_serves_metrics_before_taking_work():
     """If the server started after `worker.work()` it would never start —
     that call blocks forever."""
@@ -90,7 +119,7 @@ def test_worker_serves_metrics_before_taking_work():
         worker_module, "start_http_server", side_effect=lambda p: calls.append(p)
     ), patch.object(worker_module, "Redis"), patch.object(
         worker_module, "Queue"
-    ), patch.object(worker_module, "Worker") as mock_worker:
+    ), patch.object(worker_module, "SimpleWorker") as mock_worker:
         mock_worker.return_value.work.side_effect = lambda **_: calls.append(
             "work"
         )

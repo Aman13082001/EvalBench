@@ -19,6 +19,16 @@ defects were concentrated in the few places nothing reached.
   looked broken: the panels rendered "No data", indistinguishable from an
   idle system. The worker now serves `/metrics` on `WORKER_METRICS_PORT`,
   discovered by `dns_sd_configs` so `--scale worker=N` needs no edit.
+- **The web app was not in `docker compose` at all.** When the Streamlit
+  service was removed, nothing replaced it — so `docker compose up`
+  brought up the API, worker, Mongo, Redis, Ollama, Prometheus and
+  Grafana, and no website. `web/` is now containerized (multi-stage,
+  Next standalone output, 225 MB against the old Streamlit image's
+  9.1 GB) and comes up with everything else. `NEXT_PUBLIC_API_URL` is a
+  build arg, not a runtime env var, because Next inlines it into the
+  client bundle — and it has to be the browser-visible address, so
+  `http://api:8000` would have looked right and failed for every real
+  visitor.
 - **`GET /suites/{id}/regression-history` leaked other users' runs** — no
   owner filter, while its reachable sibling had one. Unused code is
   unaudited code: nothing called it, so the ownership pass missed it.

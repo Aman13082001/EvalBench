@@ -35,13 +35,14 @@ EvalBench is built around that question:
 ```mermaid
 flowchart LR
     CLI["evalbench CLI\n(Typer)"] -->|"REST + JWT / API key"| API
-    UI["Web app (Next.js)"] --> API
     subgraph stack["docker compose"]
+      UI["Web app (Next.js)\nlocalhost:3005"] --> API
       API["FastAPI\n/suites /runs /regression /baseline /metrics"] --> MONGO[("MongoDB\nsuites + runs")]
       API --> PROV["Providers\nOllama · Groq · Gemini · OpenAI · ..."]
       API --> REDIS[("Redis\njob queue")]
       REDIS --> WORKER["RQ worker\nscale with --scale worker=N"]
       PROM["Prometheus\nscrape /metrics + alert rules"] --> API
+      PROM --> WORKER
       GRAF["Grafana\nProduction Overview dashboard"] --> PROM
     end
 ```
@@ -68,7 +69,8 @@ flowchart LR
 **Prerequisites:** Docker + Docker Compose, and an Ollama model pulled inside the `ollama` container.
 
 ```bash
-# 1. bring up the whole stack
+# 1. bring up the whole stack — API, worker, Mongo, Redis, Ollama,
+#    Prometheus, Grafana and the web app
 docker compose up -d
 
 # 2. pull a model into the Ollama container
@@ -88,7 +90,7 @@ Endpoints once the stack is up:
 
 | Service | URL | Notes |
 |---|---|---|
-| Web app | http://localhost:3005 | `cd web && npm install && npm run dev` |
+| Web app | http://localhost:3005 | part of `docker compose up`; for hot reload use `cd web && npm install && npm run dev` |
 | API docs | http://localhost:8000/docs | OpenAPI / Swagger |
 | Prometheus | http://localhost:9090 | `/alerts` for rule state |
 | Grafana | http://localhost:3000 | `admin` / `evalbench` → Dashboards → *EvalBench* |

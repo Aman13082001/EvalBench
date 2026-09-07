@@ -15,7 +15,7 @@ import logging
 
 from prometheus_client import start_http_server
 from redis import Redis
-from rq import Queue, Worker
+from rq import Queue, SimpleWorker
 
 from evalbench.config import settings
 from evalbench.jobs import RUNS_QUEUE
@@ -34,7 +34,22 @@ def main() -> None:
     log.info("worker metrics on :%d/metrics", settings.worker_metrics_port)
 
     conn = Redis.from_url(settings.redis_url)
-    worker = Worker([Queue(RUNS_QUEUE, connection=conn)], connection=conn)
+
+    # SimpleWorker, not Worker, and the reason is the metrics endpoint
+    # above. rq.Worker forks a "work horse" per job; the runner would
+    # emit every metric into that child's registry and the child would
+    # exit, taking them with it. The parent serving this endpoint would
+    # never see a single run metric — which is exactly the bug this
+    # replaced. SimpleWorker executes in-process, so the metrics land in
+    # the registry we actually expose.
+    #
+    # The trade is losing work-horse isolation: a job that hard-crashes
+    # takes the worker down rather than just itself. Acceptable here —
+    # these jobs are async network I/O to model providers, the container
+    # has a restart policy, and RQ still enforces job timeouts in-process.
+    worker = SimpleWorker(
+        [Queue(RUNS_QUEUE, connection=conn)], connection=conn
+    )
     log.info(
         "worker started on queue %s (redis=%s)", RUNS_QUEUE, settings.redis_url
     )

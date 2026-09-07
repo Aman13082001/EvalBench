@@ -1,0 +1,9 @@
+# Keep the build context small. node_modules is reinstalled from the
+# lockfile inside the image, and .next would be rebuilt anyway.
+node_modules
+.next
+.env.local
+.git
+Dockerfile
+tsconfig.tsbuildinfo
+npm-debug.log*

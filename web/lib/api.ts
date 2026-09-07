@@ -171,8 +171,35 @@ export const setBaseline = (suiteId: string, runId: string) =>
     body: JSON.stringify({ run_id: runId }),
   });
 
+/** Shape of POST /regression. Verified against the live endpoint —
+ *  every field here is present in its response. */
+export interface PerTestDelta {
+  test_name: string;
+  baseline_score: number | null;
+  current_score: number | null;
+  delta: number | null;
+  regressed: boolean;
+}
+
+export interface Comparison {
+  mean_diff: number;
+  p_value: number | null;
+  effect_size: number | null;
+  significant: boolean;
+  regression_detected: boolean | null;
+  min_samples_for_5pt_mde: number | null;
+  test_count: number;
+  per_test: PerTestDelta[];
+  mcnemar: {
+    regressions: number;
+    fixes: number;
+    discordant: number;
+    p_value: number;
+  } | null;
+}
+
 export const compareRuns = (baselineId: string, currentId: string) =>
-  authed<Record<string, unknown>>("/regression", {
+  authed<Comparison>("/regression", {
     method: "POST",
     body: JSON.stringify({
       baseline_run_id: baselineId,

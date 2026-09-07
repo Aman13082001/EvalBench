@@ -1,41 +1,10 @@
 import { Disclosure, Metric, Panel, Rule, Status } from "@/components/ui";
+import type { Comparison, RunSummary } from "@/lib/api";
 
-type Summary = {
-  model: string;
-  passed: number;
-  scored_tests: number;
-  pass_rate: number;
-  avg_score: number;
-  pass_rate_ci: [number, number] | null;
-  total_cost_usd: number;
-  avg_latency_ms: number;
-  by_category: Record<string, { total: number; pass_rate: number }>;
-};
+/* Re-exported so pages can import the type alongside the component. */
+export type { Comparison };
 
-type PerTest = {
-  test_name: string;
-  baseline_score: number | null;
-  current_score: number | null;
-  delta: number | null;
-  regressed: boolean;
-};
-
-export type Comparison = {
-  mean_diff: number;
-  p_value: number | null;
-  effect_size: number | null;
-  significant: boolean;
-  regression_detected: boolean | null;
-  min_samples_for_5pt_mde: number | null;
-  test_count: number;
-  per_test: PerTest[];
-  mcnemar: {
-    regressions: number;
-    fixes: number;
-    discordant: number;
-    p_value: number;
-  } | null;
-};
+type Summary = RunSummary;
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 

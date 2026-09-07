@@ -4,15 +4,21 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
+  compareRuns,
   getRunStatus,
+  getRunSummary,
   getSuite,
   listRuns,
   RunDoc,
+  RunSummary,
   setBaseline,
   startRun,
   SuiteDoc,
 } from "@/lib/api";
 import { RequireAuth } from "@/components/AuthProvider";
+import ComparisonReport, {
+  Comparison,
+} from "@/components/ComparisonReport";
 import { Panel, Rule, Status } from "@/components/ui";
 
 const TERMINAL = new Set(["completed", "failed"]);
@@ -29,6 +35,13 @@ function SuiteDetail({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>("");
+  const [comparing, setComparing] = useState<string | null>(null);
+  const [report, setReport] = useState<{
+    baseline: RunSummary;
+    candidate: RunSummary;
+    comparison: Comparison;
+    runId: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -94,6 +107,31 @@ function SuiteDetail({ id }: { id: string }) {
     }
   }
 
+  /* The whole point of promoting a baseline: check a later run against
+     it and get the paired statistics, not just two pass rates. */
+  const compare = useCallback(
+    async (runId: string) => {
+      const base = suite?.baseline_run_id;
+      if (!base) return;
+      setError(null);
+      setComparing(runId);
+      setReport(null);
+      try {
+        const [baseline, candidate, comparison] = await Promise.all([
+          getRunSummary(base),
+          getRunSummary(runId),
+          compareRuns(base, runId),
+        ]);
+        setReport({ baseline, candidate, comparison, runId });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setComparing(null);
+      }
+    },
+    [suite?.baseline_run_id]
+  );
+
   if (error && !suite) {
     return (
       <div className="panel border-error p-4 text-sm text-error">{error}</div>
@@ -147,6 +185,29 @@ function SuiteDetail({ id }: { id: string }) {
         </p>
       )}
 
+      {report && (
+        <section className="space-y-3">
+          <Rule label="Comparison" />
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="font-mono text-xs text-muted">
+              baseline {suite.baseline_run_id?.slice(-8)} → run{" "}
+              {report.runId.slice(-8)}
+            </p>
+            <button
+              className="btn btn-ghost px-2 py-1 font-mono text-[11px]"
+              onClick={() => setReport(null)}
+            >
+              close
+            </button>
+          </div>
+          <ComparisonReport
+            baseline={report.baseline}
+            candidate={report.candidate}
+            comparison={report.comparison}
+          />
+        </section>
+      )}
+
       <Rule label="Run history" />
 
       {runs.length === 0 && (
@@ -183,12 +244,25 @@ function SuiteDetail({ id }: { id: string }) {
                   <Status state="pass">baseline</Status>
                 ) : (
                   r.status === "completed" && (
-                    <button
-                      className="btn btn-ghost px-2 py-1 font-mono text-[11px]"
-                      onClick={() => promote(r._id)}
-                    >
-                      set as baseline
-                    </button>
+                    <>
+                      {suite.baseline_run_id && (
+                        <button
+                          className="btn btn-ghost px-2 py-1 font-mono text-[11px]"
+                          onClick={() => compare(r._id)}
+                          disabled={comparing === r._id}
+                        >
+                          {comparing === r._id
+                            ? "comparing…"
+                            : "compare to baseline"}
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-ghost px-2 py-1 font-mono text-[11px]"
+                        onClick={() => promote(r._id)}
+                      >
+                        set as baseline
+                      </button>
+                    </>
                   )
                 )}
               </div>

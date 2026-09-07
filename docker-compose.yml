@@ -209,7 +209,10 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3005/"]
+      # 127.0.0.1, not localhost: in this image localhost resolves to
+      # ::1 first and the Next server binds IPv4 only, so the check
+      # would fail against a perfectly healthy site.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3005/"]
       interval: 15s
       timeout: 5s
       retries: 5

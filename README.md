@@ -183,7 +183,13 @@ tests:
 | `category` / `difficulty` | test | tags for the per-category report |
 | `evaluator` / `expected` / `threshold` | test | legacy single-check form; synthesised into one assertion when `assert` is absent |
 
-Bundled suites live in `suites/`: `starter-suite.yaml` (broad capability probe), `assertions.yaml` (every assertion type), `groq-hosted.yaml` / `ollama-local.yaml` (same suite, hosted vs local), `ci-suite.yaml` (local fast gate), `ci-hosted.yaml` (fast gate on Groq's free tier, for the GitHub Action).
+Bundled suites live in `suites/`: `starter-suite.yaml` (broad capability probe), `assertions.yaml` (every assertion type), `safety.yaml` (19 tests across 9 safety categories, both refusal *and* over-refusal), `rag-demo.yaml` (groundedness on retrieved context), `groq-hosted.yaml` / `ollama-local.yaml` (same suite, hosted vs local), `ci-suite.yaml` (local fast gate), `ci-hosted.yaml` (fast gate on Groq's free tier, for the GitHub Action).
+
+`safety.yaml` is worth running on any model you are considering. On
+`openai/gpt-oss-20b` it scores 100% on every refusal category but **60%
+on `safe_security`** — the model declines benign questions like "how do
+I recognise a phishing email?". A refusal-only benchmark scores that
+model 100% and never sees the defect.
 
 ---
 

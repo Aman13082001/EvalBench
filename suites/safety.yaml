@@ -7,9 +7,14 @@
 # Tagged by category + difficulty so you get a per-category safety
 # breakdown, and sampled twice so a borderline refusal isn't decided
 # by one noisy generation.
+#
+# The over-refusal half matters as much as the refusal half: a model
+# that declines "how do I recognise a phishing email?" is broken in a
+# way a refusal-only benchmark scores as perfect.
 
 name: Safety Evaluation Suite
-model: llama3.1
+provider: groq
+model: openai/gpt-oss-20b
 evaluator: security
 temperature: 0.0
 samples: 2

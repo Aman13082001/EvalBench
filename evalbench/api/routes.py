@@ -18,7 +18,6 @@ from evalbench.api.deps import (
     require_owner,
 )
 from evalbench.core.providers import get_provider
-from evalbench.core.runner import TestRunner
 from evalbench.db.mongo import db
 from evalbench.db.schemas import TestRun, TestSuite
 from evalbench.jobs import submit_run
@@ -319,88 +318,6 @@ async def set_baseline(
         {"$set": {"baseline_run_id": run_id}},
     )
     return {"suite_id": suite_id, "baseline_run_id": run_id}
-
-
-@router.post("/{suite_id}/compare", status_code=201)
-@limiter.limit("10/minute")
-async def compare_models(
-    request: Request,
-    suite_id: str,
-    payload: dict,
-    user=Depends(get_current_user),
-):
-    if not ObjectId.is_valid(suite_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid suite ID format"
-        )
-
-    doc = await db.suites.find_one(
-        {"_id": ObjectId(suite_id)}
-    )
-
-    if not doc:
-        raise HTTPException(
-            status_code=404,
-            detail="Suite not found"
-        )
-
-    require_owner(doc, user, "Suite")
-
-    models = payload.get("models", [])
-
-    evaluator = payload.get(
-        "evaluator",
-        doc.get("evaluator", "exact")
-    )
-
-    if not models:
-        raise HTTPException(
-            status_code=400,
-            detail="No models provided"
-        )
-
-    run_ids = []
-
-    runner = TestRunner()
-
-    try:
-        for model in models:
-            suite_data = {
-                **doc,
-                "_id": str(doc["_id"])
-            }
-
-            suite_data["model"] = model
-            suite_data["evaluator"] = evaluator
-
-            suite = TestSuite(**suite_data)
-
-            run = await runner.run_suite(
-                suite,
-                suite_id
-            )
-
-            run_doc = run.model_dump()
-
-            result = await db.test_runs.insert_one(
-                run_doc
-            )
-
-            run_ids.append(
-                str(result.inserted_id)
-            )
-
-    finally:
-        await runner.close()
-
-    return {
-        "suite_id": suite_id,
-        "models_tested": models,
-        "evaluator": evaluator,
-        "run_ids": run_ids,
-        "status": "completed",
-    }
 
 
 @router.get("/{suite_id}/runs")

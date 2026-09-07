@@ -14,7 +14,12 @@ from slowapi.errors import RateLimitExceeded
 from evalbench.api.admin import router as admin_router
 from evalbench.api.auth import get_password_hash
 from evalbench.api.auth_routes import router as auth_router
-from evalbench.api.deps import get_current_user, limiter, require_owner
+from evalbench.api.deps import (
+    get_current_user,
+    limiter,
+    owner_filter,
+    require_owner,
+)
 from evalbench.api.playground import router as playground_router
 from evalbench.api.routes import router as suites_router
 from evalbench.api.summary import summarize_run
@@ -611,7 +616,7 @@ async def get_regression_history(
     runs = []
 
     async for doc in db.test_runs.find(
-        {"suite_id": suite_id}
+        {"suite_id": suite_id, **owner_filter(user)}
     ).sort(
         "created_at",
         1,

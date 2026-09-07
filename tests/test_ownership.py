@@ -124,3 +124,41 @@ class TestRunScoping:
             json={"baseline_run_id": RUN_ID, "current_run_id": RUN_ID},
         )
         assert r.status_code == 404
+
+    def test_regression_history_is_filtered_by_owner(self, as_alice, mock_db):
+        """Regression: this endpoint had no owner filter because nothing
+        called it, so Phase B7's audit walked straight past it."""
+
+        async def empty():
+            for _ in ():
+                yield {}
+
+        find = mock_db.test_runs.find
+        find.return_value.sort.return_value.limit.return_value = empty()
+        as_alice.get(f"/suites/{SUITE_ID}/regression-history")
+        assert find.call_args[0][0] == {
+            "suite_id": SUITE_ID,
+            "created_by": "alice",
+        }
+
+    def test_cannot_promote_another_users_run_as_baseline(
+        self, as_alice, mock_db
+    ):
+        """Owning the suite is not enough; the run has to be yours too."""
+        mock_db.suites.find_one.return_value = {
+            "_id": ObjectId(SUITE_ID),
+            "created_by": "alice",
+            "name": "S",
+        }
+        mock_db.test_runs.find_one.return_value = {
+            "_id": ObjectId(RUN_ID),
+            "created_by": "bob",
+            "status": "completed",
+            "results": [],
+            "created_at": datetime.now(timezone.utc),
+        }
+        r = as_alice.post(
+            f"/suites/{SUITE_ID}/baseline", json={"run_id": RUN_ID}
+        )
+        assert r.status_code == 404
+        mock_db.suites.update_one.assert_not_called()

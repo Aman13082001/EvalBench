@@ -303,6 +303,10 @@ async def set_baseline(
     run = await db.test_runs.find_one({"_id": ObjectId(run_id)})
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    # Owning the suite is not enough — the run has to be yours too, or a
+    # baseline could be pinned to someone else's run and silently break
+    # this suite's regression gate.
+    require_owner(run, user, "Run")
     if run.get("status", "completed") != "completed":
         raise HTTPException(
             status_code=400,

@@ -5,6 +5,32 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [0.5.0] — 2026-09-07
 
+### Added — after a round of user testing
+
+Three findings from actually using the thing, all valid:
+
+- **Plain language in the CLI.** The web app got `explain.ts` after
+  earlier feedback about jargon; the CLI still printed `T-Statistic` /
+  `P-Value` / `faithfulness` with no translation, and terminal output is
+  what people screenshot. `evalbench/explain.py` mirrors the web wording
+  across the run summary, the assertion table and both comparison paths.
+  Tests pin meaning as well as tone — a real regression must still read
+  bluntly, and one test diffs the two layers so they cannot drift.
+- **Anyone can now run an evaluation with no API key.** Every playground
+  provider required one, so a visitor landed on a form they could not
+  submit. `ReplayProvider` ("demo") serves answers captured from a real
+  run while the assertion engine, judge calls, scoring and statistics all
+  execute live. `scripts/capture_demo.py` records by running the suite
+  for real with every provider call wrapped, which is what catches the
+  runtime-generated judge prompts. An unrecorded prompt errors and is
+  excluded from the pass rate rather than being invented.
+- **`evalbench reset-password`.** An admin who did not know the admin
+  password was locked out of `/admin` with no recovery path anywhere.
+  Writes directly to MongoDB rather than exposing an endpoint, prints the
+  database it targets, and on a miss names the accounts that database
+  holds — because a natively installed MongoDB can occupy the same port
+  Docker publishes, and "no such user" then means "wrong database".
+
 ### Fixed — a connectedness audit
 
 Traced every module, endpoint, component, export, metric, setting and

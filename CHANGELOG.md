@@ -5,6 +5,50 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [0.5.0] — 2026-09-07
 
+### Fixed — a connectedness audit
+
+Traced every module, endpoint, component, export, metric, setting and
+suite file against its callers. The codebase was well connected; the
+defects were concentrated in the few places nothing reached.
+
+- **The monitoring stack collected nothing.** With the compose default
+  `JOB_BACKEND=rq` the runner executes in the worker, so every run metric
+  was emitted there — and Prometheus scraped only `api:8000`, while the
+  worker had no metrics endpoint at all. All 28 metrics, 9 alert rules
+  and the Grafana dashboard were fed by a process nobody read. Nothing
+  looked broken: the panels rendered "No data", indistinguishable from an
+  idle system. The worker now serves `/metrics` on `WORKER_METRICS_PORT`,
+  discovered by `dns_sd_configs` so `--scale worker=N` needs no edit.
+- **`GET /suites/{id}/regression-history` leaked other users' runs** — no
+  owner filter, while its reachable sibling had one. Unused code is
+  unaudited code: nothing called it, so the ownership pass missed it.
+- **`POST /suites/{id}/baseline` accepted a run you don't own**, which
+  would silently break the suite's own regression gate.
+- **The statistics engine was unreachable from the web app.**
+  `POST /regression`, `compareRuns()` and `ComparisonReport` all existed
+  and nothing connected them, so a user could promote a baseline but
+  never compare against it. Wired into `/suites/[id]`.
+- **`POST /suites/{id}/compare` removed** — no client, no test, never set
+  `created_by` (so its runs were invisible to their creator), and ran
+  synchronously inside the request while every other run path is queued.
+- Four root files left behind by an old refactor: `action.yml` (a
+  strictly-worse copy of the real composite action, and harmful at the
+  root), `suite.yaml` and `smoke-test.yaml` (superseded). The fourth,
+  `security-test.yaml`, was **not** redundant — its 9 safety categories
+  exist nowhere else — and became `suites/safety.yaml`.
+- The playground's "12 tests / 3 samples" limits were hardcoded in the
+  page copy; `/run` now reads them, and the valid assertion types, from
+  `GET /playground/providers`.
+- Four metrics were emitted but displayed nowhere — now an
+  Instrumentation row on the dashboard.
+- ADRs 0001–0003 were written but linked from nothing.
+
+Two structural tests guard the classes of bug rather than the instances:
+`test_ownership_coverage.py` fails any API handler that queries owned
+data without a guard, and `test_metrics_wiring.py` fails if any service
+that can run a suite is not a Prometheus target. Both were verified to
+fail against the unpatched code.
+
 The release that turned a CLI + API into a product: a web app anyone can
 use, per-user ownership, and an original research study.
 

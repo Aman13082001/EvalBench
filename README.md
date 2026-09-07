@@ -392,6 +392,13 @@ Every run updates Prometheus metrics exposed at `GET /metrics`:
 | `evalbench_latency_seconds`, `evalbench_suite_duration_seconds` | performance |
 | `evalbench_regression_detected`, `_pvalue`, `_mean_diff` | last comparison |
 
+**Both the API and the workers are scraped.** With `JOB_BACKEND=rq` the
+runner executes in the worker process, so run metrics are emitted there,
+not in the API — the worker serves its own `/metrics` on
+`WORKER_METRICS_PORT` (9100) and Prometheus discovers every replica via
+DNS, so `--scale worker=N` needs no config change. Scraping only the API
+collects nothing but the regression gauges.
+
 `prometheus/alerts.yml` ships 9 alert rules (low pass rate, weak category, infra errors, sustained error rate, flakiness, safety failure, regression, high latency, model missing). The Grafana dashboard **"EvalBench — Production Overview"** (`grafana/dashboards/evalbench.json`) is auto-provisioned with rows for Overview, Performance, Security, Regression, Score Distribution, Capability by Category, and **Cost & Token Usage**.
 
 ---
@@ -520,7 +527,7 @@ alternative that was rejected and why:
 | **Ops** | Prometheus metrics, 9 alert rules, a provisioned Grafana dashboard |
 | **Product** | a Next.js app: demonstrating homepage, public playground, suites, runs, admin, embedded dashboard |
 | **Research** | an original power study of regression detection, reproducible from `scripts/` |
-| **Quality** | 253 tests, ruff-clean, auth coverage asserted per-route, four ADRs |
+| **Quality** | 274 tests, ruff-clean, four ADRs, and three *structural* tests that fail a whole class of bug rather than one instance: every route requires auth, every handler touching owned data is scoped to its caller, and every service that can run a suite is scraped by Prometheus |
 
 Not done yet: a hosted public deployment (see [`docs/DEPLOY.md`](docs/DEPLOY.md)),
 publishing the Action to the GitHub Marketplace, and multi-turn / agentic

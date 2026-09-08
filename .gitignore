@@ -1,6 +1,11 @@
 __pycache__/
 *.pyc
+# Secrets. `.env` alone left .env.local / .env.production / .env.backup
+# committable — and copying .env aside before editing it is exactly what
+# someone does. Ignore the whole family, keep the template.
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 .idea/

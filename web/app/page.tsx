@@ -170,21 +170,49 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── §4 · The door ───────────────────────────────────── */}
+      {/* ── §4 · The door ───────────────────────────────────────
+          The whole block is the control, not a small button beside a
+          heading. "Sign in" is a chore; the invitation is to go and
+          check, so the action says that. */}
       <Rule />
-      <section className="flex flex-col items-start gap-4 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="font-display text-2xl">Want to check for yourself?</p>
-          <p className="mt-1 max-w-xl text-sm text-muted">
-            Sign in to run suites against your own models and keep the history —
-            or run one right now without an account.
-          </p>
-        </div>
+      <section className="pb-4">
         <button
-          className="btn btn-primary shrink-0"
           onClick={() => setLoginOpen(true)}
+          className="group block w-full border border-line-strong bg-surface px-5 py-6 text-left
+                     transition-colors duration-100 hover:border-accent hover:bg-accent-soft
+                     focus:border-accent focus:outline-none sm:px-7 sm:py-7"
+          style={{ borderRadius: 2 }}
         >
-          Sign in
+          <span className="flex flex-wrap items-stretch justify-between gap-5 sm:flex-nowrap">
+            <span className="space-y-1.5">
+              <span className="label-xs block text-accent">§4 · Go and check</span>
+              <span className="block font-display text-3xl leading-none">
+                Check it for yourself
+              </span>
+              <span className="block max-w-xl text-sm leading-relaxed text-muted">
+                Run a real evaluation against your own model and keep the
+                history — or run one right now without an account.
+              </span>
+            </span>
+
+            {/* The actuator. Separated by a hairline and labelled, so the
+                block reads as a control at rest rather than only on hover. */}
+            <span
+              className="flex shrink-0 items-center gap-3 self-center bg-accent-soft px-5 py-3"
+              style={{ borderRadius: 2 }}
+            >
+              <span className="label-xs whitespace-nowrap text-accent">
+                Sign in
+              </span>
+              <span
+                aria-hidden
+                className="font-mono text-xl leading-none text-accent transition-transform
+                           duration-100 group-hover:translate-x-1"
+              >
+                →
+              </span>
+            </span>
+          </span>
         </button>
       </section>
 

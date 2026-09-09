@@ -1,148 +1,194 @@
-import Link from "next/link";
-import HeroDemo from "@/components/HeroDemo";
-import { Disclosure, Panel, Rule } from "@/components/ui";
+"use client";
 
-/* Every figure below came out of a real run — see the caption on §2. */
-const CAPABILITIES: {
-  fig: string;
-  title: string;
-  plain: string;
-  technical: string;
-}[] = [
+import { useState } from "react";
+import ArchitectureFlow from "@/components/ArchitectureFlow";
+import LoginDialog from "@/components/LoginDialog";
+import { Rule } from "@/components/ui";
+
+/* ── §3 · What it can do ────────────────────────────────────────
+   Written as a specification rather than a feature grid: what it
+   checks, how it decides something changed, where it runs, how it
+   runs in production. Every figure is real. */
+
+const CHECKS: { group: string; types: string; what: string }[] = [
   {
-    fig: "2.1",
-    title: "Correctness",
-    plain: "12 of 12 answers passed every check they were given.",
-    technical:
-      "pass_rate 1.00 · 4 assertion types (icontains, json-schema, regex, latency) · 12 tests · concurrency 4",
+    group: "Exact & format",
+    types: "exact · equals · contains · icontains · regex · json-schema",
+    what: "Is the answer literally right, and is it shaped the way the caller needs?",
   },
   {
-    fig: "2.2",
-    title: "Retrieval quality (RAG)",
-    plain:
-      "Caught two claims the source material never made — a hallucination a human reviewer would skim past.",
-    technical:
-      "faithfulness 1/3 claims grounded · unsupported: “the exact order depends on timing”, “hard to reproduce” · context-recall and context-precision scored separately",
+    group: "Meaning",
+    types: "semantic · judge · llm-rubric",
+    what: "Does it mean the same thing, even worded differently — graded by embedding distance or by a second model against a written rubric.",
   },
   {
-    fig: "2.3",
-    title: "Regression detection",
-    plain:
-      "Told us model quality genuinely dropped after a change — not that it looked worse, that the drop was real.",
-    technical:
-      "paired t-test p=0.033 · Cohen's d −0.94 (large) · McNemar 4 regressed / 0 fixed · mean_diff −0.25",
+    group: "Groundedness (RAG)",
+    types: "faithfulness · context-recall · context-precision",
+    what: "Did it stick to the retrieved source, did the source contain the answer, and was the retrieval relevant. Unsupported claims are named individually.",
   },
   {
-    fig: "2.4",
-    title: "Statistical confidence",
-    plain:
-      "Warned us the suite was too small to trust a 5-point move in either direction.",
-    technical:
-      "min_samples_for_5pt_mde = 225 at the observed variance · pass rate reported with a 95% percentile bootstrap CI (2000 resamples)",
+    group: "Budgets",
+    types: "latency · cost",
+    what: "Was it fast enough and cheap enough to actually ship.",
+  },
+];
+
+const CAPABILITIES: { title: string; body: string; detail: string }[] = [
+  {
+    title: "It decides whether a change is real",
+    body: "A lower score is not a regression. Runs are compared against a promoted baseline with a paired t-test, an exact McNemar test on pass/fail outcomes, and a Cohen's d effect size — so a significant-but-tiny move is distinguishable from one that matters. Every headline number carries a bootstrap confidence interval.",
+    detail:
+      "paired t-test · exact McNemar · Cohen's d · 95% percentile bootstrap (2000 resamples)",
   },
   {
-    fig: "2.5",
-    title: "Cost and speed",
-    plain: "A full 12-test suite cost three hundredths of a cent.",
-    technical:
-      "$0.000339 · 962 in / 480 out tokens · $0.10/$0.50 per 1M · 474 ms average · priced per model with a source and as_of date",
+    title: "It tells you when your suite is too small to trust",
+    body: "Alongside the verdict it reports the minimum number of tests needed to detect a five-point move at your measured variance. If your suite is under that, the tool says so instead of quietly reporting 'no regression detected'.",
+    detail: "min_samples_for_5pt_mde, reported on every comparison",
   },
   {
-    fig: "2.6",
-    title: "Safety, both directions",
-    plain:
-      "Refused both harmful prompts — and answered both harmless ones, instead of refusing everything to look safe.",
-    technical:
-      "security evaluator · 2/2 refusals on adversarial prompts, 2/2 helpful answers on benign prompts · over-refusal is scored as a failure, not a win",
+    title: "It scores safety in both directions",
+    body: "Refusing harm is half the job. A model that also declines 'how do I recognise a phishing email?' is broken in a way a refusal-only benchmark scores as perfect. Over-refusal is counted as a failure.",
+    detail: "19 tests across 9 safety categories · refusal and over-refusal scored separately",
+  },
+  {
+    title: "It runs the same suite on any model",
+    body: "Local Ollama or five hosted providers behind one interface, with per-provider concurrency ceilings so free-tier rate limits are respected. Token counts and estimated cost come back normalised, so comparing two models is a config change.",
+    detail: "ollama · groq · gemini · github · openrouter · openai",
+  },
+  {
+    title: "It gates CI",
+    body: "A composite GitHub Action spins up an ephemeral EvalBench, runs a suite against a pull request, fails the check on a low pass rate or a detected regression, and posts the result as a comment that updates in place.",
+    detail: "evalbench run --fail-under 0.80 --compare-to-baseline",
+  },
+  {
+    title: "It is instrumented like production software",
+    body: "Runs execute as queued jobs on workers you can scale horizontally, with a startup reaper for anything a crash orphaned. Every run emits Prometheus metrics from the process that actually executed it, onto a provisioned Grafana dashboard.",
+    detail: "29 metrics · 9 alert rules · async job queue · horizontal scaling",
   },
 ];
 
 export default function Home() {
+  const [loginOpen, setLoginOpen] = useState(false);
+
   return (
     <div className="space-y-12">
+      {/* ── §1 · The system ─────────────────────────────────── */}
       <section className="space-y-5">
-        <p className="label-xs">§1 · What this is</p>
+        <p className="label-xs">§1 · How it works</p>
         <h1 className="max-w-3xl font-display text-4xl leading-[1.15] sm:text-5xl">
           An instrument for measuring what a language model actually does.
         </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-muted">
-          Write a suite of prompts and the checks each answer must pass. Run it
-          against any model. Get back a scored report with statistical
-          confidence, cost, and a verdict on whether your last change made
-          things worse.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <Link href="/run" className="btn btn-primary">
-            Try it — no account
-          </Link>
-          <a
-            href="https://github.com/Aman13082001/EvalBench"
-            className="btn btn-secondary"
-          >
-            Read the source
-          </a>
-        </div>
+        <ArchitectureFlow />
       </section>
 
-      <Rule label="Fig. 1 · A recorded evaluation" />
-      <HeroDemo />
+      {/* ── §2 · Why ────────────────────────────────────────── */}
+      <Rule label="§2 · Why I built it" />
+      <section className="max-w-2xl space-y-3">
+        <p className="text-base leading-relaxed">
+          I kept getting eval results I couldn&rsquo;t trust. The same suite
+          would score 84% one day and 89% the next against the same model, with
+          no way to tell whether anything had actually changed.
+        </p>
+        <p className="text-base leading-relaxed">
+          EvalBench answers that — it samples each test repeatedly and runs a
+          paired statistical test before it will call a change real.
+        </p>
+        <p className="font-mono text-[11px] text-muted tnum">
+          those two figures are real: 84.2% and 89.5% on the same safety suite
+          and the same model, p = 0.429
+        </p>
+      </section>
 
-      <Rule label="§2 · What it measures" />
+      {/* ── §3a · What it checks ────────────────────────────── */}
+      <Rule label="§3 · What it can do" />
       <section className="space-y-4">
         <p className="max-w-2xl text-sm leading-relaxed text-muted">
-          Six things, each with a plain answer and the statistics behind it.
-          Every figure here came out of a real run against{" "}
-          <span className="font-mono text-xs">openai/gpt-oss-20b</span> — none
-          of it is illustrative.
+          A test passes only when every check on it passes. Fourteen check
+          types, grouped by what they actually measure.
         </p>
 
+        <div className="panel divide-y divide-line">
+          {CHECKS.map((c) => (
+            <div
+              key={c.group}
+              className="grid gap-1 p-4 sm:grid-cols-[11rem_1fr] sm:gap-5"
+            >
+              <div className="space-y-1">
+                <p className="font-display text-base leading-none">{c.group}</p>
+                <p className="font-mono text-[10px] leading-relaxed text-muted">
+                  {c.types}
+                </p>
+              </div>
+              <p className="text-sm leading-relaxed text-muted">{c.what}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* ── §3b · Capabilities ────────────────────────────── */}
         <div className="grid gap-4 md:grid-cols-2">
           {CAPABILITIES.map((c) => (
-            <Panel key={c.fig} title={c.title} fig={c.fig}>
-              <Disclosure plain={c.plain} technical={c.technical} />
-            </Panel>
+            <section key={c.title} className="panel p-4">
+              <h3 className="font-display text-base leading-snug">{c.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                {c.body}
+              </p>
+              <p className="mt-3 border-t border-line pt-2 font-mono text-[10px] leading-relaxed text-muted tnum">
+                {c.detail}
+              </p>
+            </section>
           ))}
         </div>
       </section>
 
-      <Rule label="§3 · Why it is built this way" />
-      <section className="grid gap-4 md:grid-cols-3">
-        <Panel title="One answer, many checks" fig="3.1">
-          <p className="text-sm leading-relaxed text-muted">
-            A response is rarely just right or wrong. EvalBench scores the same
-            answer on correctness, meaning, rubric quality, groundedness, speed
-            and cost — and fails the test if any single check fails.
-          </p>
-        </Panel>
-        <Panel title="Statistics, not vibes" fig="3.2">
-          <p className="text-sm leading-relaxed text-muted">
-            A lower score is not a regression. EvalBench runs a paired test
-            against a promoted baseline and reports an effect size, so you can
-            tell a real drop from sampling noise.
-          </p>
-        </Panel>
-        <Panel title="Provider-agnostic" fig="3.3">
-          <p className="text-sm leading-relaxed text-muted">
-            The same suite runs against a local Ollama model or a hosted one.
-            Token counts and cost come back normalised, so comparing models is
-            a config change, not a rewrite.
-          </p>
-        </Panel>
+      {/* ── §3c · The research behind it ────────────────────── */}
+      <section className="space-y-4">
+        <Rule label="The research behind it" />
+        <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="max-w-2xl space-y-3">
+            <p className="text-base leading-relaxed">
+              The statistics above are not decoration. Before building the
+              regression gate I measured whether a typical eval suite is even
+              large enough to answer the question it is asked.
+            </p>
+            <p className="text-sm leading-relaxed text-muted">
+              Real paired outputs from two models across 30 prompts, resampled
+              2,000 times at each suite size, with EvalBench&rsquo;s own
+              detector run on every resample. A ten-prompt suite detects a
+              genuine regression <strong className="text-text">21%</strong> of
+              the time — it misses four in five, and it fails toward false
+              confidence, which is the dangerous direction for something wired
+              to a deploy gate. That is why every result here carries a
+              confidence interval and a minimum-sample estimate.
+            </p>
+            <p className="font-mono text-[11px] text-muted tnum">
+              reproducible: python scripts/run_study_power.py
+            </p>
+          </div>
+          <a href="/research" className="btn btn-secondary shrink-0">
+            Read the study
+          </a>
+        </div>
       </section>
 
+      {/* ── §4 · The door ───────────────────────────────────── */}
       <Rule />
       <section className="flex flex-col items-start gap-4 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="font-display text-2xl">Run one yourself.</p>
-          <p className="mt-1 text-sm text-muted">
-            Bring a free API key. No account, nothing stored, results in about
-            three seconds.
+          <p className="font-display text-2xl">Want to check for yourself?</p>
+          <p className="mt-1 max-w-xl text-sm text-muted">
+            Sign in to run suites against your own models and keep the history —
+            or run one right now without an account.
           </p>
         </div>
-        <Link href="/run" className="btn btn-primary shrink-0">
-          Open the playground
-        </Link>
+        <button
+          className="btn btn-primary shrink-0"
+          onClick={() => setLoginOpen(true)}
+        >
+          Sign in
+        </button>
       </section>
+
+      <LoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
     </div>
   );
 }

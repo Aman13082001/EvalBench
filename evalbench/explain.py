@@ -157,3 +157,50 @@ def explain_comparison(comp: dict) -> str:
         f"(p = {p:.3f}; anything above 0.05 means it could easily be luck)."
         + hint
     )
+
+
+def explain_model_comparison(model_a: str, model_b: str, comp: dict) -> str:
+    """Two models on the same suite. Symmetric — neither is "the baseline".
+
+    The regression wording asks "did it get worse?"; this asks "which is
+    better, and can we tell?". The second question is the one a raw
+    pass-rate comparison answers wrongly most often, because a higher
+    number is read as "better" even when the gap is inside the noise.
+    """
+    diff = comp.get("mean_diff")
+    p = comp.get("p_value")
+    n = comp.get("test_count") or 0
+
+    if diff is None:
+        return "Not enough tests in common to compare these two models."
+
+    pts = abs(diff) * 100
+    if pts < 0.05:
+        return (
+            f"{model_a} and {model_b} scored the same on these {n} tests."
+        )
+
+    ahead, behind = (model_b, model_a) if diff > 0 else (model_a, model_b)
+
+    if p is None:
+        return f"{ahead} scored {pts:.1f} points higher than {behind}."
+
+    if p < 0.05:
+        return (
+            f"{ahead} scored {pts:.1f} points higher than {behind}, and "
+            f"the difference is real — not luck (p = {p:.3f}, {n} paired "
+            "tests)."
+        )
+
+    hint = ""
+    need = comp.get("min_samples_for_5pt_mde")
+    if need and n and need > n:
+        hint = (
+            f" Telling them apart reliably would take around {need} tests, "
+            f"not {n}."
+        )
+    return (
+        f"{ahead} scored {pts:.1f} points higher than {behind}, but that "
+        f"is within expected noise — it does not show one model is better "
+        f"(p = {p:.3f}, {n} paired tests)." + hint
+    )

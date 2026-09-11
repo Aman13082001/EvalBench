@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # rq = enqueue to Redis, executed by `python -m evalbench.worker`.
     job_backend: str = "inline"
     worker_metrics_port: int = 9100
+    # Runs per user per day that may use the server's own provider key.
+    # Runs made with a user-supplied key are not counted. 0 disables the
+    # server key for non-admins entirely.
+    daily_run_cap: int = 20
 
     # Authentication
     secret_key: str = "change-this-to-a-random-32-char-string"

@@ -251,6 +251,51 @@ async def readiness():
         ) from exc
 
 
+@app.get("/runs")
+async def list_runs(
+    limit: int = 20,
+    user=Depends(get_current_user),
+):
+    """The caller's most recent runs across every suite.
+
+    Until now runs could only be listed per suite, so "what have I run
+    lately" meant one request per suite. The workspace needs it in one
+    call. Results are trimmed to the fields a list needs — the full
+    result set is on /runs/{id}.
+    """
+    limit = max(1, min(limit, 100))
+    out = []
+    async for doc in (
+        db.test_runs.find(
+            owner_filter(user),
+            {
+                "suite_id": 1, "model": 1, "provider": 1, "evaluator": 1,
+                "status": 1, "created_at": 1, "finished_at": 1,
+                "total_tests": 1, "completed_tests": 1, "error": 1,
+                "used_server_key": 1,
+                # enough of results to compute a pass rate, nothing more
+                "results.passed": 1, "results.error": 1,
+                "results.cost_usd": 1,
+            },
+        )
+        .sort("created_at", -1)
+        .limit(limit)
+    ):
+        results = doc.pop("results", []) or []
+        scored = [r for r in results if not r.get("error")]
+        doc["_id"] = str(doc["_id"])
+        doc["passed"] = sum(1 for r in scored if r.get("passed"))
+        doc["scored_tests"] = len(scored)
+        doc["pass_rate"] = (
+            round(doc["passed"] / len(scored), 4) if scored else None
+        )
+        doc["total_cost_usd"] = round(
+            sum(r.get("cost_usd") or 0 for r in results), 6
+        )
+        out.append(doc)
+    return out
+
+
 @app.get("/runs/{run_id}")
 async def get_run(
     run_id: str,

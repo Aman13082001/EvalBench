@@ -19,18 +19,23 @@ def _queue() -> Queue:
     return Queue(RUNS_QUEUE, connection=Redis.from_url(settings.redis_url))
 
 
-def enqueue_run(run_id: str, suite_id: str) -> None:
+def enqueue_run(
+    run_id: str, suite_id: str, provider_key: str | None = None
+) -> None:
     _queue().enqueue(
         "evalbench.jobs_rq.run_job_sync",
         run_id,
         suite_id,
+        provider_key,
         job_id=run_id,
         retry=Retry(max=2, interval=[10, 30]),
         job_timeout=settings.suite_run_timeout,
     )
 
 
-def run_job_sync(run_id: str, suite_id: str) -> None:
+def run_job_sync(
+    run_id: str, suite_id: str, provider_key: str | None = None
+) -> None:
     """Sync wrapper RQ calls. Runs the async job on a fresh loop + client."""
     from evalbench import jobs
     from evalbench.db.mongo import make_client
@@ -39,7 +44,7 @@ def run_job_sync(run_id: str, suite_id: str) -> None:
         client = make_client()
         jobs.db = client[settings.mongodb_db]
         try:
-            await jobs.execute_run_job(run_id, suite_id)
+            await jobs.execute_run_job(run_id, suite_id, provider_key)
         finally:
             client.close()
 

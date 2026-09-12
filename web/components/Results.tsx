@@ -37,26 +37,48 @@ export default function Results({ r }: { r: RunSummary }) {
         />
         <Metric
           label="Est. cost"
-          value={r.total_cost_usd ? `$${r.total_cost_usd.toFixed(5)}` : "$0"}
+          value={
+            r.total_cost_usd
+              ? `$${r.total_cost_usd.toFixed(5)}`
+              : r.total_prompt_tokens + r.total_completion_tokens > 0
+                ? "unpriced"
+                : "$0"
+          }
           sub={`${r.total_prompt_tokens}/${r.total_completion_tokens} tok`}
-          caption="At the model's list price."
+          caption={
+            r.total_cost_usd || r.total_prompt_tokens + r.total_completion_tokens === 0
+              ? "At the model's list price."
+              : "No list price on file for this model."
+          }
           tone="accent"
         />
         <Metric
           label="Avg latency"
           value={String(Math.round(r.avg_latency_ms))}
           unit="ms"
-          caption="Average time to answer."
+          caption={r.errors > 0 ? "Average over the tests that answered." : "Average time to answer."}
         />
       </div>
 
       {(r.errors > 0 || r.rate_limited_samples > 0) && (
-        <p className="font-mono text-xs text-warning">
-          {r.errors > 0 &&
-            `${r.errors} test(s) errored — infrastructure issue, not a wrong answer. `}
-          {r.rate_limited_samples > 0 &&
-            `${r.rate_limited_samples} sample(s) rate-limited by the provider.`}
-        </p>
+        <div className="border border-warning/60 p-3 text-sm">
+          <p>
+            <span className="font-medium text-warning">
+              {r.errors} of {r.total_tests} tests never got an answer.
+            </span>{" "}
+            They are left out of every number above — the pass rate is over the{" "}
+            {r.scored_tests} that did.
+          </p>
+          {r.rate_limited_samples > 0 && (
+            <p className="mt-1 text-xs text-muted">
+              The provider rate-limited {r.rate_limited_samples} request
+              {r.rate_limited_samples === 1 ? "" : "s"}. Free tiers allow a
+              limited number per minute; a large benchmark with several samples
+              per test can exceed it. Try fewer samples, a smaller benchmark,
+              your own key, or run again in a few minutes.
+            </p>
+          )}
+        </div>
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -64,21 +86,31 @@ export default function Results({ r }: { r: RunSummary }) {
           <Panel
             title="By category"
             fig="A"
-            caption="Where the model is strong or weak, grouped by each test's category tag."
+            caption="Where the model is strong or weak, by category. Tests that never got an answer are shown but not scored."
           >
             <table className="w-full text-sm">
               <tbody>
-                {cats.map(([name, s]) => (
-                  <tr key={name} className="border-t border-line first:border-0">
-                    <td className="py-1.5">{name}</td>
-                    <td className="py-1.5 text-right font-mono text-xs text-muted tnum">
-                      {s.total}
-                    </td>
-                    <td className="py-1.5 text-right font-mono text-sm tnum">
-                      {pct(s.pass_rate)}
-                    </td>
-                  </tr>
-                ))}
+                {cats.map(([name, s]) => {
+                  const scored = s.scored ?? s.total - (s.errors ?? 0);
+                  return (
+                    <tr key={name} className="border-t border-line first:border-0">
+                      <td className="py-1.5">{name}</td>
+                      <td className="py-1.5 text-right font-mono text-xs text-muted tnum">
+                        {scored}/{s.total}
+                        {s.errors > 0 && (
+                          <span className="ml-1 text-warning">· {s.errors} no answer</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 text-right font-mono text-sm tnum">
+                        {s.pass_rate == null ? (
+                          <span className="text-muted">— no reading</span>
+                        ) : (
+                          pct(s.pass_rate)
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </Panel>
@@ -116,19 +148,41 @@ export default function Results({ r }: { r: RunSummary }) {
 
       <Rule label="Per test" />
       <div className="space-y-3">
-        {r.results.map((t) => (
+        {r.results.map((t) => {
+          /* Same rule as the API's summary: a test is "errored" only when
+             no sample produced an answer. One lost sample out of three
+             still leaves a scored test — noted, not flagged. */
+          const errored = !!t.error && !(t.runs ?? 0);
+          const lostSamples = !errored && (t.rate_limited ?? 0) > 0;
+          return (
           <Panel
             key={t.test_name}
             title={t.test_name}
             right={
               <span className="flex items-center gap-2">
                 <span className="font-mono text-[11px] text-muted tnum">
-                  {t.score ?? 0} · {Math.round(t.latency_ms)}ms
+                  {errored ? "no answer" : `${t.score ?? 0} · ${Math.round(t.latency_ms)}ms`}
                 </span>
-                <Status state={t.passed ? "pass" : "fail"} />
+                <Status state={errored ? "warn" : t.passed ? "pass" : "fail"}>
+                  {errored ? "error" : undefined}
+                </Status>
               </span>
             }
           >
+            {errored && (
+              <p className="mb-2 text-sm text-warning">
+                Couldn&rsquo;t get an answer from the provider — not scored, not
+                counted against the model.
+                <span className="ml-2 font-mono text-[11px] text-muted">
+                  {String(t.error).slice(0, 140)}
+                </span>
+              </p>
+            )}
+            {lostSamples && (
+              <p className="mb-2 font-mono text-[11px] text-muted">
+                scored on {t.runs} sample{t.runs === 1 ? "" : "s"} · {t.rate_limited} rate-limited
+              </p>
+            )}
             {t.assertions && t.assertions.length > 0 && (
               <ul className="space-y-2 text-sm">
                 {t.assertions.map((a, i) => (
@@ -168,7 +222,8 @@ export default function Results({ r }: { r: RunSummary }) {
               </pre>
             </details>
           </Panel>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

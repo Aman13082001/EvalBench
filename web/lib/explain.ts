@@ -47,10 +47,18 @@ export function explainAssertion(a: AssertionOutcome): string {
 export function explainRun(r: RunSummary): string {
   const n = r.scored_tests;
   const p = r.passed;
-  if (n === 0) return "No tests could be scored.";
-  if (p === n) return `All ${n} answers passed every check you asked for.`;
-  if (p === 0) return `None of the ${n} answers passed — worth a closer look.`;
-  return `${p} out of ${n} answers passed everything you checked for; ${n - p} missed at least one check.`;
+  const errs = r.errors ?? 0;
+  // Errors are named up front. Omitting them let a run where 35 of 51
+  // tests never got an answer read as "15 of 16 passed" — true of the
+  // sixteen, and silent about the thirty-five.
+  const tail =
+    errs > 0
+      ? ` ${errs} test${errs === 1 ? "" : "s"} couldn't run at all — a provider or connection problem, not the model's fault — and ${errs === 1 ? "is" : "are"} left out of the score.`
+      : "";
+  if (n === 0) return `No tests could be scored.${tail}`;
+  if (p === n) return `All ${n} answers passed every check you asked for.${tail}`;
+  if (p === 0) return `None of the ${n} answers passed — worth a closer look.${tail}`;
+  return `${p} out of ${n} answers passed everything you checked for; ${n - p} missed at least one check.${tail}`;
 }
 
 /** Whether a difference between two runs of the same suite is real.

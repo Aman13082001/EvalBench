@@ -25,7 +25,10 @@ def summarize_run(doc: dict) -> dict:
 
     scores = [r.get("score", 0) or 0 for r in scored]
     pass_flags = [1 if r.get("passed") else 0 for r in scored]
-    latencies = [r.get("latency_ms", 0) for r in results]
+    # Over scored tests only. A timed-out request's latency is the
+    # timeout, not the model — averaging it in reports the provider's
+    # bad day as the model's speed.
+    latencies = [r.get("latency_ms", 0) for r in scored]
     tokens = [r.get("tokens", 0) for r in results]
     prompt_tokens = [r.get("prompt_tokens", 0) for r in results]
     completion_tokens = [r.get("completion_tokens", 0) for r in results]
@@ -56,8 +59,12 @@ def summarize_run(doc: dict) -> dict:
 
     for b in by_category.values():
         n = b["total"] - b["errors"]
-        b["pass_rate"] = round(b["passed"] / n, 4) if n else 0
-        b["avg_score"] = round(b["_score_sum"] / n, 4) if n else 0
+        # None, not 0, when nothing in the category could be scored. "0%"
+        # reads as "the model failed every one"; the truth is "no answer
+        # was obtained", which is a different finding entirely.
+        b["scored"] = n
+        b["pass_rate"] = round(b["passed"] / n, 4) if n else None
+        b["avg_score"] = round(b["_score_sum"] / n, 4) if n else None
         del b["_score_sum"]
 
     return {

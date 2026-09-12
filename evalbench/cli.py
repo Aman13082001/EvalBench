@@ -512,12 +512,17 @@ def run(
         cat_table.add_column("Errors", style="yellow")
 
         for name, stats in sorted(by_category.items()):
+            pr = stats.get("pass_rate")
+            sc = stats.get("avg_score")
+            errs = stats.get("errors", 0)
             cat_table.add_row(
                 name,
                 str(stats.get("total", 0)),
-                f"{stats.get('pass_rate', 0) * 100:.1f}%",
-                f"{stats.get('avg_score', 0):.3f}",
-                str(stats.get("errors", 0)),
+                # None means nothing in the category could be scored —
+                # that is not 0%, it is "no reading".
+                f"{pr * 100:.1f}%" if pr is not None else "[dim]— no reading[/dim]",
+                f"{sc:.3f}" if sc is not None else "[dim]—[/dim]",
+                f"[yellow]{errs}[/yellow]" if errs else "0",
             )
 
         console.print(cat_table)

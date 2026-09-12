@@ -210,3 +210,51 @@ class TestRegressionEndpoint:
         data = response.json()
 
         assert "regression_detected" in data
+
+
+class TestSummaryDoesNotBlameTheModelForTheProvider:
+    """A run where a category got no answers at all, and where timeouts
+    dominated the latencies. Found on a real run: 35 of 51 tests were
+    rate-limited, and the page reported reasoning as 0.0% and average
+    latency as 16.7s — the provider's bad day, presented as the model's."""
+
+    def _doc(self):
+        ok = lambda name, cat, ms: {  # noqa: E731
+            "test_name": name, "prompt": "p", "expected": "e", "actual": "a",
+            "latency_ms": ms, "tokens": 10, "score": 1.0, "passed": True,
+            "category": cat, "runs": 1,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        err = lambda name, cat: {  # noqa: E731
+            "test_name": name, "prompt": "p", "expected": "e", "actual": "",
+            "latency_ms": 20000.0, "tokens": 0, "score": 0.0, "passed": False,
+            "category": cat, "runs": 0, "error": "rate limited",
+            "rate_limited": 3,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        return {
+            "_id": ObjectId("507f1f77bcf86cd799439011"),
+            "suite_id": "s", "model": "m", "evaluator": "exact",
+            "created_at": datetime.now(timezone.utc),
+            "results": [
+                ok("a1", "arithmetic", 300.0),
+                ok("a2", "arithmetic", 500.0),
+                err("r1", "reasoning"),
+                err("r2", "reasoning"),
+            ],
+        }
+
+    def test_category_with_no_answers_has_no_reading_not_zero(self, client, mock_db):
+        mock_db.test_runs.find_one.return_value = self._doc()
+        cat = client.get("/runs/507f1f77bcf86cd799439011/summary").json()["by_category"]
+        assert cat["reasoning"]["errors"] == 2
+        assert cat["reasoning"]["scored"] == 0
+        assert cat["reasoning"]["pass_rate"] is None, "0% would mean the model failed them"
+        assert cat["reasoning"]["avg_score"] is None
+        assert cat["arithmetic"]["pass_rate"] == 1.0
+
+    def test_latency_averages_only_tests_that_answered(self, client, mock_db):
+        mock_db.test_runs.find_one.return_value = self._doc()
+        data = client.get("/runs/507f1f77bcf86cd799439011/summary").json()
+        # (300 + 500) / 2, not (300 + 500 + 20000 + 20000) / 4
+        assert data["avg_latency_ms"] == 400.0

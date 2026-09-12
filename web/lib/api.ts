@@ -7,8 +7,12 @@ export interface CategoryStat {
   total: number;
   passed: number;
   errors: number;
-  pass_rate: number;
-  avg_score: number;
+  /** Tests that actually got an answer. */
+  scored?: number;
+  /** null when nothing in the category could be scored — "no reading",
+   *  which is not the same finding as 0%. */
+  pass_rate: number | null;
+  avg_score: number | null;
 }
 
 export interface AssertionOutcome {
@@ -29,6 +33,11 @@ export interface TestResult {
   cost_usd?: number;
   category?: string | null;
   error?: string | null;
+  /** Samples that produced an answer. 0 with an error = the test never
+   *  ran (excluded from scoring); >0 with an error = some samples were
+   *  lost but the test was still scored on the rest. */
+  runs?: number;
+  rate_limited?: number;
   assertions?: AssertionOutcome[];
 }
 

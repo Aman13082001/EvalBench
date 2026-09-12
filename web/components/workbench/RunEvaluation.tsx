@@ -203,10 +203,17 @@ function ResultHeader({
 }: {
   model: string;
   suite: string;
-  summary: { pass_rate: number; passed: number; scored_tests: number };
+  summary: {
+    pass_rate: number;
+    passed: number;
+    scored_tests: number;
+    total_tests: number;
+    errors: number;
+  };
   runId: string;
 }) {
   const pct = (summary.pass_rate * 100).toFixed(1);
+  const partial = summary.errors > 0;
   return (
     <div className="panel flex flex-wrap items-end justify-between gap-4 p-5">
       <div className="space-y-1">
@@ -215,11 +222,19 @@ function ResultHeader({
           <span className="font-mono text-text">{suite}</span>
         </p>
         <p className="font-display text-5xl leading-none tnum">
-          {pct}
-          <span className="text-2xl text-muted">%</span>
+          {summary.scored_tests === 0 ? "—" : pct}
+          {summary.scored_tests > 0 && <span className="text-2xl text-muted">%</span>}
         </p>
+        {/* The qualifier lives next to the big number, not three panels
+            down. A 93.8% over 16 of 51 tests is a different finding from
+            a 93.8% over 51, and the reader must not have to hunt for that. */}
         <p className="font-mono text-xs text-muted tnum">
           {summary.passed} of {summary.scored_tests} tests passed every check
+          {partial && (
+            <span className="text-warning">
+              {" "}· {summary.errors} of {summary.total_tests} never got an answer
+            </span>
+          )}
         </p>
       </div>
       <Link

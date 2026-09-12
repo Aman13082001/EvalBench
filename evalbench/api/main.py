@@ -396,7 +396,16 @@ async def get_run_summary(
 
     require_owner(doc, user, "Run")
 
-    return {"run_id": run_id, **summarize_run(doc)}
+    # Per-test results ride along, as they do on the playground's summary.
+    # The web client's RunSummary type has always declared `results`; this
+    # endpoint was the one place that didn't honour it, and the result
+    # view crashed on `.map` of undefined the first time it was rendered
+    # from an authenticated run.
+    return {
+        "run_id": run_id,
+        **summarize_run(doc),
+        "results": doc.get("results", []),
+    }
 
 
 # ─────────────────────────────────────────────

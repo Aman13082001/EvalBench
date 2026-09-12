@@ -149,10 +149,80 @@ export const importSuite = (suite: unknown) =>
     body: JSON.stringify(suite),
   });
 
-export const startRun = (suiteId: string) =>
+/** Optional overrides for a run. Omit everything for the suite's own
+ *  defaults. `provider_key` is the caller's key — sent to the job, never
+ *  stored. */
+export interface RunOptions {
+  model?: string;
+  provider?: string;
+  provider_key?: string;
+}
+
+export const startRun = (suiteId: string, opts: RunOptions = {}) =>
   authed<{ run_id: string; test_count: number }>(`/suites/${suiteId}/run`, {
     method: "POST",
+    body: JSON.stringify(opts),
   });
+
+/* ── workspace ── */
+
+export interface RecentRun {
+  _id: string;
+  suite_id: string;
+  model: string;
+  provider?: string;
+  evaluator?: string;
+  status: string;
+  created_at?: string;
+  finished_at?: string;
+  total_tests: number;
+  completed_tests: number;
+  error?: string | null;
+  used_server_key?: boolean;
+  passed: number;
+  scored_tests: number;
+  pass_rate: number | null;
+  total_cost_usd: number;
+}
+
+/** My recent runs across every benchmark, newest first. */
+export const listRecentRuns = (limit = 20) =>
+  authed<RecentRun[]>(`/runs?limit=${limit}`);
+
+export interface Quota {
+  cap: number | null;
+  used: number;
+  remaining: number | null;
+}
+
+/** Runs left today on EvalBench's own key. null cap = uncapped (admin). */
+export const getQuota = () => authed<Quota>("/suites/quota");
+
+export interface Benchmark {
+  slug: string;
+  title: string;
+  blurb: string;
+  name: string;
+  test_count: number;
+  provider: string;
+  model: string;
+  categories: string[];
+}
+
+export const listBenchmarks = () => authed<Benchmark[]>("/suites/bundled");
+
+/** Get my own copy of a bundled benchmark — creates one the first time,
+ *  returns the same one every time after. */
+export const adoptBenchmark = (slug: string) =>
+  authed<{ id: string; name: string; created: boolean }>(
+    `/suites/bundled/${slug}/adopt`,
+    { method: "POST" }
+  );
+
+export const listModels = (provider: string) =>
+  authed<{ provider: string; models: string[] }>(
+    `/suites/models?provider=${encodeURIComponent(provider)}`
+  );
 
 export const listRuns = (suiteId: string) =>
   authed<RunDoc[]>(`/suites/${suiteId}/runs`);

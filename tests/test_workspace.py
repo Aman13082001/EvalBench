@@ -271,3 +271,26 @@ class TestBundled:
     def test_adopt_unknown_slug(self, as_alice, mock_db):
         mock_db.suites.find_one.return_value = None
         assert as_alice.post("/suites/bundled/nope/adopt").status_code == 404
+
+
+class TestSummaryContract:
+    def test_summary_includes_per_test_results(self, as_alice, mock_db):
+        """The web client's RunSummary type declares `results`, and the
+        result view maps over it. The playground summary always had it;
+        this endpoint didn't, and the workspace crashed on first render."""
+        mock_db.test_runs.find_one.return_value = {
+            "_id": ObjectId(RUN_ID),
+            "created_by": "alice",
+            "status": "completed",
+            "model": "m",
+            "evaluator": "exact",
+            "created_at": datetime.now(timezone.utc),
+            "results": [
+                {"test_name": "t", "passed": True, "score": 1.0,
+                 "latency_ms": 5, "tokens": 3, "cost_usd": 0.0,
+                 "category": "c", "assertions": []},
+            ],
+        }
+        body = as_alice.get(f"/runs/{RUN_ID}/summary").json()
+        assert "results" in body
+        assert body["results"][0]["test_name"] == "t"

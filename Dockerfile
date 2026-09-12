@@ -21,9 +21,11 @@ RUN mkdir evalbench \
     && pip install --no-cache-dir -e . \
     && rm -rf evalbench
 
-# Now bring in the real README and source (fast layers).
+# Now bring in the real README and source (fast layers). suites/ ships
+# too: the bundled benchmarks the workspace offers are read from it.
 COPY README.md ./
 COPY evalbench/ ./evalbench/
+COPY suites/ ./suites/
 
 # Run as an unprivileged user
 RUN useradd -m -u 1000 evalbench && chown -R evalbench:evalbench /app

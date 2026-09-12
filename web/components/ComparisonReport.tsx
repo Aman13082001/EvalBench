@@ -1,5 +1,6 @@
 import { Disclosure, Metric, Panel, Rule, Status } from "@/components/ui";
 import type { Comparison, RunSummary } from "@/lib/api";
+import { explainComparison, explainModelComparison } from "@/lib/explain";
 
 /* Re-exported so pages can import the type alongside the component. */
 export type { Comparison };
@@ -9,7 +10,7 @@ type Summary = RunSummary;
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
 /** Two CI ranges on a shared 0–100% scale. Overlap is the whole point:
- *  it shows visually why a big-looking drop isn't significant. */
+ *  it shows visually why a big-looking gap may not be significant. */
 function CiBars({ a, b }: { a: Summary; b: Summary }) {
   const row = (s: Summary, tone: string) => {
     const ci = s.pass_rate_ci;
@@ -51,53 +52,125 @@ function CiBars({ a, b }: { a: Summary; b: Summary }) {
   );
 }
 
+/* ────────────────────────────────────────────────────────────────
+   Every sentence below is derived from the numbers. An earlier version
+   carried prose written for one specific recorded comparison ("the
+   smaller model", "the drop", "moderate, not large") — true for that
+   fixture, false the moment the component was reused. A report that
+   narrates a conclusion the data doesn't support is worse than no
+   report, so nothing here is allowed to assume a direction, a size, or
+   a verdict.
+
+   mode="regression": baseline vs. a newer run — "did it get worse?"
+   mode="models":     two models on one benchmark — "which is better?"
+   ──────────────────────────────────────────────────────────────── */
+
+export type ComparisonMode = "regression" | "models";
+
+function effectLabel(d: number | null): string {
+  if (d == null) return "Effect size not available.";
+  const m = Math.abs(d);
+  const size =
+    m < 0.2 ? "negligible" : m < 0.5 ? "small" : m < 0.8 ? "moderate" : "large";
+  return `The effect size is ${size}.`;
+}
+
+function ciOverlap(a: Summary, b: Summary): boolean | null {
+  if (!a.pass_rate_ci || !b.pass_rate_ci) return null;
+  return (
+    a.pass_rate_ci[0] <= b.pass_rate_ci[1] &&
+    b.pass_rate_ci[0] <= a.pass_rate_ci[1]
+  );
+}
+
 export default function ComparisonReport({
   baseline,
   candidate,
   comparison,
+  mode = "regression",
 }: {
   baseline: Summary;
   candidate: Summary;
   comparison: Comparison;
+  mode?: ComparisonMode;
 }) {
   const c = comparison;
   const moved = c.per_test.filter((t) => (t.delta ?? 0) !== 0);
-  const cats = Object.keys(baseline.by_category);
+  const cats = Array.from(
+    new Set([
+      ...Object.keys(baseline.by_category),
+      ...Object.keys(candidate.by_category),
+    ])
+  );
+  const models = mode === "models";
+  const labelA = models ? "Model A" : "Baseline";
+  const labelB = models ? "Model B" : "Candidate";
+
+  const verdict = models
+    ? explainModelComparison(baseline.model, candidate.model, c)
+    : explainComparison(c);
+  const significant = c.p_value != null && c.p_value < 0.05;
+  const higher =
+    candidate.pass_rate > baseline.pass_rate
+      ? "b"
+      : candidate.pass_rate < baseline.pass_rate
+        ? "a"
+        : null;
+  const overlap = ciOverlap(baseline, candidate);
+
+  // categories where the two runs actually differ, for the caption
+  const catMoves = cats
+    .map((k) => ({
+      k,
+      d:
+        (candidate.by_category[k]?.pass_rate ?? 0) -
+        (baseline.by_category[k]?.pass_rate ?? 0),
+    }))
+    .filter((x) => Math.abs(x.d) > 1e-9);
+  const catCaption =
+    catMoves.length === 0
+      ? "Every category scored the same on both runs."
+      : `Categories that moved: ${catMoves
+          .map((x) => `${x.k} ${x.d > 0 ? "+" : ""}${(x.d * 100).toFixed(0)} pts`)
+          .join(", ")}. A single blended pass rate would hide this.`;
+
+  const pLine =
+    c.p_value == null
+      ? "no p-value available"
+      : significant
+        ? `p = ${c.p_value.toFixed(3)} — below 0.05, unlikely to be chance`
+        : `p = ${c.p_value.toFixed(3)} — above 0.05, could easily be chance`;
 
   return (
     <div className="space-y-6">
       {/* ── The verdict ── */}
       <Panel fig="Verdict">
-        <p className="font-display text-xl leading-snug">
-          The smaller model scored {(c.mean_diff * -1).toFixed(3)} lower — and
-          EvalBench still refuses to call it a regression.
-        </p>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-          {baseline.passed}/{baseline.scored_tests} passed on{" "}
-          <span className="font-mono text-xs">{baseline.model}</span> against{" "}
-          {candidate.passed}/{candidate.scored_tests} on{" "}
-          <span className="font-mono text-xs">{candidate.model}</span>. That
-          looks decisive. With {c.test_count} tests it isn&rsquo;t: the
-          confidence intervals overlap and the paired test comes back{" "}
-          <span className="font-mono text-xs tnum">p={c.p_value}</span>. A tool
-          that told you &ldquo;regression&rdquo; here would be lying to you.
+        <p className="font-display text-xl leading-snug">{verdict}</p>
+        <p className="mt-2 font-mono text-[11px] text-muted tnum">
+          {pLine}
+          {c.effect_size != null && ` · Cohen's d ${c.effect_size.toFixed(2)}`}
+          {` · ${c.test_count} paired tests`}
         </p>
       </Panel>
 
       {/* ── Side by side ── */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Panel title="Baseline" fig="A" caption={baseline.model}>
+        <Panel title={labelA} fig="A" caption={baseline.model}>
           <div className="grid grid-cols-2 gap-4">
             <Metric
               label="Pass rate"
               value={pct(baseline.pass_rate)}
               sub={`${baseline.passed}/${baseline.scored_tests}`}
-              tone="success"
+              tone={higher === "a" ? "success" : higher === "b" ? "error" : "text"}
             />
             <Metric label="Avg score" value={baseline.avg_score.toFixed(3)} />
             <Metric
               label="Cost"
-              value={`$${baseline.total_cost_usd.toFixed(6)}`}
+              value={
+                baseline.total_cost_usd
+                  ? `$${baseline.total_cost_usd.toFixed(6)}`
+                  : "unpriced"
+              }
             />
             <Metric
               label="Latency"
@@ -106,13 +179,13 @@ export default function ComparisonReport({
             />
           </div>
         </Panel>
-        <Panel title="Candidate" fig="B" caption={candidate.model}>
+        <Panel title={labelB} fig="B" caption={candidate.model}>
           <div className="grid grid-cols-2 gap-4">
             <Metric
               label="Pass rate"
               value={pct(candidate.pass_rate)}
               sub={`${candidate.passed}/${candidate.scored_tests}`}
-              tone="error"
+              tone={higher === "b" ? "success" : higher === "a" ? "error" : "text"}
             />
             <Metric label="Avg score" value={candidate.avg_score.toFixed(3)} />
             <Metric
@@ -132,31 +205,43 @@ export default function ComparisonReport({
         </Panel>
       </div>
 
-      {/* ── Why it's not significant ── */}
+      {/* ── Is the difference real? ── */}
       <Panel
-        title="Why that isn't a regression"
+        title="Is the difference real?"
         fig="Fig. 2"
-        caption="The bars are 95% bootstrap confidence intervals on the pass rate. They overlap, so the true difference could plausibly be zero."
+        caption={
+          overlap == null
+            ? "The bars are 95% bootstrap confidence intervals on the pass rate."
+            : overlap
+              ? "The bars are 95% bootstrap confidence intervals on the pass rate. They overlap, so the true difference could plausibly be zero."
+              : "The bars are 95% bootstrap confidence intervals on the pass rate. They do not overlap — the two runs are separable even allowing for sampling noise."
+        }
       >
         <CiBars a={baseline} b={candidate} />
         <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
           <Disclosure
-            plain="The drop is not statistically significant."
+            plain={
+              c.p_value == null
+                ? "No significance test could be run."
+                : significant
+                  ? "The difference is statistically significant."
+                  : "The difference is not statistically significant."
+            }
             technical={`paired t-test p=${c.p_value} · threshold 0.05 · n=${c.test_count}`}
           />
           <Disclosure
-            plain="The effect size is moderate, not large."
-            technical={`Cohen's d = ${c.effect_size} (|d| 0.5 ≈ medium, 0.8 ≈ large)`}
+            plain={effectLabel(c.effect_size)}
+            technical={`Cohen's d = ${c.effect_size} (|d| 0.2 small, 0.5 medium, 0.8 large)`}
           />
           {c.mcnemar && (
             <Disclosure
-              plain={`${c.mcnemar.regressions} tests flipped pass→fail, ${c.mcnemar.fixes} flipped fail→pass.`}
+              plain={`${c.mcnemar.regressions} test(s) went pass→fail, ${c.mcnemar.fixes} went fail→pass.`}
               technical={`exact McNemar on paired outcomes · ${c.mcnemar.discordant} discordant pairs · p=${c.mcnemar.p_value}`}
             />
           )}
           {c.min_samples_for_5pt_mde && (
             <Disclosure
-              plain={`To resolve a move this size you'd need about ${c.min_samples_for_5pt_mde} tests.`}
+              plain={`To resolve a move this size reliably you'd need about ${c.min_samples_for_5pt_mde} tests.`}
               technical={`min_samples_for_5pt_mde = ${c.min_samples_for_5pt_mde} at the observed variance · 80% power, α=0.05`}
             />
           )}
@@ -169,54 +254,58 @@ export default function ComparisonReport({
         fig="Fig. 3"
         caption="Per-test deltas. Aggregate scores hide this — one test can collapse while another improves."
       >
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-line text-left">
-              <th className="label-xs pb-2 font-normal">Test</th>
-              <th className="label-xs pb-2 text-right font-normal">Baseline</th>
-              <th className="label-xs pb-2 text-right font-normal">Candidate</th>
-              <th className="label-xs pb-2 text-right font-normal">Δ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {moved.map((t) => (
-              <tr key={t.test_name} className="border-b border-line/60">
-                <td className="py-1.5 font-mono text-xs">{t.test_name}</td>
-                <td className="py-1.5 text-right font-mono text-xs tnum">
-                  {t.baseline_score?.toFixed(3)}
-                </td>
-                <td className="py-1.5 text-right font-mono text-xs tnum">
-                  {t.current_score?.toFixed(3)}
-                </td>
-                <td
-                  className={`py-1.5 text-right font-mono text-xs tnum ${
-                    (t.delta ?? 0) < 0 ? "text-error" : "text-success"
-                  }`}
-                >
-                  {(t.delta ?? 0) > 0 ? "+" : ""}
-                  {t.delta?.toFixed(3)}
-                </td>
+        {moved.length === 0 ? (
+          <p className="text-sm text-muted">
+            Every test scored identically on both runs.
+          </p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-line text-left">
+                <th className="label-xs pb-2 font-normal">Test</th>
+                <th className="label-xs pb-2 text-right font-normal">{labelA}</th>
+                <th className="label-xs pb-2 text-right font-normal">{labelB}</th>
+                <th className="label-xs pb-2 text-right font-normal">Δ</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="mt-3 font-mono text-xs text-muted">
-          {c.per_test.length - moved.length} test(s) scored identically.
-        </p>
+            </thead>
+            <tbody>
+              {moved.map((t) => (
+                <tr key={t.test_name} className="border-b border-line/60">
+                  <td className="py-1.5 font-mono text-xs">{t.test_name}</td>
+                  <td className="py-1.5 text-right font-mono text-xs tnum">
+                    {t.baseline_score?.toFixed(3)}
+                  </td>
+                  <td className="py-1.5 text-right font-mono text-xs tnum">
+                    {t.current_score?.toFixed(3)}
+                  </td>
+                  <td
+                    className={`py-1.5 text-right font-mono text-xs tnum ${
+                      (t.delta ?? 0) < 0 ? "text-error" : "text-success"
+                    }`}
+                  >
+                    {(t.delta ?? 0) > 0 ? "+" : ""}
+                    {t.delta?.toFixed(3)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {moved.length > 0 && (
+          <p className="mt-3 font-mono text-xs text-muted">
+            {c.per_test.length - moved.length} test(s) scored identically.
+          </p>
+        )}
       </Panel>
 
       {/* ── Per category ── */}
-      <Panel
-        title="Where it degraded"
-        fig="Fig. 4"
-        caption="One blended pass rate would have hidden that reasoning and structured output took the hit while factual recall held."
-      >
+      <Panel title="By category" fig="Fig. 4" caption={catCaption}>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left">
               <th className="label-xs pb-2 font-normal">Category</th>
-              <th className="label-xs pb-2 text-right font-normal">Baseline</th>
-              <th className="label-xs pb-2 text-right font-normal">Candidate</th>
+              <th className="label-xs pb-2 text-right font-normal">{labelA}</th>
+              <th className="label-xs pb-2 text-right font-normal">{labelB}</th>
             </tr>
           </thead>
           <tbody>
@@ -243,16 +332,29 @@ export default function ComparisonReport({
         </table>
       </Panel>
 
-      <Rule />
-      <div className="flex flex-wrap items-center gap-3">
-        <Status state="pass">gate would allow this change</Status>
-        <span className="text-sm text-muted">
-          <span className="font-mono text-xs">
-            evalbench run --compare-to-baseline
-          </span>{" "}
-          exits 0 here — the drop is real-looking but unproven.
-        </span>
-      </div>
+      {/* ── The gate — only meaningful for a regression check ── */}
+      {!models && (
+        <>
+          <Rule />
+          <div className="flex flex-wrap items-center gap-3">
+            {c.regression_detected ? (
+              <Status state="fail">gate would block this change</Status>
+            ) : (
+              <Status state="pass">gate would allow this change</Status>
+            )}
+            <span className="text-sm text-muted">
+              <span className="font-mono text-xs">
+                evalbench run --compare-to-baseline
+              </span>{" "}
+              {c.regression_detected
+                ? "exits non-zero here — a real, significant drop."
+                : significant
+                  ? "exits 0 here — significant, but not a drop past the regression threshold."
+                  : "exits 0 here — any difference is within noise."}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

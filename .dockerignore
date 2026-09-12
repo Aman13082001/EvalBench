@@ -25,10 +25,10 @@ web/
 node_modules/
 .next/
 
-# Not needed at runtime
+# Not needed at runtime. (suites/ IS needed: the workspace's bundled
+# benchmarks are read from it — see evalbench/benchmarks.py.)
 .github/
 tests/
-suites/
 docs/
 research/
 scripts/

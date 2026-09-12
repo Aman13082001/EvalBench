@@ -12,7 +12,8 @@ const PUBLIC = [
 ];
 
 const PRIVATE = [
-  { href: "/suites", label: "Suites" },
+  { href: "/workbench", label: "Workbench" },
+  { href: "/suites", label: "Benchmarks" },
   { href: "/dashboard", label: "Dashboard" },
 ];
 

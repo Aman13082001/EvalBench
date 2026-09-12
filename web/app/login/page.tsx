@@ -30,7 +30,7 @@ export default function LoginPage() {
         await login(username, password);
       }
       await refresh();
-      if (mode === "signin") router.push("/suites");
+      if (mode === "signin") router.push("/workbench");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

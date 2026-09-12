@@ -61,7 +61,7 @@ export default function LoginDialog({
           await login(username, password);
           await refresh();
           onClose();
-          router.push("/suites");
+          router.push("/workbench");
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -119,7 +119,7 @@ export default function LoginDialog({
                 className="btn btn-primary w-full"
                 onClick={() => {
                   onClose();
-                  router.push("/suites");
+                  router.push("/workbench");
                 }}
               >
                 Continue

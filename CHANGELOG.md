@@ -5,6 +5,38 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [0.5.0] — 2026-09-07
 
+### Added — the workbench
+
+The first page after sign-in: evaluate → understand → build → compare.
+
+- `/workbench`: pick a benchmark (bundled, yours, or uploaded YAML), a
+  provider and model, and whose key pays; run through the existing job
+  endpoint with inline progress. The result block leads with the pass
+  rate set large, then the existing `Results` view. A form builds a
+  benchmark without YAML, emitting the exact shape `/suites/import` takes.
+  Compare-two-models runs one benchmark twice with model overrides and
+  hands the pair to `/compare?a=&b=`, which the regression engine renders.
+- Backend, minimal: optional `{model, provider, provider_key}` body on
+  `POST /suites/{id}/run` (the key reaches the job and is never stored);
+  `DAILY_RUN_CAP` per user on server-key runs with `GET /suites/quota`;
+  `GET /runs?limit=` across all suites; `GET /suites/bundled` from a
+  curated manifest and an idempotent `POST /suites/bundled/{slug}/adopt`.
+- `explain_model_comparison` / `explainModelComparison`: symmetric wording
+  for two models on one benchmark — including the sentence a raw
+  pass-rate comparison never produces, "within expected noise".
+
+### Fixed — found by driving the real UI
+- `GET /runs/{id}/summary` omitted per-test `results` while the playground
+  summary included them; the result view crashed on first render.
+- `ComparisonReport` narrated one recorded fixture ("the smaller model",
+  "the drop", "moderate, not large") and stated falsehoods when reused —
+  and was wrong for its own fixture (d = −0.49 is small). Every sentence
+  is now derived from the data, with a mode for model-vs-model.
+- `suites/` had been excluded from the API image as "not needed at
+  runtime"; the bundled benchmark list returned `[]` in the container.
+- `test_auth_coverage` now walks `app.routes`; the hand list had two
+  protected routes nobody recorded.
+
 ### Added — after a round of user testing
 
 Three findings from actually using the thing, all valid:

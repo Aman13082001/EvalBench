@@ -356,7 +356,9 @@ console for people who have.
 | `/run` | public | the **playground**: paste a suite, bring your own provider key, get a permalink |
 | `/research` | public | the power study, its figure, and how to reproduce it |
 | `/login` | public | sign in or register |
-| `/suites`, `/suites/[id]` | user | suite list, detail, launch a run, promote a baseline |
+| `/workbench` | user | **the first page after sign-in** — pick a benchmark and a model, run it, read the result; build a benchmark from a form; compare two models |
+| `/compare?a=&b=` | user | two runs paired by the regression engine — shareable, reconstructed from the runs each time |
+| `/suites`, `/suites/[id]` | user | benchmark list, detail, launch a run, promote a baseline |
 | `/runs/[id]` | user | run results with per-test assertion detail |
 | `/dashboard` | user | the Grafana dashboard, embedded |
 | `/admin` | admin | users, activate/deactivate, instance stats |
@@ -381,6 +383,15 @@ npm install
 cp .env.local.example .env.local     # NEXT_PUBLIC_API_URL=http://localhost:8000
 npm run dev                          # http://localhost:3005
 ```
+
+**The workbench** is where a signed-in user lives. It talks only to
+endpoints the CLI already used, plus four small additions: an optional
+model/provider override on a run (so one benchmark can be run against two
+models without duplicating it), an optional caller-supplied key that never
+touches the database, a per-user daily cap on runs that spend the server's
+key (`DAILY_RUN_CAP`, shown as "N left today" before the click), and a
+curated list of bundled benchmarks a user can adopt exactly once. The UI
+says *benchmark*; the API, YAML and CLI say *suite* — same thing.
 
 The design system is documented in `web/app/globals.css` and rendered at
 `/styleguide`.

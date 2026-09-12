@@ -236,11 +236,22 @@ export function ModelPicker({
     let alive = true;
     setModels([]);
     listModels(value.provider)
-      .then((r) => alive && setModels(r.models ?? []))
+      .then((r) => {
+        if (!alive) return;
+        const list = r.models ?? [];
+        setModels(list);
+        // An empty field with a greyed-out Run button tells the user
+        // nothing. Prefill the first model the provider actually lists;
+        // they can still overwrite it.
+        if (!value.model && list.length > 0) {
+          onChange({ provider: value.provider, model: list[0] });
+        }
+      })
       .catch(() => alive && setModels([]));
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value.provider]);
 
   const listId = `${idPrefix}-models`;

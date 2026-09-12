@@ -55,6 +55,23 @@ _PRESET_CONCURRENCY: dict[str, int] = {
 }
 
 
+# Substrings that mark a model as something other than a chat model —
+# speech, audio, moderation classifiers, embeddings. Provider model lists
+# include all of these; offering Whisper as a model to evaluate is a
+# trap, and a prompt-guard classifier answers with a probability, not
+# text. A user can still type any name — this only filters suggestions.
+_NOT_CHAT = (
+    "whisper", "tts", "orpheus", "speech", "audio", "transcri",
+    "guard", "moderation", "embed", "rerank", "vision-encoder",
+)
+
+
+def is_chat_model(name: str) -> bool:
+    """False for names that structurally cannot answer a prompt."""
+    n = name.lower()
+    return not any(tag in n for tag in _NOT_CHAT)
+
+
 def register_provider(name: str, cls: type[Provider]) -> None:
     _PROVIDERS[name.lower()] = cls
 

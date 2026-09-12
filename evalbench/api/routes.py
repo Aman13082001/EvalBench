@@ -20,7 +20,11 @@ from evalbench.api.deps import (
 )
 from evalbench.benchmarks import describe_benchmarks, load_benchmark
 from evalbench.config import settings
-from evalbench.core.providers import available_providers, get_provider
+from evalbench.core.providers import (
+    available_providers,
+    get_provider,
+    is_chat_model,
+)
 from evalbench.db.mongo import db
 from evalbench.db.schemas import TestRun, TestSuite
 from evalbench.jobs import submit_run
@@ -68,9 +72,17 @@ async def list_models(
 ):
     client = get_provider(provider)
     try:
-        return {"provider": provider, "models": await client.list_models()}
+        models = await client.list_models()
     finally:
         await client.close()
+    # Providers list speech, audio and classifier models alongside chat
+    # ones. Only chat models are useful here; the rest are hidden from
+    # suggestions (a caller can still name any model explicitly).
+    return {
+        "provider": provider,
+        "models": [m for m in models if is_chat_model(m)],
+        "hidden": [m for m in models if not is_chat_model(m)],
+    }
 
 
 @router.post("/security-suite", status_code=201)

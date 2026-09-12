@@ -226,3 +226,56 @@ class TestOllamaProvider:
         provider = OllamaProvider()
         provider.list_models = AsyncMock(return_value=[])
         assert await provider.has_model("anything") is True
+
+
+class TestChatModelFilter:
+    """Provider model lists include speech, audio and classifier models.
+    Tried every one Groq listed: Whisper and Orpheus return 400 to a chat
+    request, prompt-guard answers with a probability. Suggesting them as
+    models to evaluate is a trap; a caller can still type any name."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "whisper-large-v3",
+            "whisper-large-v3-turbo",
+            "canopylabs/orpheus-v1-english",
+            "meta-llama/llama-prompt-guard-2-22m",
+            "text-embedding-3-small",
+            "playai-tts",
+        ],
+    )
+    def test_non_chat_models_are_hidden(self, name):
+        from evalbench.core.providers import is_chat_model
+
+        assert not is_chat_model(name)
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "openai/gpt-oss-20b",
+            "openai/gpt-oss-120b",
+            "llama3.1",
+            "qwen/qwen3.8-27b",
+            "gemini-2.0-flash",
+            "gpt-4o-mini",
+            "allam-2-7b",
+        ],
+    )
+    def test_chat_models_are_kept(self, name):
+        from evalbench.core.providers import is_chat_model
+
+        assert is_chat_model(name)
+
+    def test_models_endpoint_splits_them(self, client, mock_db):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        fake = MagicMock()
+        fake.list_models = AsyncMock(
+            return_value=["openai/gpt-oss-20b", "whisper-large-v3"]
+        )
+        fake.close = AsyncMock()
+        with patch("evalbench.api.routes.get_provider", return_value=fake):
+            body = client.get("/suites/models?provider=groq").json()
+        assert body["models"] == ["openai/gpt-oss-20b"]
+        assert body["hidden"] == ["whisper-large-v3"]

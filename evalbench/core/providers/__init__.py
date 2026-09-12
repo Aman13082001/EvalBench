@@ -62,7 +62,10 @@ _PRESET_CONCURRENCY: dict[str, int] = {
 # text. A user can still type any name — this only filters suggestions.
 _NOT_CHAT = (
     "whisper", "tts", "orpheus", "speech", "audio", "transcri",
-    "guard", "moderation", "embed", "rerank", "vision-encoder",
+    # the classifier families, not bare "guard" — gpt-oss-safeguard-20b
+    # is a safety-tuned chat model and answers normally
+    "prompt-guard", "llama-guard", "llamaguard",
+    "moderation", "embed", "rerank", "vision-encoder",
 )
 
 

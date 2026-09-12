@@ -260,6 +260,8 @@ class TestChatModelFilter:
             "gemini-2.0-flash",
             "gpt-4o-mini",
             "allam-2-7b",
+            # "guard" inside a name is not a classifier; this one chats
+            "openai/gpt-oss-safeguard-20b",
         ],
     )
     def test_chat_models_are_kept(self, name):

@@ -293,3 +293,10 @@ class TestSummaryContract:
         body = as_alice.get(f"/runs/{RUN_ID}/summary").json()
         assert "results" in body
         assert body["results"][0]["test_name"] == "t"
+
+    def test_every_bundled_benchmark_says_what_it_measures(self):
+        """The description is the one thing the list page shows besides
+        the name. It lives in the YAML so the file is the source of truth
+        for the workspace picker, the adopted copy, and the CLI alike."""
+        for d in describe_benchmarks():
+            assert len(d["description"]) > 40, d["slug"]

@@ -102,8 +102,8 @@ export default function LoginPage() {
           <pre className="mt-2 overflow-x-auto border border-line bg-surface-sunk p-2 font-mono text-xs">
             {apiKey}
           </pre>
-          <a href="/suites" className="btn btn-primary mt-3 inline-block">
-            Continue
+          <a href="/workbench" className="btn btn-primary mt-3 inline-block">
+            Continue to the Workbench
           </a>
         </Panel>
       )}

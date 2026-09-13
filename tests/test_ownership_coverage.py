@@ -27,7 +27,9 @@ OWNED_COLLECTIONS = {"suites", "test_runs"}
 # users, and depending on it is how that intent is declared. Listing it
 # here rather than exempting admin.py by name means a new admin endpoint
 # that forgets the dependency still fails this test.
-GUARDS = {"owner_filter", "require_owner", "owns", "get_current_admin"}
+# `mine` is the write-side guard: strictly the caller's own documents,
+# admin included, for create-or-update by name.
+GUARDS = {"owner_filter", "require_owner", "owns", "get_current_admin", "mine"}
 
 # Handlers with no request user at all. Each needs a reason.
 EXEMPT = {

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import StatusStrip from "@/components/StatusStrip";
+import SignIn from "@/components/SignIn";
 import ThemeToggle from "@/components/ThemeToggle";
 
 /* One public link. The example evaluation is reached from the study,
@@ -61,12 +62,9 @@ export default function Nav() {
           sign out
         </button>
       ) : (
-        <Link
-          href="/login"
-          className="font-mono text-xs text-accent transition-colors hover:text-text"
-        >
+        <SignIn className="font-mono text-xs text-accent transition-colors hover:text-text">
           sign in
-        </Link>
+        </SignIn>
       )}
 
       <ThemeToggle />

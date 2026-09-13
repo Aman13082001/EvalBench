@@ -3,6 +3,10 @@
 # gate is fast and a pass/fail flip means a real change.
 
 name: "CI Gate (hosted)"
+description: >-
+  A fast, deterministic quality gate for CI on Groq's free tier:
+  temperature 0, one sample, cheap checks only, so a pass/fail flip
+  means a real change.
 provider: groq
 model: openai/gpt-oss-20b
 evaluator: icontains

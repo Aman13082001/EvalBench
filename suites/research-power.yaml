@@ -6,6 +6,10 @@
 # comes from the model under test, not from a grader.
 
 name: Research — Power Study
+description: >-
+  Thirty tests spread from trivial to hard with no LLM judge, built so
+  two models of different capability actually separate. The suite used
+  in the power study.
 provider: groq
 model: openai/gpt-oss-120b
 temperature: 0.0

@@ -45,6 +45,10 @@ class TestSuite(BaseModel):
 
     name: str
 
+    # One or two sentences on what this suite measures — what the list
+    # page shows under the name. Nothing else on that page says.
+    description: str | None = None
+
     # Backend that serves `model` (ollama | ...). See evalbench.core.providers.
     provider: str = "ollama"
 

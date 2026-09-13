@@ -13,6 +13,11 @@
 # >= 20 per category before trusting a per-category pass rate).
 
 name: EvalBench Starter Suite
+description: >-
+  A broad probe of general capability: arithmetic, factual recall,
+  reasoning, definitions, instruction-following, calibration and safety,
+  reported per category so you can see where a model is weak rather than
+  one blended score.
 model: llama3.1
 evaluator: semantic
 temperature: 0.0

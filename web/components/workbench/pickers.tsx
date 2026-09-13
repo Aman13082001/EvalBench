@@ -117,7 +117,7 @@ export function BenchmarkPicker({
           kind: "mine",
           id: s._id,
           label: s.name,
-          tests: s.tests?.length ?? 0,
+          tests: s.test_count ?? s.tests?.length ?? 0,
           provider: s.provider ?? "ollama",
           model: s.model,
         });
@@ -167,7 +167,7 @@ export function BenchmarkPicker({
           <optgroup label="Your benchmarks">
             {mine.map((s) => (
               <option key={s._id} value={`m:${s._id}`}>
-                {s.name} · {s.tests?.length ?? 0} tests
+                {s.name} · {s.test_count ?? s.tests?.length ?? 0} tests
               </option>
             ))}
           </optgroup>
@@ -191,11 +191,26 @@ export function BenchmarkPicker({
       {uploadErr && <p className="text-xs text-error">{uploadErr}</p>}
 
       {value && (
-        <p className="font-mono text-[11px] text-muted tnum">
-          {value.tests} tests
-          {value.kind === "bundled" &&
-            ` · ${bundled.find((b) => b.slug === value.slug)?.categories.length ?? 0} categories`}
-        </p>
+        <div className="space-y-1">
+          <p className="font-mono text-[11px] text-muted tnum">
+            {value.tests} tests
+            {value.kind === "bundled" &&
+              ` · ${bundled.find((b) => b.slug === value.slug)?.categories.length ?? 0} categories`}
+          </p>
+          {/* What it measures — the sentence that makes the choice mean
+              something before the numbers arrive. */}
+          {(() => {
+            const d =
+              value.kind === "bundled"
+                ? bundled.find((b) => b.slug === value.slug)?.description
+                : value.kind === "mine"
+                  ? mine.find((s) => s._id === value.id)?.description
+                  : null;
+            return d ? (
+              <p className="max-w-xl text-xs leading-relaxed text-muted">{d}</p>
+            ) : null;
+          })()}
+        </div>
       )}
     </div>
   );

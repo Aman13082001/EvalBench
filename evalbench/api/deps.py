@@ -86,6 +86,16 @@ def owner_filter(user: dict) -> dict:
     return {"created_by": owner_of(user)}
 
 
+def mine(user: dict) -> dict:
+    """Mongo filter for what this user *owns* — admin included.
+
+    `owner_filter` answers "what may I see" and lets an admin see all of
+    it. This answers "which is mine", for writes: an admin importing
+    "Safety" must update the admin's "Safety", not the first one found.
+    """
+    return {"created_by": owner_of(user)}
+
+
 def owns(doc: dict, user: dict) -> bool:
     if user.get("role") == "admin":
         return True

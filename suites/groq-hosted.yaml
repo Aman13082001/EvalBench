@@ -1,4 +1,7 @@
 name: Groq Hosted (parallel)
+description: >-
+  Twelve quick factual and reasoning questions on a hosted model — a
+  throughput and correctness smoke test.
 provider: groq
 model: openai/gpt-oss-20b
 evaluator: contains

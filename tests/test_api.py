@@ -49,9 +49,7 @@ class TestSuiteEndpoints:
                 "created_at": datetime.now(timezone.utc),
             }
 
-        mock_db.suites.find.return_value.sort.return_value.limit.return_value = (
-            mock_cursor()
-        )
+        mock_db.suites.aggregate.return_value = mock_cursor()
 
         response = client.get("/suites")
 

@@ -2,6 +2,9 @@
 # sample) so a pass/fail flip means a real change, not noise. For the
 # GitHub Action (no local model) use ci-hosted.yaml instead.
 name: "CI Quality Gate"
+description: >-
+  The same fast quality gate, run against a local Ollama model — no API
+  key needed.
 model: "llama3.1"
 evaluator: "semantic"
 temperature: 0.0

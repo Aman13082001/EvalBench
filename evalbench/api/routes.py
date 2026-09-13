@@ -8,12 +8,14 @@ from fastapi import (
     Depends,
     HTTPException,
     Request,
+    Response,
 )
 from pydantic import BaseModel, Field
 
 from evalbench.api.deps import (
     get_current_user,
     limiter,
+    mine,
     owner_filter,
     owner_of,
     require_owner,
@@ -33,35 +35,71 @@ from evalbench.security.adversarial_suite import ADVERSARIAL_TESTS
 router = APIRouter(prefix="/suites", tags=["suites"])
 
 
+# Fields that make a suite *this* suite rather than a definition of one.
+# A re-import rewrites the definition and leaves these alone.
+_IDENTITY = ("created_at", "created_by", "bundled_slug", "baseline_run_id")
+
+
+async def _upsert_suite(suite: TestSuite, user, response: Response) -> dict:
+    """Create the suite, or update the caller's suite of the same name.
+
+    A benchmark's identity is its name within an account. `evalbench run`
+    imports before every run; when that was a plain insert, every run left
+    another copy behind — 70 suites with 18 names in one database, run
+    history scattered across them, a baseline on one copy meaning nothing
+    to the next. Now the second import of "Safety" *is* "Safety".
+    """
+    owner = owner_of(user)
+    doc = suite.model_dump()
+    existing = await db.suites.find_one(
+        {"name": suite.name, **mine(user)}, {"_id": 1}
+    )
+    if existing:
+        changes = {k: v for k, v in doc.items() if k not in _IDENTITY}
+        # A baseline in the payload is an explicit choice; None is silence.
+        if doc.get("baseline_run_id"):
+            changes["baseline_run_id"] = doc["baseline_run_id"]
+        changes["updated_at"] = datetime.now(timezone.utc)
+        await db.suites.update_one({"_id": existing["_id"]}, {"$set": changes})
+        response.status_code = 200
+        return {"id": str(existing["_id"]), "created": False,
+                "message": "Suite updated"}
+
+    doc["created_at"] = datetime.now(timezone.utc)
+    doc["created_by"] = owner
+    result = await db.suites.insert_one(doc)
+    response.status_code = 201
+    return {"id": str(result.inserted_id), "created": True,
+            "message": "Suite created"}
+
+
 @router.post("", status_code=201)
 @limiter.limit("20/minute")
 async def create_suite(
     request: Request,
+    response: Response,
     suite: TestSuite,
     user=Depends(get_current_user),
 ):
-    doc = suite.model_dump()
-    doc["created_at"] = datetime.now(timezone.utc)
-    doc["created_by"] = owner_of(user)
-
-    result = await db.suites.insert_one(doc)
-
-    return {
-        "id": str(result.inserted_id),
-        "message": "Suite created"
-    }
+    return await _upsert_suite(suite, user, response)
 
 
 @router.get("")
 async def list_suites(user=Depends(get_current_user)):
+    """The list page: name, what it measures, how many tests. The test
+    bodies stay out — 50 suites' worth of prompts was 129 KB to print
+    a count. The definition loads when you open one."""
+    pipeline = [
+        {"$match": owner_filter(user)},
+        {"$sort": {"created_at": -1}},
+        {"$limit": 200},
+        {"$addFields": {"test_count": {"$size": {"$ifNull": ["$tests", []]}}}},
+        {"$project": {"tests": 0}},
+    ]
     suites = []
-
-    async for doc in (
-        db.suites.find(owner_filter(user)).sort("created_at", -1).limit(50)
-    ):
+    async for doc in db.suites.aggregate(pipeline):
         doc["_id"] = str(doc["_id"])
         suites.append(doc)
-
     return suites
 
 
@@ -283,6 +321,7 @@ async def export_suite(suite_id: str, user=Depends(get_current_user)):
 @limiter.limit("20/minute")
 async def import_suite(
     request: Request,
+    response: Response,
     payload: dict,
     user=Depends(get_current_user),
 ):
@@ -294,16 +333,7 @@ async def import_suite(
             detail=f"Invalid suite data: {e}",
         ) from e
 
-    doc = suite.model_dump()
-    doc["created_at"] = datetime.now(timezone.utc)
-    doc["created_by"] = owner_of(user)
-
-    result = await db.suites.insert_one(doc)
-
-    return {
-        "id": str(result.inserted_id),
-        "message": "Suite imported",
-    }
+    return await _upsert_suite(suite, user, response)
 
 
 @router.post("/{suite_id}/run", status_code=202)

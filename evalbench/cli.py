@@ -1120,5 +1120,112 @@ def reset_password(
     )
 
 
+@app.command("merge-suites")
+def merge_suites(
+    apply: bool = typer.Option(
+        False, "--apply", help="Write the merge. Without it, only show the plan."
+    ),
+    claim: str | None = typer.Option(
+        None,
+        "--claim",
+        help="Assign suites that have no owner (from before accounts "
+        "existed) to this username, then merge them with that user's.",
+    ),
+):
+    """Fold duplicate suites — same owner, same name — into one each.
+
+    Until importing became create-or-update, `evalbench run` inserted a
+    new suite every time it ran, so a database fills with copies of the
+    same benchmark and run history scatters across them. This keeps one
+    copy per name (the one holding a baseline, else the newest), points
+    every run at it, and deletes the rest. Runs are never deleted.
+
+    Dry run by default: it prints what it would do and stops.
+    """
+    import asyncio
+
+    from motor.motor_asyncio import AsyncIOMotorClient
+
+    from evalbench import maintenance
+
+    async def _plan_and_maybe_apply():
+        client = AsyncIOMotorClient(settings.mongodb_url)
+        try:
+            db = client[settings.mongodb_db]
+            suites = [
+                s
+                async for s in db.suites.find(
+                    {}, {"name": 1, "created_by": 1, "baseline_run_id": 1,
+                         "created_at": 1},
+                )
+            ]
+            groups = maintenance.plan_merge(suites, claim=claim)
+            rows = []
+            for g in groups:
+                runs = await db.test_runs.count_documents(
+                    {"suite_id": {"$in": [str(i) for i in g.drop]}}
+                )
+                rows.append((g, runs))
+            result = (
+                await maintenance.apply_merge(db, groups) if apply else None
+            )
+            return len(suites), rows, result
+        finally:
+            client.close()
+
+    console.print(
+        f"[dim]Database: {settings.mongodb_url} / "
+        f"{settings.mongodb_db}[/dim]"
+    )
+    try:
+        total, rows, result = asyncio.run(_plan_and_maybe_apply())
+    except Exception as e:  # noqa: BLE001
+        console.print(
+            f"[bold red]✗[/bold red] Couldn't reach the database at "
+            f"[cyan]{settings.mongodb_url}[/cyan]: {e}\n"
+            "[dim]Inside the stack: docker compose exec api evalbench "
+            "merge-suites[/dim]"
+        )
+        raise typer.Exit(1) from e
+
+    if not rows:
+        console.print(
+            f"[bold green]✓[/bold green] {total} suites, no duplicates. "
+            "Nothing to do."
+        )
+        return
+
+    table = Table(title=None, box=None, show_header=True, header_style="dim")
+    table.add_column("owner")
+    table.add_column("benchmark")
+    table.add_column("copies", justify="right")
+    table.add_column("runs re-pointed", justify="right")
+    for g, runs in rows:
+        table.add_row(
+            g.owner or "[dim](none)[/dim]", g.name,
+            str(len(g.drop) + 1), str(runs),
+        )
+    console.print(table)
+    drop = sum(len(g.drop) for g, _ in rows)
+    moved = sum(r for _, r in rows)
+    claimed = sum(1 for g, _ in rows if claim and g.owner == claim)
+
+    if result is None:
+        console.print(
+            f"\n[bold]Dry run.[/bold] Would keep {total - drop} of {total} "
+            f"suites, delete {drop} duplicate{'s' if drop != 1 else ''}, "
+            f"re-point {moved} run{'s' if moved != 1 else ''}"
+            + (f", claim {claimed} for [cyan]{claim}[/cyan]" if claim else "")
+            + ".\n[dim]Add --apply to do it.[/dim]"
+        )
+        return
+
+    console.print(
+        f"\n[bold green]✓[/bold green] Kept {total - result['deleted_suites']} "
+        f"suites, deleted {result['deleted_suites']}, re-pointed "
+        f"{result['moved_runs']} runs, claimed {result['claimed']}."
+    )
+
+
 if __name__ == "__main__":
     app()

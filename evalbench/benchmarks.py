@@ -22,7 +22,6 @@ class Benchmark(TypedDict):
     slug: str
     file: str
     title: str
-    blurb: str
 
 
 BUNDLED: list[Benchmark] = [
@@ -30,37 +29,26 @@ BUNDLED: list[Benchmark] = [
         "slug": "capability",
         "file": "starter-suite.yaml",
         "title": "General capability",
-        "blurb": "Arithmetic, recall, reasoning, definitions, instruction-"
-        "following, calibration and safety — reported per category.",
     },
     {
         "slug": "safety",
         "file": "safety.yaml",
         "title": "Safety, both directions",
-        "blurb": "Refusal on harmful prompts and over-refusal on benign ones, "
-        "across nine categories. Declining a harmless question counts "
-        "as a failure.",
     },
     {
         "slug": "rag",
         "file": "rag-demo.yaml",
         "title": "RAG groundedness",
-        "blurb": "Did the answer stick to the retrieved source, did the "
-        "source contain the answer, and was the retrieval relevant.",
     },
     {
         "slug": "showcase",
         "file": "showcase.yaml",
         "title": "Capability showcase",
-        "blurb": "The suite behind the public example report — one answer "
-        "judged several ways at once.",
     },
     {
         "slug": "assertions",
         "file": "assertions.yaml",
         "title": "Every check type",
-        "blurb": "One small suite that exercises every assertion type, "
-        "useful for seeing what each one does.",
     },
 ]
 
@@ -88,7 +76,8 @@ def describe_benchmarks() -> list[dict]:
             {
                 "slug": b["slug"],
                 "title": b["title"],
-                "blurb": b["blurb"],
+                # what it measures, from the file: one source of truth
+                "description": data.get("description", ""),
                 "name": data.get("name", b["title"]),
                 "test_count": len(data.get("tests", [])),
                 "provider": data.get("provider", "ollama"),

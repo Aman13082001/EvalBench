@@ -46,9 +46,10 @@ def mock_db():
     # Suites collection
     mock.suites = MagicMock()
     mock.suites.insert_one = AsyncMock()
-    mock.suites.find_one = AsyncMock()
+    mock.suites.find_one = AsyncMock(return_value=None)
     mock.suites.update_one = AsyncMock()
     mock.suites.find = MagicMock()
+    mock.suites.aggregate = MagicMock()
     mock.suites.count_documents = AsyncMock(
         return_value=1
     )

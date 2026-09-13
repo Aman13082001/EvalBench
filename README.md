@@ -316,7 +316,10 @@ evalbench models [--provider P]            # list a provider's models
 evalbench init [-o suite.yaml]             # scaffold a suite
 evalbench export <run_id> [--format json|csv] [-o file]
 evalbench reset-password -u <user>          # recover a locked-out account
+evalbench merge-suites [--apply] [--claim U] # fold duplicate suites into one per name
 ```
+
+`run` imports the suite first, as create-or-update by name: running the same file twice runs the same benchmark, and its run history and baseline accrue in one place. (`merge-suites` repairs databases from before that was true — dry run by default.)
 
 `run` exits non-zero when the pass rate is below `--fail-under` (default 0.75) **or**, with `--compare-to-baseline`, when a regression is detected against the suite's `baseline_run_id`. It polls the async job and shows a progress bar. `--report` writes a machine-readable JSON (`summary` + `regression` + `gate`) for CI. `EVALBENCH_API_URL` overrides the API location (default `http://localhost:8000`).
 

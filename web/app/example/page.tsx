@@ -1,9 +1,9 @@
-import Link from "next/link";
 import example from "@/lib/fixtures/example.json";
 import ComparisonReport, { Comparison } from "@/components/ComparisonReport";
 import Results from "@/components/Results";
 import { RunSummary } from "@/lib/api";
 import { Rule } from "@/components/ui";
+import SignIn from "@/components/SignIn";
 
 export const metadata = {
   title: "Example evaluation — EvalBench",
@@ -55,9 +55,7 @@ export default function ExamplePage() {
             key or without one.
           </p>
         </div>
-        <Link href="/login" className="btn btn-primary shrink-0">
-          Sign in to run one
-        </Link>
+        <SignIn className="btn btn-primary shrink-0">Sign in to run one</SignIn>
       </section>
     </div>
   );

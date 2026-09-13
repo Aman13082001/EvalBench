@@ -31,7 +31,7 @@ function RunReport({ id }: { id: string }) {
       <header className="space-y-1">
         <p className="label-xs">
           <Link href="/suites" className="hover:text-text">
-            § Suites
+            § Benchmarks
           </Link>{" "}
           / run
         </p>

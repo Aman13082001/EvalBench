@@ -70,7 +70,12 @@ const blank = (): Draft => ({
 });
 
 /** The form → the suite shape the import endpoint already takes. */
-function toSuite(name: string, model: ModelChoice, drafts: Draft[]) {
+function toSuite(
+  name: string,
+  description: string,
+  model: ModelChoice,
+  drafts: Draft[]
+) {
   const tests = drafts.map((d, i) => {
     const spec = CHECKS.find((c) => c.id === d.check)!;
     const base: Record<string, unknown> = {
@@ -101,6 +106,7 @@ function toSuite(name: string, model: ModelChoice, drafts: Draft[]) {
   });
   return {
     name: name.trim(),
+    description: description.trim() || null,
     provider: model.provider,
     model: model.model || "llama3.1",
     evaluator: "exact",
@@ -119,6 +125,7 @@ export default function BuildBenchmark({
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [model, setModel] = useState<ModelChoice>(defaultModel);
   const [drafts, setDrafts] = useState<Draft[]>([blank()]);
   const [busy, setBusy] = useState(false);
@@ -144,7 +151,7 @@ export default function BuildBenchmark({
     setError(null);
     setBusy(true);
     try {
-      const suite = toSuite(name, model, drafts);
+      const suite = toSuite(name, description, model, drafts);
       const r = await importSuite(suite);
       onCreated(r.id, suite.name);
       setOpen(false);
@@ -196,6 +203,18 @@ export default function BuildBenchmark({
           <span className="label-xs block">Default model</span>
           <ModelPicker value={model} onChange={setModel} idPrefix="bb" />
         </div>
+      </div>
+      <div className="space-y-1">
+        <label className="label-xs block" htmlFor="bb-desc">
+          What does it measure? <span className="normal-case">(optional)</span>
+        </label>
+        <input
+          id="bb-desc"
+          className="field text-sm"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="e.g. Whether answers to billing questions stay polite and quote the right refund window"
+        />
       </div>
 
       <div className="space-y-3">

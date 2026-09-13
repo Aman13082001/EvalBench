@@ -11,6 +11,10 @@
 # `judge_provider`. Set GROQ_API_KEY.
 
 name: RAG Evaluation Demo
+description: >-
+  Groundedness for retrieval-augmented answers. Each test carries the
+  retrieved passages and checks that the answer sticks to them, that
+  they contained the answer, and that the retrieval was relevant.
 provider: groq
 model: openai/gpt-oss-120b
 judge_provider: groq

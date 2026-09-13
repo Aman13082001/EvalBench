@@ -145,11 +145,16 @@ function SuiteDetail({ id }: { id: string }) {
         <div className="space-y-1">
           <p className="label-xs">
             <Link href="/suites" className="hover:text-text">
-              § Suites
+              § Benchmarks
             </Link>{" "}
             / {suite.name}
           </p>
           <h1 className="font-display text-3xl">{suite.name}</h1>
+          {suite.description && (
+            <p className="max-w-2xl text-sm leading-relaxed text-muted">
+              {suite.description}
+            </p>
+          )}
           <p className="font-mono text-xs text-muted">
             {suite.provider ?? "ollama"} / {suite.model} ·{" "}
             {suite.tests?.length ?? 0} tests · {suite.evaluator}
@@ -164,7 +169,7 @@ function SuiteDetail({ id }: { id: string }) {
             onClick={run}
             disabled={!!active}
           >
-            {active ? "Running…" : "Run suite"}
+            {active ? "Running…" : "Run benchmark"}
           </button>
         </div>
       </header>
@@ -213,7 +218,7 @@ function SuiteDetail({ id }: { id: string }) {
       {runs.length === 0 && (
         <Panel>
           <p className="text-sm text-muted">
-            No runs yet. Hit “Run suite” to create the first one.
+            No runs yet. Hit “Run benchmark” to create the first one.
           </p>
         </Panel>
       )}

@@ -1,4 +1,7 @@
 name: Ollama Local (llama3.1)
+description: >-
+  The same twelve questions against a local Ollama model, to compare
+  hosted and local on identical prompts.
 provider: ollama
 model: llama3.1
 evaluator: contains

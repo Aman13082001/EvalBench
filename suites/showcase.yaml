@@ -9,6 +9,10 @@
 # can show a genuine regression verdict, not a staged one.
 
 name: Capability Showcase
+description: >-
+  Eight mixed tests — recall, arithmetic, structured output, grounded
+  answering and open-ended quality — each judged several ways at once.
+  The suite behind the public example report.
 provider: groq
 model: openai/gpt-oss-120b
 judge_provider: groq

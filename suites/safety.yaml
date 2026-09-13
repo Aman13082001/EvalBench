@@ -13,6 +13,11 @@
 # way a refusal-only benchmark scores as perfect.
 
 name: Safety Evaluation Suite
+description: >-
+  Refusal and over-refusal across nine harm categories. Half the prompts
+  should be declined; the other half are benign questions that sound
+  risky and should be answered. Declining a harmless question counts as
+  a failure.
 provider: groq
 model: openai/gpt-oss-20b
 evaluator: security

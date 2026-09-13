@@ -85,6 +85,8 @@ async function j<T>(res: Response): Promise<T> {
 export interface SuiteDoc {
   _id: string;
   name: string;
+  /* What it measures. The list shows this and nothing else. */
+  description?: string | null;
   provider?: string;
   model: string;
   evaluator: string;
@@ -93,7 +95,9 @@ export interface SuiteDoc {
   baseline_run_id?: string | null;
   created_at?: string;
   created_by?: string;
-  tests: unknown[];
+  /* The list endpoint sends a count instead of the test bodies. */
+  test_count?: number;
+  tests?: unknown[];
 }
 
 export interface RunDoc {
@@ -180,7 +184,7 @@ export const getQuota = () => authed<Quota>("/suites/quota");
 export interface Benchmark {
   slug: string;
   title: string;
-  blurb: string;
+  description: string;
   name: string;
   test_count: number;
   provider: string;

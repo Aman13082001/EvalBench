@@ -5,6 +5,35 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Changed — a benchmark is its name
+
+- **Importing a suite is create-or-update.** `POST /suites/import` (and
+  `POST /suites`) look for the caller's suite of the same name and
+  update it in place — same id, same run history, same baseline —
+  instead of inserting another copy. `evalbench run` imports before
+  every run; as a plain insert that left a new suite behind each time,
+  and one database reached 70 suites with 18 names. The response says
+  which happened: `{"created": true|false}`, 201 or 200.
+- **`evalbench merge-suites`** folds the duplicates that already exist:
+  one copy kept per (owner, name) — the one holding a baseline, else
+  the newest — every run re-pointed at it, the rest deleted. Runs are
+  never deleted. Dry run by default; `--apply` writes; `--claim <user>`
+  assigns suites from before accounts existed to that user first.
+- **Suites carry a `description`.** One or two sentences on what the
+  benchmark measures, in the YAML. Every bundled suite has one; the
+  workspace picker shows it once a benchmark is chosen, the build form
+  asks for it, and the manifest reads it from the file rather than
+  keeping its own copy.
+- **The benchmarks list is a list.** `GET /suites` sends `test_count`
+  instead of the test bodies — it was 129 KB of prompts to print
+  "51 tests" — and the page shows name, description and count. Model,
+  check type and baseline badges were noise there; they belong to the
+  run and the detail page.
+- Wording: the pages say *benchmark*, matching the nav. Sign-up lands on
+  the Workbench. "sign in" in the nav and on the example page opens the
+  same dialog the homepage uses; `/login` remains only as the auth
+  redirect target.
+
 ### Removed — one way to do each thing
 
 - **`/run`, the public playground.** Everything it did — paste a suite,

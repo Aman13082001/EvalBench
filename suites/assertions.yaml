@@ -7,6 +7,9 @@
 # assertion when `assert` is absent).
 
 name: Composable Assertions
+description: >-
+  Six small tests that between them use every assertion type, so you can
+  see what each check does before using it in your own benchmark.
 provider: groq
 model: openai/gpt-oss-20b
 evaluator: contains

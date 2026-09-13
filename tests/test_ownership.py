@@ -49,11 +49,10 @@ class TestSuiteScoping:
             for _ in ():
                 yield {}
 
-        mock_db.suites.find.return_value.sort.return_value.limit.return_value = (
-            empty()
-        )
+        mock_db.suites.aggregate.return_value = empty()
         as_alice.get("/suites")
-        assert mock_db.suites.find.call_args[0][0] == {"created_by": "alice"}
+        pipeline = mock_db.suites.aggregate.call_args[0][0]
+        assert pipeline[0] == {"$match": {"created_by": "alice"}}
 
     def test_cannot_read_another_users_suite(self, as_alice, mock_db):
         mock_db.suites.find_one.return_value = {

@@ -20,7 +20,6 @@ from evalbench.api.deps import (
     owner_filter,
     require_owner,
 )
-from evalbench.api.playground import router as playground_router
 from evalbench.api.routes import router as suites_router
 from evalbench.api.summary import summarize_run
 from evalbench.config import settings
@@ -82,10 +81,6 @@ async def _ensure_indexes() -> None:
     await db.test_runs.create_index([("suite_id", 1), ("created_at", -1)])
     # The startup reaper queries status $in [queued, running].
     await db.test_runs.create_index("status")
-    # Playground runs auto-expire after 24h.
-    await db.playground_runs.create_index(
-        "created_at", expireAfterSeconds=86400
-    )
 
 
 @asynccontextmanager
@@ -182,7 +177,6 @@ init_metrics(app)
 
 app.include_router(auth_router)
 app.include_router(suites_router)
-app.include_router(playground_router)
 app.include_router(admin_router)
 
 
@@ -396,7 +390,7 @@ async def get_run_summary(
 
     require_owner(doc, user, "Run")
 
-    # Per-test results ride along, as they do on the playground's summary.
+    # Per-test results ride along; the result view maps over them.
     # The web client's RunSummary type has always declared `results`; this
     # endpoint was the one place that didn't honour it, and the result
     # view crashed on `.map` of undefined the first time it was rendered

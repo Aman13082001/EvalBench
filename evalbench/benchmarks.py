@@ -1,9 +1,8 @@
 """The benchmarks EvalBench ships, as offered in the workspace.
 
 A curated list rather than "every YAML in suites/", because that
-directory also holds fixtures (hero.yaml drives the homepage animation,
-demo.yaml is replay-only) and CI gates that make no sense as something
-a user picks from a dropdown.
+directory also holds demo.yaml (replay-only, needs no key) and CI gates
+that make no sense as something a user picks from a dropdown.
 
 "Benchmark" is the word the UI uses; the file format and the API still
 say "suite". Same thing — a benchmark is a suite someone else wrote.

@@ -56,7 +56,7 @@ class TestRunner:
         # Lazily built when a suite uses the judge / security evaluator.
         self._judge_provider: Provider | None = None
         self._evaluator_cache: dict = {}
-        # Optional per-run API key (playground / bring-your-own-key). When
+        # Optional per-run API key (bring-your-own-key). When
         # set it overrides the key resolved from settings/env.
         self._provider_key = provider_key
 

@@ -84,14 +84,14 @@ NEXT_PUBLIC_GRAFANA_URL=https://<grafana-host>   # optional
 ```
 
 Then add the resulting Vercel domain to the API's `CORS_ORIGINS` and
-redeploy the API. The playground and homepage work without any of the
-authenticated pieces, so the site is useful even if you stop here.
+redeploy the API. The homepage, study and example are static, so the
+site reads fine even if you stop here; running anything needs an account.
 
 ## 4. Verify
 
 ```bash
 curl https://<api>/health
-curl https://<api>/playground/providers
+curl https://<api>/suites/bundled   # 401 — auth is on
 
 EVALBENCH_API_URL=https://<api> evalbench login -u <admin>
 EVALBENCH_API_URL=https://<api> evalbench run suites/ci-hosted.yaml
@@ -107,6 +107,6 @@ EVALBENCH_API_URL=https://<api> evalbench run suites/ci-hosted.yaml
   `GF_SECURITY_ALLOW_EMBEDDING=true` on the Grafana instance. Anonymous
   viewing is enabled in the local compose for convenience — do not carry
   that into a public deployment without putting Grafana behind auth.
-- **Playground abuse.** `/playground/run` is unauthenticated by design but
-  requires the visitor's own provider key, so it cannot spend your money.
-  It is rate limited to 5/minute per IP and capped at 12 tests.
+- **Spending the server key.** Runs on the server's key are capped per
+  user per day (`DAILY_RUN_CAP`, default 20). Bring-your-own-key runs are
+  not capped and the key is never stored. Admins are uncapped.

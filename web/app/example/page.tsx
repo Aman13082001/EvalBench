@@ -41,8 +41,8 @@ export default function ExamplePage() {
       <Rule label="The baseline run in full" />
       <p className="max-w-2xl text-sm leading-relaxed text-muted">
         Every test from the baseline model, with each assertion that ran against
-        it and the model&rsquo;s raw response. This is the same view you get in
-        the playground.
+        it and the model&rsquo;s raw response. This is the same view every run
+        gets in the Workbench.
       </p>
       <Results r={{ ...data.baseline, run_id: "example" } as RunSummary} />
 
@@ -51,11 +51,12 @@ export default function ExamplePage() {
         <div>
           <p className="font-display text-2xl">Run your own.</p>
           <p className="mt-1 text-sm text-muted">
-            Bring a free API key, edit the suite, see your own report.
+            Pick a benchmark and a model in the Workbench — with your own
+            key or without one.
           </p>
         </div>
-        <Link href="/run" className="btn btn-primary shrink-0">
-          Open the playground
+        <Link href="/login" className="btn btn-primary shrink-0">
+          Sign in to run one
         </Link>
       </section>
     </div>

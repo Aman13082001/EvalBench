@@ -227,10 +227,9 @@ class TestBundled:
             assert load_benchmark(b["slug"]) is not None, b["file"]
 
     def test_fixtures_are_not_offered(self):
-        """hero.yaml drives the homepage; demo.yaml is replay-only. Neither
-        is something a user should be handed as a benchmark."""
+        """demo.yaml is replay-only — it can only answer its own prompts, so
+        handing it to a user as a benchmark would be a trap."""
         files = {b["file"] for b in BUNDLED}
-        assert "hero.yaml" not in files
         assert "demo.yaml" not in files
 
     def test_counts_are_read_from_the_files(self):
@@ -276,8 +275,8 @@ class TestBundled:
 class TestSummaryContract:
     def test_summary_includes_per_test_results(self, as_alice, mock_db):
         """The web client's RunSummary type declares `results`, and the
-        result view maps over it. The playground summary always had it;
-        this endpoint didn't, and the workspace crashed on first render."""
+        result view maps over it. This endpoint once omitted it and the
+        workspace crashed on first render."""
         mock_db.test_runs.find_one.return_value = {
             "_id": ObjectId(RUN_ID),
             "created_by": "alice",

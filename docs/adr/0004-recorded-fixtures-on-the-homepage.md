@@ -1,6 +1,12 @@
 # 4. The homepage demo is a recording, not a live call
 
-**Status:** accepted · **Date:** 2026-09
+**Status:** superseded · **Date:** 2026-09
+
+> Superseded 2026-09-13. The homepage no longer replays a recorded run;
+> it animates the architecture with numbers captured from real runs, and
+> the recorded *example* moved to `/example`, reached from the research
+> page. The reasoning below — never make a live provider call on page
+> load — still holds and is why the example is a fixture too.
 
 ## Context
 
@@ -26,7 +32,7 @@ demo.
 
 The honesty cost is real, so it is paid explicitly: the fixture comes from
 an actual run against `openai/gpt-oss-20b`, the caption says it is a
-recording, and the live path is one click away at `/run`.
+recording, and the live path is one sign-in away in the Workbench.
 
 ## Consequences
 

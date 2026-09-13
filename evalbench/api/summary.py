@@ -1,6 +1,6 @@
 """Turn a stored run document into the summary payload.
 
-Shared by ``GET /runs/{id}/summary`` and the playground so the two never
+Shared by ``GET /runs/{id}/summary`` and the CLI so the two never
 drift.
 """
 

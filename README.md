@@ -7,7 +7,7 @@ EvalBench runs versioned test suites against a model — local via [Ollama](http
 Think of it as **`pytest` + CI quality gates for LLM behaviour**.
 
 There is a CLI, a REST API, a GitHub Action, a Grafana stack, a Next.js
-web app with a public playground — and [a research study](research/REPORT.md)
+web app — and [a research study](research/REPORT.md)
 showing that most eval suites are too small to detect the regressions they
 were built to catch.
 
@@ -57,7 +57,7 @@ flowchart LR
 | **Pricing** (`evalbench/pricing.py`) | per-model token rates (each with `source` + `as_of`) → estimated USD per run; `scripts/check_pricing.py` fails CI on stale entries |
 | **MongoDB** | stores suites and run results |
 | **Prometheus + Grafana** | scrape `/metrics`, alert rules, "EvalBench — Production Overview" dashboard |
-| **Web app** (`web/`) | Next.js front end — public demo + playground, suites, run history, admin, embedded Grafana |
+| **Web app** (`web/`) | Next.js front end — homepage, research study, workbench, benchmarks, run history, admin, embedded Grafana |
 | **CLI** (`evalbench/cli.py`) | `login`, `run`, `compare`, `baseline`, `pr-comment`, `security`, `models`, `init`, `export` |
 | **Jobs** (`evalbench/jobs.py`) | inline `BackgroundTasks` or an RQ queue with a scalable worker |
 | **Research** (`research/`) | an empirical power study of regression detection, reproducible from `scripts/` |
@@ -351,10 +351,9 @@ console for people who have.
 
 | Route | Auth | What it does |
 |---|---|---|
-| `/` | public | the homepage **runs a miniature evaluation in front of you** — prompt → model → response → assertion checks → score → statistics |
-| `/example` | public | a full recorded run, expandable check by check |
-| `/run` | public | the **playground**: paste a suite, bring your own provider key, get a permalink |
+| `/` | public | the homepage — the architecture animated stage by stage with captured numbers, why it exists, what it checks, and the research behind it |
 | `/research` | public | the power study, its figure, and how to reproduce it |
+| `/example` | public | a full recorded comparison, expandable check by check — reached from the study |
 | `/login` | public | sign in or register |
 | `/workbench` | user | **the first page after sign-in** — pick a benchmark and a model, run it, read the result; build a benchmark from a form; compare two models |
 | `/compare?a=&b=` | user | two runs paired by the regression engine — shareable, reconstructed from the runs each time |
@@ -362,7 +361,6 @@ console for people who have.
 | `/runs/[id]` | user | run results with per-test assertion detail |
 | `/dashboard` | user | the Grafana dashboard, embedded |
 | `/admin` | admin | users, activate/deactivate, instance stats |
-| `/styleguide` | public | the design system, for contributors |
 
 Two deliberate choices:
 
@@ -393,8 +391,7 @@ key (`DAILY_RUN_CAP`, shown as "N left today" before the click), and a
 curated list of bundled benchmarks a user can adopt exactly once. The UI
 says *benchmark*; the API, YAML and CLI say *suite* — same thing.
 
-The design system is documented in `web/app/globals.css` and rendered at
-`/styleguide`.
+The design system lives in `web/app/globals.css` and `web/components/ui`.
 
 ---
 
@@ -510,7 +507,7 @@ evalbench/
   jobs.py       run-job dispatch (inline BackgroundTasks | RQ)
   worker.py     RQ worker entrypoint
   cli.py        Typer CLI
-web/            Next.js front end (demo, playground, suites, admin, dashboard)
+web/            Next.js front end (homepage, research, workbench, benchmarks, admin, dashboard)
 research/       the power study: REPORT.md, data, generated figure
 docs/adr/       architecture decision records
 scripts/        pricing freshness check, the power-study runner
@@ -548,7 +545,7 @@ alternative that was rejected and why:
 | **Providers** | Ollama + five hosted providers behind one interface, with per-provider concurrency ceilings and token/cost normalization |
 | **CI** | `--fail-under` and `--compare-to-baseline` gates, a composite **GitHub Action** that runs the suite and posts a PR comment |
 | **Ops** | Prometheus metrics, 9 alert rules, a provisioned Grafana dashboard |
-| **Product** | a Next.js app: demonstrating homepage, public playground, suites, runs, admin, embedded dashboard |
+| **Product** | a Next.js app: homepage, research study, workbench, benchmarks, runs, admin, embedded dashboard |
 | **Research** | an original power study of regression detection, reproducible from `scripts/` |
 | **Quality** | 274 tests, ruff-clean, four ADRs, and three *structural* tests that fail a whole class of bug rather than one instance: every route requires auth, every handler touching owned data is scoped to its caller, and every service that can run a suite is scraped by Prometheus |
 

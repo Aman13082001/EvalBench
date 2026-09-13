@@ -3,6 +3,29 @@
 All notable changes to EvalBench. Versions follow the shape of
 [Keep a Changelog](https://keepachangelog.com/); dates are release dates.
 
+## [Unreleased]
+
+### Removed — one way to do each thing
+
+- **`/run`, the public playground.** Everything it did — paste a suite,
+  bring a key, run it — the Workbench does with a free account, and does
+  better: honest error reporting, a model picker, a daily cap instead of
+  a 12-test one. Two ways to run an evaluation meant the weaker one was
+  the first thing a visitor found. The `/playground/*` endpoints, their
+  TTL collection and tests go with it.
+- **The hero demo.** `HeroDemo`, `hero-run.json`, `suites/hero.yaml` and
+  `scripts/capture_hero.py` had rendered nothing since the homepage was
+  rebuilt around the architecture animation. ADR 0004 is marked
+  superseded rather than deleted.
+- **`/styleguide`.** A page of colour swatches is not part of the product.
+- **"Try" and "Example" from the nav.** The public nav is one link,
+  Research; the example evaluation is reached from the end of the study.
+  A visitor's path is now home → study → example → sign in → Workbench,
+  and every public page has one exit that points forward.
+
+The `demo` provider stays: `evalbench run suites/demo.yaml` still works
+with no key at all.
+
 ## [0.5.0] — 2026-09-07
 
 ### Added — the workbench

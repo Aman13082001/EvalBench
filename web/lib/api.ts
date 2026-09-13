@@ -63,13 +63,6 @@ export interface RunSummary {
   results: TestResult[];
 }
 
-export interface PlaygroundInfo {
-  providers: string[];
-  max_tests: number;
-  max_samples: number;
-  assertion_types: string[];
-}
-
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText;
@@ -81,29 +74,6 @@ async function j<T>(res: Response): Promise<T> {
     throw new Error(detail);
   }
   return res.json() as Promise<T>;
-}
-
-export function getPlaygroundInfo(): Promise<PlaygroundInfo> {
-  return fetch(`${API_URL}/playground/providers`).then((r) =>
-    j<PlaygroundInfo>(r)
-  );
-}
-
-export function runPlayground(
-  suite: unknown,
-  providerKey: string
-): Promise<RunSummary> {
-  return fetch(`${API_URL}/playground/run`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ suite, provider_key: providerKey }),
-  }).then((r) => j<RunSummary>(r));
-}
-
-export function getPlaygroundRun(id: string): Promise<RunSummary> {
-  return fetch(`${API_URL}/playground/runs/${id}`).then((r) =>
-    j<RunSummary>(r)
-  );
 }
 
 /* ────────────────────────────────────────────────────────────────

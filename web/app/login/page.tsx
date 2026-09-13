@@ -46,11 +46,7 @@ export default function LoginPage() {
           {mode === "signin" ? "Sign in" : "Create an account"}
         </h1>
         <p className="text-sm text-muted">
-          Only needed to save suites and keep run history. The{" "}
-          <a href="/run" className="text-accent hover:underline">
-            playground
-          </a>{" "}
-          works without one.
+          Free. An account keeps your benchmarks and run history.
         </p>
       </header>
 

@@ -1,10 +1,9 @@
 """A provider that replays recorded model output instead of calling one.
 
-This exists so a visitor can run an evaluation with no API key at all.
-Every hosted provider needs a key, and Ollama isn't reachable from a
-public deployment, so without this the playground shows a stranger a YAML
-box they cannot use — they have to go create a Groq account first, which
-nobody browsing a project is going to do.
+This exists so ``evalbench run suites/demo.yaml`` works with no API key
+at all — clone, run, see a real result. Every hosted provider needs a
+key and Ollama needs a model pulled, so without this the first command
+someone tries would fail before they had seen the tool do anything.
 
 What is real and what is not, stated plainly, because a demo that
 overstates itself is worse than no demo:

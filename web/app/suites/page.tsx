@@ -93,11 +93,11 @@ function Suites() {
       {suites && suites.length === 0 && (
         <Panel>
           <p className="text-sm text-muted">
-            No suites yet. Create one above, or try the{" "}
-            <Link href="/run" className="text-accent hover:underline">
-              playground
-            </Link>{" "}
-            first.
+            No suites yet. Paste YAML above, or build one in the{" "}
+            <Link href="/workbench" className="text-accent hover:underline">
+              Workbench
+            </Link>
+            .
           </p>
         </Panel>
       )}

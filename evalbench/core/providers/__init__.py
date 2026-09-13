@@ -27,7 +27,7 @@ from evalbench.core.providers.replay import ReplayProvider
 _PROVIDERS: dict[str, type[Provider]] = {
     "ollama": OllamaProvider,
     "mock": MockProvider,
-    # Replays recorded answers so the public playground works with no
+    # Replays recorded answers so the demo suite runs with no
     # API key at all. See providers/replay.py.
     "demo": ReplayProvider,
 }

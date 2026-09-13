@@ -5,11 +5,9 @@ import { useAuth } from "@/components/AuthProvider";
 import StatusStrip from "@/components/StatusStrip";
 import ThemeToggle from "@/components/ThemeToggle";
 
-const PUBLIC = [
-  { href: "/run", label: "Try" },
-  { href: "/example", label: "Example" },
-  { href: "/research", label: "Research" },
-];
+/* One public link. The example evaluation is reached from the study,
+   not the nav — a visitor's path is home → study → example → sign in. */
+const PUBLIC = [{ href: "/research", label: "Research" }];
 
 const PRIVATE = [
   { href: "/workbench", label: "Workbench" },

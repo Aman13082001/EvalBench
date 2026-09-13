@@ -57,7 +57,7 @@ const BOXES: Box[] = [
 
 /* The three ways a suite reaches the API — drawn inside the Suite
    box so the left edge carries real information instead of air. */
-const ENTRYPOINTS = ["evalbench run", "web playground", "GitHub Action"];
+const ENTRYPOINTS = ["evalbench run", "web workbench", "GitHub Action"];
 
 const PROVIDERS = ["ollama", "groq", "gemini", "github", "openrouter", "openai"];
 

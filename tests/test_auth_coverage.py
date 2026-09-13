@@ -36,16 +36,12 @@ PROTECTED = [
     ("POST", "/suites/bundled/safety/adopt", None),
 ]
 
-# Routes that are public by design and not probes: the playground (bring
-# your own key, or the no-key demo), auth itself, and the metrics scrape.
-# Each needs a reason to be here.
+# Routes that are public by design and not probes: auth itself, the
+# metrics scrape, and the API docs. Each needs a reason to be here.
 PUBLIC_BY_DESIGN = {
     "/metrics",           # Prometheus scrape target
     "/auth/login",        # you cannot be logged in to log in
     "/auth/register",
-    "/playground/providers",
-    "/playground/run",    # rate-limited, needs the caller's key or replay
-    "/playground/runs/{run_id}",
     "/docs", "/redoc", "/openapi.json",
     "/docs/oauth2-redirect",
 }

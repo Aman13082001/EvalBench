@@ -193,21 +193,6 @@ export default function LoginDialog({
             </>
           )}
         </div>
-
-        {/* The escape hatch. Someone who will not create an account can
-            still watch the thing work, which is the whole point of the
-            button that opened this dialog. */}
-        {!apiKey && (
-          <div className="border-t border-line px-4 py-3">
-            <a
-              href="/run"
-              className="flex items-baseline justify-between gap-3 text-sm hover:text-accent"
-            >
-              <span>Or try it without an account</span>
-              <span className="label-xs shrink-0">no key needed →</span>
-            </a>
-          </div>
-        )}
       </div>
     </div>
   );

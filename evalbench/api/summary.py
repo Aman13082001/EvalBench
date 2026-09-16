@@ -6,12 +6,66 @@ drift.
 
 from __future__ import annotations
 
+from bson import ObjectId
+
 from evalbench.core.stats import bootstrap_ci
 
 
 def _errored(r: dict) -> bool:
     # An infra error (excluded from the pass rate) = no sample produced a score.
     return bool(r.get("error")) and not r.get("runs", 0)
+
+
+# What a run-history row needs, and nothing else. A whole run document
+# carries every response and every assertion — megabytes to draw twenty
+# rows, which is what the per-suite history used to fetch.
+RUN_ROW_FIELDS = {
+    "suite_id": 1,
+    "model": 1,
+    "provider": 1,
+    "evaluator": 1,
+    "status": 1,
+    "created_at": 1,
+    "finished_at": 1,
+    "total_tests": 1,
+    "completed_tests": 1,
+    "error": 1,
+    "used_server_key": 1,
+    "results.passed": 1,
+    "results.error": 1,
+    "results.runs": 1,
+    "results.rate_limited": 1,
+    "results.cost_usd": 1,
+}
+
+
+def run_row(doc: dict) -> dict:
+    """One row of run history, counted the way the summary counts.
+
+    Both run lists call this so they cannot disagree about a pass rate.
+    In particular a test that lost some samples to rate limits but was
+    answered on others is *scored* here, exactly as in `summarize_run` —
+    reading it as a failure would report the provider's bad minute as the
+    model's.
+    """
+    results = doc.pop("results", []) or []
+    scored = [r for r in results if not _errored(r)]
+    passed = sum(1 for r in scored if r.get("passed"))
+
+    row = dict(doc)
+    if isinstance(row.get("_id"), ObjectId):
+        row["_id"] = str(row["_id"])
+    row["passed"] = passed
+    row["scored_tests"] = len(scored)
+    row["errors"] = len(results) - len(scored)
+    row["pass_rate"] = round(passed / len(scored), 4) if scored else None
+    row["rate_limited_samples"] = sum(
+        r.get("rate_limited", 0) for r in results
+    )
+    row["total_cost_usd"] = round(
+        sum(r.get("cost_usd") or 0 for r in results), 6
+    )
+    return row
 
 
 def summarize_run(doc: dict) -> dict:
@@ -34,6 +88,15 @@ def summarize_run(doc: dict) -> dict:
     completion_tokens = [r.get("completion_tokens", 0) for r in results]
     costs = [r.get("cost_usd", 0) or 0 for r in results]
     rate_limited = sum(r.get("rate_limited", 0) for r in results)
+
+    # `samples: 3` exists so a pass/fail is a majority vote rather than one
+    # draw. A test scored on fewer samples than asked for is back toward a
+    # coin flip: its interval widens and the benchmark's resolution drops.
+    # That is the real cost of a rate limit, and it is invisible in the
+    # error count because the test *was* answered.
+    sample_counts = [r.get("runs", 1) for r in scored]
+    requested = doc.get("samples") or (max(sample_counts) if sample_counts else 1)
+    undersampled = sum(1 for n in sample_counts if n < requested)
 
     assertion_types: dict = {}
     for r in results:
@@ -90,6 +153,8 @@ def summarize_run(doc: dict) -> dict:
         "total_completion_tokens": sum(completion_tokens),
         "total_cost_usd": round(sum(costs), 6),
         "rate_limited_samples": rate_limited,
+        "samples_requested": requested,
+        "undersampled_tests": undersampled,
         "by_category": by_category,
         "assertion_types": assertion_types,
     }

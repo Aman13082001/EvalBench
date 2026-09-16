@@ -231,17 +231,45 @@ function SuiteDetail({ id }: { id: string }) {
               key={r._id}
               className="panel flex flex-wrap items-center justify-between gap-3 p-3"
             >
-              <div className="flex items-center gap-3">
+              {/* A run is identified by what it found and when, not by the
+                  tail of its Mongo id — and the way in says so in words.
+                  The id stays visible for copying into the CLI. */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <Status state={stateOf(r.status)}>{r.status}</Status>
+                <span className="font-mono text-sm tnum">
+                  {typeof r.pass_rate === "number" ? (
+                    <>
+                      <span className="text-text">
+                        {(r.pass_rate * 100).toFixed(1)}%
+                      </span>
+                      <span className="text-muted"> passed</span>
+                    </>
+                  ) : (
+                    <span className="text-muted">not scored</span>
+                  )}
+                </span>
+                <span className="font-mono text-[11px] text-muted tnum">
+                  {r.scored_tests ?? r.completed_tests}/{r.total_tests} scored
+                  {r.created_at
+                    ? ` · ${r.created_at.slice(0, 16).replace("T", " ")}`
+                    : ""}
+                </span>
+                {!!r.rate_limited_samples && (
+                  <span
+                    className="font-mono text-[11px] text-warning"
+                    title="Samples dropped to provider rate limits. Those tests were scored on fewer samples than requested."
+                  >
+                    {r.rate_limited_samples} samples lost
+                  </span>
+                )}
                 <Link
                   href={`/runs/${r._id}`}
                   className="font-mono text-xs text-accent hover:underline"
                 >
-                  {r._id.slice(-8)}
+                  Open report →
                 </Link>
-                <span className="font-mono text-[11px] text-muted">
-                  {r.completed_tests}/{r.total_tests}
-                  {r.created_at ? ` · ${r.created_at.slice(0, 19)}` : ""}
+                <span className="font-mono text-[10px] text-muted/60">
+                  {r._id.slice(-8)}
                 </span>
               </div>
               <div className="flex items-center gap-2">

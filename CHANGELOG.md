@@ -5,6 +5,35 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Changed — instruments that know their own precision
+
+- **Every benchmark reports what it can resolve.** `mde_for_n` inverts
+  the existing power calculation, and `evalbench/resolution.py`
+  estimates the spread from the benchmark's own run history — paired by
+  test name, errored tests excluded. A benchmark run once reports no
+  number and says what is missing, because resolution is an empirical
+  property and not a property of the YAML.
+- **Rate limits read as what they are.** A run that lost samples but
+  answered every test used to announce "0 of 51 tests never got an
+  answer". The two conditions are now separate: tests that got no answer
+  are missing from the numbers; tests that lost *samples* are in them but
+  measured less precisely, and the summary counts them
+  (`samples_requested`, `undersampled_tests`). A real run had 25 of 51
+  tests scored on fewer than the 3 samples requested.
+- **429s pause the provider, not just the request.** A free tier's
+  ceiling is per-minute and shared, so four workers retrying in parallel
+  burn their attempts against the same shut door. Each 429 now holds
+  every in-flight request for the same backoff (`Retry-After` honoured),
+  and the retry budget rose from 3 to 5.
+- **One definition of a run-history row.** `/runs` and
+  `/suites/{id}/runs` counted scored tests by different rules, so the
+  same run showed two pass rates depending on the page. Both now call
+  `run_row`, which counts as the summary does, and the per-suite history
+  stopped shipping whole run documents.
+- Run history rows say what the run found — pass rate, tests scored,
+  date, samples lost — behind an "Open report →" link, instead of an
+  unlabelled Mongo id as the only clickable thing.
+
 ### Changed — a benchmark is its name
 
 - **Importing a suite is create-or-update.** `POST /suites/import` (and

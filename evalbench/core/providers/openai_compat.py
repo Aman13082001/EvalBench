@@ -15,10 +15,17 @@ import httpx
 from evalbench.config import settings
 from evalbench.core.providers.base import LLMResponse, Provider, RateLimitError
 
-# 429 retry policy: back off 1s, 2s, 4s (capped), honouring Retry-After.
-_MAX_RETRIES = 3
+# 429 retry policy: back off 1s, 2s, 4s… (capped), honouring Retry-After.
+#
+# The ceiling on a free tier is per-minute and shared, so one worker
+# hitting it means the others are about to. Each 429 therefore pauses the
+# whole provider, not just the request that saw it: without that, four
+# concurrent workers spend their retries in parallel against a door that
+# is shut for all of them, and the samples are lost together. A real
+# 51-test run at samples=3 lost 34 of 153 generations that way.
+_MAX_RETRIES = 5
 _BACKOFF_BASE = 1.0
-_BACKOFF_CAP = 10.0
+_BACKOFF_CAP = 20.0
 
 
 class OpenAICompatibleProvider(Provider):
@@ -33,6 +40,9 @@ class OpenAICompatibleProvider(Provider):
     ):
         self.name = name
         self.base_url = base_url.rstrip("/")
+        # Shared across every in-flight request to this provider: when one
+        # is rate limited, they all wait.
+        self._paused_until = 0.0
         if max_concurrency is not None:
             self.max_concurrency = max_concurrency
         headers = {"Authorization": f"Bearer {api_key}"}
@@ -72,9 +82,25 @@ class OpenAICompatibleProvider(Provider):
             raw=data,
         )
 
+    def paused_for(self) -> float:
+        """Seconds still owed to a rate limit, shared across callers."""
+        return max(0.0, self._paused_until - time.monotonic())
+
+    def _pause_for(self, delay: float) -> None:
+        """Shut the door for everyone until ``delay`` has passed."""
+        self._paused_until = max(
+            self._paused_until, time.monotonic() + delay
+        )
+
     async def _post_with_retry(self, payload: dict) -> httpx.Response:
-        """POST /chat/completions, retrying 429s with backoff."""
+        """POST /chat/completions, retrying 429s with a shared backoff."""
         for attempt in range(_MAX_RETRIES + 1):
+            # Another worker may already have been told to wait. Spending
+            # a request now would just collect the same 429.
+            waiting = self.paused_for()
+            if waiting > 0:
+                await asyncio.sleep(waiting)
+
             resp = await self._client.post(
                 f"{self.base_url}/chat/completions", json=payload
             )
@@ -88,11 +114,12 @@ class OpenAICompatibleProvider(Provider):
                     f"{_MAX_RETRIES} retries"
                 )
 
-            retry_after = resp.headers.get("retry-after")
-            if retry_after and retry_after.isdigit():
+            retry_after = (resp.headers or {}).get("retry-after")
+            if retry_after and str(retry_after).isdigit():
                 delay = float(retry_after)
             else:
                 delay = min(_BACKOFF_BASE * (2 ** attempt), _BACKOFF_CAP)
+            self._pause_for(delay)
             await asyncio.sleep(delay)
 
         # unreachable

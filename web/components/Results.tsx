@@ -60,22 +60,51 @@ export default function Results({ r }: { r: RunSummary }) {
         />
       </div>
 
+      {/* Two different things go wrong, and conflating them produced
+          "0 of 51 tests never got an answer" on a run where nothing
+          failed. A test that got no answer is missing from the numbers.
+          A test that lost *samples* is in the numbers but measured less
+          precisely — the quieter problem, and the one worth naming. */}
       {(r.errors > 0 || r.rate_limited_samples > 0) && (
         <div className="border border-warning/60 p-3 text-sm">
-          <p>
-            <span className="font-medium text-warning">
-              {r.errors} of {r.total_tests} tests never got an answer.
-            </span>{" "}
-            They are left out of every number above — the pass rate is over the{" "}
-            {r.scored_tests} that did.
-          </p>
+          {r.errors > 0 && (
+            <p>
+              <span className="font-medium text-warning">
+                {r.errors} of {r.total_tests} tests never got an answer.
+              </span>{" "}
+              They are left out of every number above — the pass rate is over
+              the {r.scored_tests} that did.
+            </p>
+          )}
+          {r.rate_limited_samples > 0 && (
+            <p className={r.errors > 0 ? "mt-2" : undefined}>
+              <span className="font-medium text-warning">
+                {r.rate_limited_samples} sample
+                {r.rate_limited_samples === 1 ? " was" : "s were"} dropped to
+                rate limits.
+              </span>{" "}
+              {r.undersampled_tests
+                ? `${r.undersampled_tests} test${
+                    r.undersampled_tests === 1 ? " was" : "s were"
+                  } scored on fewer than the ${
+                    r.samples_requested ?? "requested"
+                  } samples asked for.`
+                : "Every test still got the samples it asked for."}{" "}
+              {!!r.undersampled_tests && (
+                <span className="text-muted">
+                  Sampling several times is what makes a pass a majority
+                  vote rather than one draw, so those results carry more
+                  noise and the interval above is wider than it would
+                  otherwise be.
+                </span>
+              )}
+            </p>
+          )}
           {r.rate_limited_samples > 0 && (
             <p className="mt-1 text-xs text-muted">
-              The provider rate-limited {r.rate_limited_samples} request
-              {r.rate_limited_samples === 1 ? "" : "s"}. Free tiers allow a
-              limited number per minute; a large benchmark with several samples
-              per test can exceed it. Try fewer samples, a smaller benchmark,
-              your own key, or run again in a few minutes.
+              Free tiers cap requests per minute. EvalBench pauses and retries
+              when it is limited; past that, try fewer samples, a smaller
+              benchmark, your own key, or run again in a few minutes.
             </p>
           )}
         </div>

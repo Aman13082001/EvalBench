@@ -58,6 +58,11 @@ export interface RunSummary {
   total_prompt_tokens: number;
   total_completion_tokens: number;
   rate_limited_samples: number;
+  /* Samples asked for per test, and how many tests got fewer. Losing a
+     sample is not an error — the test was answered — but it costs
+     precision, which is otherwise invisible. */
+  samples_requested?: number;
+  undersampled_tests?: number;
   by_category: Record<string, CategoryStat>;
   assertion_types: Record<string, { passed: number; failed: number }>;
   results: TestResult[];
@@ -121,6 +126,13 @@ export interface RunDoc {
   completed_tests: number;
   created_at?: string;
   error?: string | null;
+  /* Computed server-side by `run_row`, so every run list agrees. */
+  passed?: number;
+  scored_tests?: number;
+  errors?: number;
+  pass_rate?: number | null;
+  rate_limited_samples?: number;
+  total_cost_usd?: number;
 }
 
 export interface RunStatus {

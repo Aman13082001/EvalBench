@@ -21,6 +21,7 @@ from evalbench.api.deps import (
     owner_of,
     require_owner,
 )
+from evalbench.api.summary import RUN_ROW_FIELDS, run_row
 from evalbench.benchmarks import describe_benchmarks, load_benchmark
 from evalbench.config import settings
 from evalbench.core.providers import (
@@ -478,6 +479,10 @@ async def run_suite(
     run_doc["created_by"] = owner_of(user)
     run_doc["provider"] = provider
     run_doc["used_server_key"] = uses_server_key
+    # How many samples were *asked* for. Without it, a run that lost
+    # samples to rate limits cannot say so — it only knows how many
+    # came back.
+    run_doc["samples"] = suite.samples
     result = await db.test_runs.insert_one(run_doc)
     run_id = str(result.inserted_id)
 
@@ -562,13 +567,12 @@ async def list_runs(suite_id: str, user=Depends(get_current_user)):
     runs = []
 
     async for doc in db.test_runs.find(
-        {"suite_id": suite_id, **owner_filter(user)}
+        {"suite_id": suite_id, **owner_filter(user)}, RUN_ROW_FIELDS
     ).sort(
         "created_at",
         -1
     ).limit(20):
 
-        doc["_id"] = str(doc["_id"])
-        runs.append(doc)
+        runs.append(run_row(doc))
 
     return runs

@@ -21,7 +21,7 @@ from evalbench.api.deps import (
     require_owner,
 )
 from evalbench.api.routes import router as suites_router
-from evalbench.api.summary import summarize_run
+from evalbench.api.summary import RUN_ROW_FIELDS, run_row, summarize_run
 from evalbench.config import settings
 from evalbench.core.regression import RegressionDetector
 from evalbench.db.mongo import client, db
@@ -260,33 +260,11 @@ async def list_runs(
     limit = max(1, min(limit, 100))
     out = []
     async for doc in (
-        db.test_runs.find(
-            owner_filter(user),
-            {
-                "suite_id": 1, "model": 1, "provider": 1, "evaluator": 1,
-                "status": 1, "created_at": 1, "finished_at": 1,
-                "total_tests": 1, "completed_tests": 1, "error": 1,
-                "used_server_key": 1,
-                # enough of results to compute a pass rate, nothing more
-                "results.passed": 1, "results.error": 1,
-                "results.cost_usd": 1,
-            },
-        )
+        db.test_runs.find(owner_filter(user), RUN_ROW_FIELDS)
         .sort("created_at", -1)
         .limit(limit)
     ):
-        results = doc.pop("results", []) or []
-        scored = [r for r in results if not r.get("error")]
-        doc["_id"] = str(doc["_id"])
-        doc["passed"] = sum(1 for r in scored if r.get("passed"))
-        doc["scored_tests"] = len(scored)
-        doc["pass_rate"] = (
-            round(doc["passed"] / len(scored), 4) if scored else None
-        )
-        doc["total_cost_usd"] = round(
-            sum(r.get("cost_usd") or 0 for r in results), 6
-        )
-        out.append(doc)
+        out.append(run_row(doc))
     return out
 
 

@@ -11,6 +11,8 @@ say "suite". Same thing — a benchmark is a suite someone else wrote.
 from __future__ import annotations
 
 import pathlib
+from copy import deepcopy
+from functools import cache
 from typing import TypedDict
 
 import yaml
@@ -53,8 +55,15 @@ BUNDLED: list[Benchmark] = [
 ]
 
 
-def load_benchmark(slug: str) -> dict | None:
-    """The parsed suite for ``slug``, or None if it isn't bundled."""
+@cache
+def _parse(slug: str) -> dict | None:
+    """Read and parse one bundled suite. Cached for the process.
+
+    These files ship inside the image and cannot change while the process
+    runs, but parsing all five cost 50ms — against 9ms for the database
+    query on the same endpoint — and being synchronous file I/O in an
+    async handler it blocked the event loop for every other request too.
+    """
     entry = next((b for b in BUNDLED if b["slug"] == slug), None)
     if entry is None:
         return None
@@ -62,6 +71,20 @@ def load_benchmark(slug: str) -> dict | None:
     if not path.exists():
         return None
     return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def load_benchmark(slug: str) -> dict | None:
+    """The parsed suite for ``slug``, or None if it isn't bundled.
+
+    A deep copy: callers mutate what they get — `adopt` stamps ownership
+    onto it — and a shared cache handed out by reference would make one
+    request's edit every later request's data.
+    """
+    parsed = _parse(slug)
+    return deepcopy(parsed) if parsed is not None else None
+
+
+load_benchmark.cache_clear = _parse.cache_clear  # type: ignore[attr-defined]
 
 
 def describe_benchmarks() -> list[dict]:

@@ -159,3 +159,27 @@ pre {
     animation: none;
   }
 }
+
+/* Scroll reveal, used by the dashboard's panel grid. The transition is
+   the visible half of a loading strategy — panels mount when they are
+   near the viewport, so seventeen Grafana iframes do not all boot at
+   once. See components/Reveal.tsx. */
+.reveal {
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 420ms ease-out,
+    transform 420ms ease-out;
+}
+.reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

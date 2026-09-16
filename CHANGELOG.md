@@ -5,6 +5,29 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Changed — the dashboard actually shows the dashboard
+
+- **Panels were never rendering.** The embed used
+  `/d/<uid>?panelId=N`, which renders the *whole dashboard* and ignores
+  `panelId` — so each frame showed a cropped overview or Grafana's home
+  screen. Single panels come from `/d-solo/`. Every panel on the page
+  was wrong for as long as the page has existed.
+- 23 panels instead of 5, laid out full-bleed across seven sections,
+  with a time-range control. A 224px timeseries in a text column is not
+  an instrument.
+- Panels follow the site's theme — including "system", which stamps no
+  attribute — instead of being pinned to light inside a dark page, and
+  they mount as they are scrolled to, at most a few at a time.
+- Grafana draws its own panel title inside the frame; it is clipped so
+  the caption above is not repeated in a second typeface.
+- Dropped the "Model Health" panel from the page: it queries
+  `evalbench_ollama_model_loaded`, so it is permanently empty for any
+  hosted provider. The regression pair is kept but labelled as
+  populating only after a baseline comparison.
+- The gauges had no `displayName`, so each series was labelled with its
+  raw selector (`evalbench_pass_rate{e…`). They now read as the suite or
+  model they describe.
+
 ### Changed — instruments that know their own precision
 
 - **Every benchmark reports what it can resolve.** `mde_for_n` inverts

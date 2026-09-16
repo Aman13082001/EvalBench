@@ -65,7 +65,8 @@
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "percentunit",
+          "displayName": "${__field.labels.suite_name}"
         },
         "overrides": []
       },
@@ -131,7 +132,8 @@
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "percentunit",
+          "displayName": "${__field.labels.model}"
         },
         "overrides": []
       },
@@ -309,7 +311,8 @@
               }
             ]
           },
-          "unit": "ms"
+          "unit": "ms",
+          "displayName": "${__field.labels.model}"
         },
         "overrides": []
       },

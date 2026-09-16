@@ -12,6 +12,8 @@ import {
   listSuites,
   Quota,
   SuiteDoc,
+  listProviders,
+  ProviderInfo,
 } from "@/lib/api";
 
 /* ── Benchmark ──────────────────────────────────────────────────
@@ -221,19 +223,55 @@ export function BenchmarkPicker({
    can enumerate its models; otherwise it is a free-text field, which
    is what the YAML format has always been. */
 
-export const PROVIDERS = [
-  { id: "groq", label: "Groq", hosted: true },
-  { id: "gemini", label: "Gemini", hosted: true },
-  { id: "github", label: "GitHub Models", hosted: true },
-  { id: "openrouter", label: "OpenRouter", hosted: true },
-  { id: "openai", label: "OpenAI", hosted: true },
-  { id: "ollama", label: "Ollama (local)", hosted: false },
-] as const;
+/* Fallback only — the real list comes from the API, which knows which
+   providers this instance actually holds a key for. Hardcoding it is how
+   the picker ended up offering five hosted providers when one had a key,
+   and the failure surfaced as a dead run minutes later. */
+const FALLBACK_PROVIDERS: ProviderInfo[] = [
+  { id: "groq", label: "Groq", needs_key: true, server_key: false },
+  { id: "ollama", label: "Ollama (local)", needs_key: false, server_key: false },
+];
 
 export type ModelChoice = { provider: string; model: string };
 
-export function isHosted(provider: string) {
-  return PROVIDERS.find((p) => p.id === provider)?.hosted ?? true;
+/** Shared across pickers: fetched once, not per component. */
+let providerCache: ProviderInfo[] | null = null;
+
+/** The live list, or null until it arrives.
+
+    Null matters: the fallback cannot know which keys this instance
+    holds, so anything that *acts* on that — forcing own-key mode —
+    must wait rather than decide from a guess. Rendering falls back
+    happily; deciding does not. */
+export function useProviders(): ProviderInfo[] | null {
+  const [list, setList] = useState<ProviderInfo[] | null>(providerCache);
+  useEffect(() => {
+    if (providerCache) return;
+    let alive = true;
+    listProviders()
+      .then((r) => {
+        providerCache = r;
+        if (alive) setList(r);
+      })
+      .catch(() => {
+        /* leave it null — the fallback renders, nothing is forced */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return list;
+}
+
+export function isHosted(provider: string, list?: ProviderInfo[] | null) {
+  const all = list ?? providerCache ?? FALLBACK_PROVIDERS;
+  return all.find((p) => p.id === provider)?.needs_key ?? true;
+}
+
+/** Whether this instance can run `provider` on its own key. */
+export function hasServerKey(provider: string, list?: ProviderInfo[] | null) {
+  const all = list ?? providerCache ?? FALLBACK_PROVIDERS;
+  return all.find((p) => p.id === provider)?.server_key ?? false;
 }
 
 export function ModelPicker({
@@ -246,6 +284,7 @@ export function ModelPicker({
   idPrefix?: string;
 }) {
   const [models, setModels] = useState<string[]>([]);
+  const providers = useProviders();
 
   useEffect(() => {
     let alive = true;
@@ -280,9 +319,10 @@ export function ModelPicker({
         value={value.provider}
         onChange={(e) => onChange({ provider: e.target.value, model: "" })}
       >
-        {PROVIDERS.map((p) => (
+        {(providers ?? FALLBACK_PROVIDERS).map((p) => (
           <option key={p.id} value={p.id}>
             {p.label}
+            {p.needs_key && !p.server_key ? " · your key only" : ""}
           </option>
         ))}
       </select>
@@ -338,13 +378,49 @@ export function KeyPicker({
    *  pickers become one group and uncheck each other. */
   name?: string;
 }) {
-  if (!isHosted(provider)) {
+  const providers = useProviders();
+
+  // Switching to a provider we hold no key for must also switch the mode,
+  // or the form would submit "use EvalBench's key" while showing a field
+  // for your own.
+  const ownOnly =
+    providers !== null &&
+    isHosted(provider, providers) &&
+    !hasServerKey(provider, providers);
+  useEffect(() => {
+    if (ownOnly && !value.own) onChange({ own: true, key: value.key });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownOnly]);
+
+  if (!isHosted(provider, providers)) {
     return (
       <p className="text-xs text-muted">
         Local model — no key needed, nothing is spent.
       </p>
     );
   }
+
+  // This instance holds no key for the provider, so there is nothing to
+  // offer but your own. Showing the choice anyway is what let someone
+  // pick GitHub Models, click run, and get a dead run back.
+  if (ownOnly) {
+    return (
+      <div className="space-y-2 text-sm">
+        <p className="text-xs text-muted">
+          This EvalBench instance has no {provider} key, so this one runs
+          on yours. It is sent with the job and never stored.
+        </p>
+        <input
+          type="password"
+          className="field font-mono text-xs"
+          placeholder={`${provider} API key`}
+          value={value.key}
+          onChange={(e) => onChange({ own: true, key: e.target.value })}
+        />
+      </div>
+    );
+  }
+
   const left =
     quota == null
       ? "…"

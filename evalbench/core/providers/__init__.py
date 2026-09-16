@@ -80,7 +80,29 @@ def register_provider(name: str, cls: type[Provider]) -> None:
 
 
 def available_providers() -> list[str]:
+    """Every provider name the system understands.
+
+    Not the same question as whether *this server* can reach it: a caller
+    supplying their own key can use any of these.
+    """
     return sorted([*_PROVIDERS, *_PRESETS])
+
+
+def configured_providers() -> list[str]:
+    """Providers this server can reach on its own key.
+
+    Everything in `_PROVIDERS` needs no key at all — Ollama is local, the
+    replay provider answers from a recording — so those are always here.
+    A hosted preset only counts when its key actually resolves.
+
+    The picker offered all six regardless, so choosing one without a key
+    was accepted, queued, and then failed inside the worker with
+    "Provider 'github' needs an API key" — a failed run instead of a
+    reason.
+    """
+    return sorted(
+        [*_PROVIDERS, *(n for n in _PRESETS if _resolve_key(_PRESETS[n][1]))]
+    )
 
 
 def _resolve_key(env_var: str) -> str:

@@ -228,6 +228,18 @@ export const adoptBenchmark = (slug: string) =>
     { method: "POST" }
   );
 
+export interface ProviderInfo {
+  id: string;
+  label: string;
+  /** Hosted: needs a key from somewhere. */
+  needs_key: boolean;
+  /** This instance has a key for it — so "use EvalBench's key" works. */
+  server_key: boolean;
+}
+
+export const listProviders = () =>
+  authed<ProviderInfo[]>("/suites/providers");
+
 export const listModels = (provider: string) =>
   authed<{ provider: string; models: string[] }>(
     `/suites/models?provider=${encodeURIComponent(provider)}`

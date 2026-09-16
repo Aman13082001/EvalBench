@@ -26,6 +26,7 @@ from evalbench.benchmarks import describe_benchmarks, load_benchmark
 from evalbench.config import settings
 from evalbench.core.providers import (
     available_providers,
+    configured_providers,
     get_provider,
     is_chat_model,
 )
@@ -233,6 +234,34 @@ async def run_quota(user=Depends(get_current_user)):
     }
 
 
+@router.get("/providers")
+async def list_providers(user=Depends(get_current_user)):
+    """Every provider, and whether this server can reach it on its own key.
+
+    The picker used to hardcode the list, so it offered five hosted
+    providers when only one had a key — and the failure surfaced as a
+    dead run minutes later.
+    """
+    configured = set(configured_providers())
+    keyless = {"ollama", "mock", "demo"}
+    labels = {
+        "groq": "Groq", "gemini": "Gemini", "github": "GitHub Models",
+        "openrouter": "OpenRouter", "openai": "OpenAI",
+        "ollama": "Ollama (local)", "demo": "Demo (replayed)",
+    }
+    return [
+        {
+            "id": name,
+            "label": labels.get(name, name),
+            "needs_key": name not in keyless,
+            # False means: usable, but only with a key of your own.
+            "server_key": name in configured and name not in keyless,
+        }
+        for name in available_providers()
+        if name != "mock"
+    ]
+
+
 @router.get("/bundled")
 async def list_bundled(user=Depends(get_current_user)):
     """The benchmarks EvalBench ships. Read from the files, so counts are
@@ -394,6 +423,21 @@ async def run_suite(
     if body.provider and provider not in available_providers():
         raise HTTPException(
             status_code=400, detail=f"Unknown provider '{provider}'"
+        )
+
+    # Refuse now, not in the worker. Without a key of their own the run
+    # would spend ours — and if we have none for this provider it was
+    # accepted, queued, and then died inside the worker with "needs an
+    # API key", which reads as a failed evaluation rather than a missing
+    # credential.
+    if not body.provider_key and provider not in configured_providers():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"This EvalBench instance has no key for '{provider}'. "
+                "Choose 'use my own key' and paste one, or pick a provider "
+                f"it is configured for: {', '.join(configured_providers())}."
+            ),
         )
 
     # Local providers cost nothing; hosted ones spend a key. If the caller

@@ -44,10 +44,13 @@ const SECTIONS: {
     blurb:
       "The state of the last run, live from the same gauges the alert rules read.",
     panels: [
-      { id: 1, title: "Pass rate", note: "Most recent value per suite, over scored tests.", height: 190 },
-      { id: 3, title: "Total runs", note: "Since the API started.", height: 190 },
-      { id: 20, title: "Avg latency", note: "Mean time to an answer.", height: 190 },
-      { id: 40, title: "Est. cost — last run", note: "USD at list price.", height: 190 },
+      // Taller than a stat needs: these panels carry one series per
+      // suite or model, and at 190px a third gauge wrapped and blew out
+      // of its box.
+      { id: 1, title: "Pass rate", note: "Most recent value per suite, over scored tests.", height: 250 },
+      { id: 3, title: "Total runs", note: "Since the API started.", height: 250 },
+      { id: 20, title: "Avg latency", note: "Mean time to an answer, per model.", height: 250 },
+      { id: 40, title: "Est. cost — last run", note: "USD at list price.", height: 250 },
     ],
   },
   {

@@ -187,16 +187,43 @@ export default function ResearchPage() {
       </section>
 
       <Rule label="Reproduce" />
-      <section className="space-y-3">
-        <pre className="panel overflow-x-auto p-3 font-mono text-xs">
-          python scripts/run_study_power.py --resamples {s.resamples}
-        </pre>
-        <p className="text-sm text-muted">
-          Raw paired scores and the full curve are in{" "}
-          <span className="font-mono text-xs">research/power-study.json</span>;
-          the write-up is{" "}
-          <span className="font-mono text-xs">research/REPORT.md</span>.
-        </p>
+      {/* Two panels rather than one full-width box: a single 55-character
+          command stretched across the page was mostly empty space. Paired
+          with what it reads and writes, the block fills its width with
+          content and matches the Method section above. */}
+      <section className="grid gap-4 md:grid-cols-2">
+        <Panel title="Run it" fig="$" caption="Re-runs the suite against both models, then the resampling. Needs a Groq key.">
+          <pre className="overflow-x-auto border border-line bg-surface-sunk p-3 font-mono text-xs leading-relaxed">
+            <span className="select-none text-muted">$ </span>
+            python scripts/run_study_power.py --resamples {s.resamples}
+          </pre>
+        </Panel>
+        <Panel title="What it reads and writes" fig="→">
+          <dl className="space-y-2 text-sm">
+            <div className="flex flex-wrap items-baseline gap-x-3">
+              <dt className="font-mono text-xs text-accent">
+                suites/research-power.yaml
+              </dt>
+              <dd className="text-xs text-muted">
+                the {s.n_tests} prompts, with deterministic checks only
+              </dd>
+            </div>
+            <div className="flex flex-wrap items-baseline gap-x-3">
+              <dt className="font-mono text-xs text-accent">
+                research/power-study.json
+              </dt>
+              <dd className="text-xs text-muted">
+                every paired score and the full curve
+              </dd>
+            </div>
+            <div className="flex flex-wrap items-baseline gap-x-3">
+              <dt className="font-mono text-xs text-accent">
+                research/REPORT.md
+              </dt>
+              <dd className="text-xs text-muted">the write-up this page renders</dd>
+            </div>
+          </dl>
+        </Panel>
       </section>
 
       <Rule />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /* ──────────────────────────────────────────────────────────────
    The system, drawn accurately and traced one hop at a time.
@@ -67,7 +67,6 @@ type Stage = {
   /** Path the packet travels, in viewBox coordinates. */
   d: string;
   caption: string;
-  detail: string;
 };
 
 const STAGES: Stage[] = [
@@ -75,70 +74,60 @@ const STAGES: Stage[] = [
     edge: ["suite", "api"],
     d: "M158 42 H198",
     caption: "A suite is a list of prompts and the checks each answer must pass.",
-    detail: "POST /suites/import",
   },
   {
     edge: ["api", "queue"],
     d: "M352 42 H392",
     caption:
       "The API returns immediately and queues the work — a long evaluation never holds a request open.",
-    detail: "202 accepted · run_id back in under a second",
   },
   {
     edge: ["queue", "worker"],
     d: "M546 42 H586",
     caption:
       "A worker picks the job up. Add more workers to run more evaluations at once.",
-    detail: "docker compose up --scale worker=3",
   },
   {
     edge: ["worker", "providers"],
     d: "M740 42 H780",
     caption:
       "The same suite runs against a local model or any hosted one, through a single interface.",
-    detail: "6 providers · per-provider concurrency ceilings · normalised tokens and cost",
   },
   {
     edge: ["providers", "assert"],
     d: "M784 132 H744",
     caption:
       "Every answer is checked — string, format, meaning, groundedness, latency and cost. All must pass.",
-    detail: "14 assertion types · a test passes only if every check passes",
   },
   {
     edge: ["assert", "stats"],
     d: "M590 132 H550",
     caption:
       "Each test is sampled repeatedly, so the score sits on a stable measurement rather than one coin flip.",
-    detail: "paired t-test · exact McNemar · Cohen's d · bootstrap CI",
   },
   {
     edge: ["stats", "mongo"],
     d: "M396 132 H356",
     caption:
       "Suites and runs persist, scoped to whoever created them. Nobody sees anyone else's work.",
-    detail: "created_by on every document · 404, never 403",
   },
   {
     edge: ["worker", "metrics"],
     d: "M665 70 V88 H180 V224 H198",
     caption:
       "Metrics come from the process that actually ran the evaluation, not just the API.",
-    detail: "scraped from api:8000 and every worker replica, found by DNS",
   },
   {
     edge: ["metrics", "prom"],
     d: "M352 224 H392",
     caption:
       "Nine alert rules watch pass rate, cost, flakiness, safety and regressions.",
-    detail: "prometheus/alerts.yml · evaluated on live data",
   },
   {
     edge: ["prom", "grafana"],
     d: "M546 224 H586",
     caption:
       "A provisioned dashboard, so the stack comes up already instrumented.",
-    detail: "grafana/dashboards/evalbench.json · 42 panels",
   },
 ];
 
@@ -163,6 +152,14 @@ export default function ArchitectureFlow() {
     );
     return () => clearInterval(t);
   }, [running]);
+
+  // Restart the packet on every stage, after the new <animateMotion> is
+  // in the DOM. Without this it never runs at all past the first hop.
+  const motion = useRef<SVGAnimateMotionElement>(null);
+  useEffect(() => {
+    if (!running) return;
+    motion.current?.beginElement?.();
+  }, [stage, running]);
 
   const active = STAGES[stage];
   const lit = new Set<NodeId>(active.edge);
@@ -220,7 +217,14 @@ export default function ArchitectureFlow() {
             markerEnd="url(#af-head-on)"
           />
 
-          {/* the packet travelling it */}
+          {/* The packet travelling it.
+
+              `begin` has to be driven from script. A SMIL animation with
+              no begin defaults to *document* time zero, so every stage
+              after the first was created already past its own start and
+              rendered frozen at the end of the path — the packet sat
+              still on stage two onwards while stage one looked fine.
+              beginElement() starts it relative to now. */}
           {running && (
             <rect
               width={7}
@@ -229,7 +233,9 @@ export default function ArchitectureFlow() {
               transform="translate(-3.5,-3.5)"
             >
               <animateMotion
+                ref={motion}
                 key={stage}
+                begin="indefinite"
                 dur={`${STAGE_MS * 0.72}ms`}
                 path={active.d}
                 fill="freeze"
@@ -299,11 +305,11 @@ export default function ArchitectureFlow() {
         </svg>
       </div>
 
-      <figcaption className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <p className="max-w-2xl text-sm leading-relaxed">{active.caption}</p>
-        <span className="font-mono text-[11px] text-muted tnum">
-          {active.detail}
-        </span>
+      {/* Caption only. Each stage also carried a line of technical
+          detail on the right, which competed with the sentence that
+          actually explains the hop. */}
+      <figcaption>
+        <p className="max-w-3xl text-sm leading-relaxed">{active.caption}</p>
       </figcaption>
 
       {/* stage ticks — doubles as a progress read-out and manual control */}

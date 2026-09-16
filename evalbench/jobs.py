@@ -9,6 +9,7 @@ worker, selected by ``settings.job_backend``.
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from datetime import datetime, timezone
 
 from bson import ObjectId
@@ -18,10 +19,68 @@ from evalbench.core.runner import TestRunner
 from evalbench.db.mongo import db
 from evalbench.db.schemas import TestSuite
 from evalbench.metrics import run_status_total
+from evalbench.resolution import resolution_from_runs
 
 logger = logging.getLogger("evalbench")
 
 RUNS_QUEUE = "evalbench:runs"
+
+
+
+# How many of a benchmark's own recent runs feed its resolution estimate.
+# Per benchmark, so the window cannot be exhausted by a busier one.
+RESOLUTION_RUNS = 5
+
+# Only what the estimate reads. A run document carries every response and
+# every assertion; this is three fields per test.
+_RESOLUTION_FIELDS = {
+    "status": 1,
+    "created_at": 1,
+    "results.test_name": 1,
+    "results.score": 1,
+    "results.error": 1,
+    # `runs` is what separates "errored" from "answered, with an error on
+    # one sample". Leaving it out of the projection made every partially
+    # rate-limited test look unscored, which is the whole population on a
+    # run that hit a free-tier limit.
+    "results.runs": 1,
+}
+
+
+async def record_resolution(suite_id: str) -> None:
+    """Re-estimate what a benchmark can detect, and store it on the suite.
+
+    Computed when a run finishes rather than when the list is drawn. The
+    first version read a fixed window of runs across *all* of a user's
+    benchmarks and bucketed them, which is correct until the window is
+    exhausted by whichever benchmark is busiest — after that an older
+    benchmark with plenty of runs reported "not yet measured", which is
+    simply untrue. A run finishing is the only moment the answer can
+    change, so that is where it belongs.
+
+    Never raises: the run is the product, this is a bonus on top of it.
+    """
+    try:
+        oid = ObjectId(suite_id)
+    except Exception:  # noqa: BLE001 - a malformed id is not worth a failure
+        return
+
+    try:
+        runs = [
+            doc
+            async for doc in db.test_runs.find(
+                {"suite_id": suite_id, "status": "completed"},
+                _RESOLUTION_FIELDS,
+            )
+            .sort("created_at", -1)
+            .limit(RESOLUTION_RUNS)
+        ]
+        await db.suites.update_one(
+            {"_id": oid},
+            {"$set": {"resolution": asdict(resolution_from_runs(runs))}},
+        )
+    except Exception:  # noqa: BLE001 - never let this cost someone their run
+        logger.exception("Could not update resolution for suite %s", suite_id)
 
 
 async def execute_run_job(
@@ -100,6 +159,9 @@ async def execute_run_job(
             }},
         )
         run_status_total.labels(status="completed").inc()
+        # New evidence about this benchmark's spread — recompute what it
+        # can detect while we are the ones who know it changed.
+        await record_resolution(suite_id)
     except Exception as e:  # noqa: BLE001 - record failure, don't crash the worker
         logger.exception("Run %s failed", run_id)
         await db.test_runs.update_one(

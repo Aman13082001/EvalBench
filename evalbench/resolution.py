@@ -40,15 +40,22 @@ class Resolution:
 def _scores(run: dict) -> dict[str, float]:
     """Test name → score, for tests this run actually scored.
 
-    A test that errored has no score. Reading it as zero would invent a
-    swing the model never produced and make the benchmark look blunter
-    than it is — the same mistake the results view used to make when it
-    counted provider failures as model failures.
+    "Errored" means no sample produced a score — the rule the summary and
+    the run lists use. An `error` string alone is not enough: a test that
+    lost one sample to a rate limit and was answered on another has both
+    an error and a perfectly good score, and discarding it threw away
+    most of the evidence. On real data that left a 51-test benchmark
+    reporting "too few tests scored in both runs" when 26 of them were
+    scored in one and 16 in the other.
+
+    A test that genuinely never answered is dropped rather than read as
+    zero, which would invent a swing the model never produced.
     """
     out: dict[str, float] = {}
     for r in run.get("results") or []:
         name, score = r.get("test_name"), r.get("score")
-        if name and score is not None and not r.get("error"):
+        errored = bool(r.get("error")) and not r.get("runs", 0)
+        if name and score is not None and not errored:
             out[name] = float(score)
     return out
 

@@ -129,6 +129,23 @@ class TestResolutionFromRuns:
         r = resolution_from_runs([good, bad])
         assert r.runs_used == 1 and r.mde is None
 
+    def test_a_test_that_lost_one_sample_is_still_evidence(self):
+        """It carries an error string *and* a score, because another
+        sample answered. Reading the error alone as "not scored" is the
+        bug that made a 51-test benchmark look unmeasurable."""
+        a = {"created_at": "2026-09-01", "status": "completed", "results": [
+            {"test_name": "x", "score": 1.0, "runs": 3},
+            {"test_name": "y", "score": 1.0, "runs": 2,
+             "error": "rate limited", "rate_limited": 1},
+        ]}
+        b = {"created_at": "2026-09-02", "status": "completed", "results": [
+            {"test_name": "x", "score": 0.0, "runs": 3},
+            {"test_name": "y", "score": 1.0, "runs": 3},
+        ]}
+        r = resolution_from_runs([a, b])
+        assert r.tests == 2
+        assert r.mde is not None
+
     def test_unscored_tests_do_not_count_as_zero(self):
         """A test that errored has no score. Treating a provider failure
         as a score of 0 would invent variance that the model never
@@ -146,68 +163,10 @@ class TestResolutionFromRuns:
         assert r.tests == 1
 
 
-class TestListReportsResolution:
-    """The number has to reach the page, and cheaply: the list endpoint
-    reads only test_name/score/error from a bounded slice of run history,
-    never whole run documents."""
-
-    def test_each_row_carries_its_resolution(self, as_alice_list, mock_db):
-        from bson import ObjectId
-
-        sid = "507f1f77bcf86cd799439011"
-
-        async def suites():
-            yield {"_id": ObjectId(sid), "name": "S", "created_by": "alice",
-                   "test_count": 20}
-
-        def runs_for(_pipeline_or_filter, *a, **k):
-            async def gen():
-                for day, flip in ((2, True), (1, False)):
-                    yield {
-                        "suite_id": sid,
-                        "status": "completed",
-                        "created_at": f"2026-09-0{day}",
-                        "results": [
-                            {"test_name": f"t{i}",
-                             "score": 0.0 if (flip and i % 4 == 0) else 1.0}
-                            for i in range(20)
-                        ],
-                    }
-            return gen()
-
-        mock_db.suites.aggregate.return_value = suites()
-        chain = mock_db.test_runs.find.return_value
-        chain.sort.return_value.limit.return_value = runs_for(None)
-
-        row = as_alice_list.get("/suites").json()[0]
-        assert row["resolution"]["runs_used"] == 2
-        assert 0 < row["resolution"]["mde"] < 1
-        assert row["resolution"]["reason"] is None
-
-        # only the fields the calculation needs are read back
-        projection = mock_db.test_runs.find.call_args[0][1]
-        assert projection.get("results.score") == 1
-        assert "results.response" not in projection
-        assert "results.assertions" not in projection
-
-    def test_a_benchmark_never_run_says_so(self, as_alice_list, mock_db):
-        from bson import ObjectId
-
-        async def suites():
-            yield {"_id": ObjectId("507f1f77bcf86cd799439011"), "name": "S",
-                   "created_by": "alice", "test_count": 19}
-
-        async def none():
-            for _ in ():
-                yield {}
-
-        mock_db.suites.aggregate.return_value = suites()
-        chain = mock_db.test_runs.find.return_value
-        chain.sort.return_value.limit.return_value = none()
-
-        row = as_alice_list.get("/suites").json()[0]
-        assert row["resolution"]["mde"] is None
-        assert "run it once" in row["resolution"]["reason"].lower()
+# How the list serves this number — stored on the benchmark when a run
+# finishes, rather than recomputed per page load — is covered in
+# tests/test_stored_resolution.py, along with why the first version was
+# wrong at scale.
 
 
 class TestBundledDescriptionFallback:

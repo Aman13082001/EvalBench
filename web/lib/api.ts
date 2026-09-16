@@ -82,6 +82,16 @@ async function j<T>(res: Response): Promise<T> {
    ──────────────────────────────────────────────────────────────── */
 
 
+/* What a benchmark can actually detect, measured from its own runs.
+   `mde` is a score fraction (0.08 = 8 points); when it is null, `reason`
+   says what is missing instead of guessing a number. */
+export interface Resolution {
+  mde: number | null;
+  runs_used: number;
+  tests: number;
+  reason: string | null;
+}
+
 export interface SuiteDoc {
   _id: string;
   name: string;
@@ -97,6 +107,7 @@ export interface SuiteDoc {
   created_by?: string;
   /* The list endpoint sends a count instead of the test bodies. */
   test_count?: number;
+  resolution?: Resolution;
   tests?: unknown[];
 }
 

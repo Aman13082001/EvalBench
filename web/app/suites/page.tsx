@@ -3,10 +3,34 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import yaml from "js-yaml";
-import { importSuite, listSuites, SuiteDoc } from "@/lib/api";
+import { importSuite, listSuites, Resolution, SuiteDoc } from "@/lib/api";
 import { EXAMPLE_SUITE } from "@/lib/example";
 import { RequireAuth } from "@/components/AuthProvider";
 import { Panel, Rule } from "@/components/ui";
+
+/* The line that makes this a list of instruments rather than a list of
+   files. A benchmark's precision is not a property of its YAML — it is
+   the spread between runs of it, so a benchmark nobody has run twice
+   reports nothing and says why. See research/REPORT.md: at ten tests a
+   real regression is caught about 21% of the time. */
+function ResolutionLine({ r }: { r?: Resolution }) {
+  if (!r) return null;
+  if (r.mde === null) {
+    return (
+      <p className="mt-2 font-mono text-[11px] text-muted">
+        resolution: <span className="italic">{r.reason}</span>
+      </p>
+    );
+  }
+  const points = Math.round(r.mde * 100);
+  return (
+    <p className="mt-2 font-mono text-[11px] text-muted tnum">
+      resolution: detects a drop of{" "}
+      <span className="text-text">{points} points</span> or more · 80% power ·
+      from {r.runs_used} runs
+    </p>
+  );
+}
 
 function Suites() {
   const [suites, setSuites] = useState<SuiteDoc[] | null>(null);
@@ -52,8 +76,9 @@ function Suites() {
           <p className="label-xs">§ Benchmarks</p>
           <h1 className="font-display text-3xl">Your benchmarks</h1>
           <p className="text-sm text-muted">
-            Each one keeps its run history and can hold a regression
-            baseline. Open one to run it or see past runs.
+            Each one states what it measures and what it can resolve —
+            the smallest drop it could actually detect. Open one to run it
+            or read every test.
           </p>
         </div>
         <button
@@ -126,6 +151,7 @@ function Suites() {
                   </span>
                 )}
               </p>
+              <ResolutionLine r={s.resolution} />
             </div>
           </Link>
         ))}

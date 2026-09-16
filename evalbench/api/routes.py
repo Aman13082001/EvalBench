@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from datetime import datetime, timezone
 
 import yaml
@@ -30,6 +31,7 @@ from evalbench.core.providers import (
 from evalbench.db.mongo import db
 from evalbench.db.schemas import TestRun, TestSuite
 from evalbench.jobs import submit_run
+from evalbench.resolution import resolution_from_runs
 from evalbench.security.adversarial_suite import ADVERSARIAL_TESTS
 
 router = APIRouter(prefix="/suites", tags=["suites"])
@@ -84,11 +86,66 @@ async def create_suite(
     return await _upsert_suite(suite, user, response)
 
 
+# How many recent runs feed a resolution estimate, and the ceiling on
+# run documents read to build the whole list. Both bound the page: it
+# must not get slower as a benchmark accumulates history.
+RESOLUTION_RUNS = 5
+RESOLUTION_SCAN = 400
+
+# Everything the estimate needs and nothing else. Whole run documents
+# carry every response and assertion — megabytes, to compute one number.
+_RESULT_FIELDS = {
+    "suite_id": 1,
+    "status": 1,
+    "created_at": 1,
+    "results.test_name": 1,
+    "results.score": 1,
+    "results.error": 1,
+}
+
+
+async def _resolutions(suite_ids: list[str], user) -> dict[str, dict]:
+    """What each benchmark can detect, from the runs this caller can see.
+
+    Owner-scoped like every other read: the suite ids arrive already
+    filtered, but the runs behind them are a second collection and get
+    their own guard rather than inheriting trust from the caller.
+    """
+    if not suite_ids:
+        return {}
+
+    by_suite: dict[str, list[dict]] = {sid: [] for sid in suite_ids}
+    cursor = (
+        db.test_runs.find(
+            {
+                "suite_id": {"$in": suite_ids},
+                "status": "completed",
+                **owner_filter(user),
+            },
+            _RESULT_FIELDS,
+        )
+        .sort("created_at", -1)
+        .limit(RESOLUTION_SCAN)
+    )
+    async for run in cursor:
+        bucket = by_suite.get(str(run.get("suite_id")))
+        # Newest first, so once a benchmark has enough recent runs the
+        # rest of its history is ignored rather than loaded.
+        if bucket is not None and len(bucket) < RESOLUTION_RUNS:
+            bucket.append(run)
+
+    return {
+        sid: asdict(resolution_from_runs(runs))
+        for sid, runs in by_suite.items()
+    }
+
+
 @router.get("")
 async def list_suites(user=Depends(get_current_user)):
-    """The list page: name, what it measures, how many tests. The test
-    bodies stay out — 50 suites' worth of prompts was 129 KB to print
-    a count. The definition loads when you open one."""
+    """The list page: name, what it measures, how many tests, and what it
+    can resolve. The test bodies stay out — 50 suites' worth of prompts
+    was 129 KB to print a count. The definition loads when you open one.
+    """
     pipeline = [
         {"$match": owner_filter(user)},
         {"$sort": {"created_at": -1}},
@@ -100,6 +157,19 @@ async def list_suites(user=Depends(get_current_user)):
     async for doc in db.suites.aggregate(pipeline):
         doc["_id"] = str(doc["_id"])
         suites.append(doc)
+
+    found = await _resolutions([s["_id"] for s in suites], user)
+    # A copy adopted before descriptions existed still *is* that bundled
+    # benchmark. Reading the wording from the file keeps one source of
+    # truth and spares every old copy a migration — but never overwrites
+    # what the user wrote themselves.
+    bundled = {b["slug"]: b["description"] for b in describe_benchmarks()}
+    for s in suites:
+        s["resolution"] = found.get(s["_id"]) or asdict(
+            resolution_from_runs([])
+        )
+        if not s.get("description") and s.get("bundled_slug"):
+            s["description"] = bundled.get(s["bundled_slug"])
     return suites
 
 

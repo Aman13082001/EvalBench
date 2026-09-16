@@ -82,6 +82,31 @@ def cohens_d(baseline: list[float], current: list[float]) -> float | None:
     return round(mean / sd, 4)
 
 
+def mde_for_n(
+    n: int,
+    std: float,
+    power: float = 0.8,
+    alpha: float = 0.05,
+) -> float | None:
+    """The smallest mean shift ``n`` paired tests can detect, at ``power``.
+
+    The inverse of :func:`samples_for_mde`, and the number a benchmark
+    reports as its resolution: "a drop smaller than this is invisible to
+    this suite". Note the square root — quadrupling a suite only halves
+    what it can see, which is why "add a few more tests" rarely rescues
+    an underpowered benchmark.
+
+    ``None`` when there is nothing to base it on: fewer than two paired
+    tests, or no observed spread at all (zero variance across a handful
+    of runs is an artefact, not infinite precision).
+    """
+    if n < 2 or std <= 0:
+        return None
+    z_a = float(stats.norm.ppf(1 - alpha / 2))
+    z_b = float(stats.norm.ppf(power))
+    return round((z_a + z_b) * std / math.sqrt(n), 4)
+
+
 def samples_for_mde(
     std: float,
     mde: float = 0.05,

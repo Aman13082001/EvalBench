@@ -186,23 +186,6 @@ export default function ResearchPage() {
         </p>
       </section>
 
-      {/* Not a section. Reproducibility matters — a study nobody can
-          check is a blog post with numbers — but almost no one browsing
-          a page will clone a repo and run a script mid-paragraph, and
-          the command needs a provider key. One line keeps the claim
-          checkable and lets the page end on the comparison instead. */}
-      <p className="text-xs leading-relaxed text-muted">
-        Check it yourself:{" "}
-        <span className="font-mono text-[11px] text-accent">
-          python scripts/run_study_power.py
-        </span>{" "}
-        re-runs the suite against both models and the resampling (needs a
-        Groq key). Every paired score and the full curve are in{" "}
-        <span className="font-mono text-[11px]">research/power-study.json</span>
-        ; the write-up is{" "}
-        <span className="font-mono text-[11px]">research/REPORT.md</span>.
-      </p>
-
       <Rule />
       <section className="flex flex-col items-start gap-4 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

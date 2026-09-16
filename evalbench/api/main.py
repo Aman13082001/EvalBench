@@ -86,7 +86,14 @@ async def _ensure_indexes() -> None:
     await ensure_unique_index(db.users, "username")
     # list_suites sorts by created_at; list_runs filters suite_id + sorts.
     await db.suites.create_index([("created_at", -1)])
+    # The benchmarks page: this user's suites, newest first. Without the
+    # owner in the index it scans every suite of every user, every load.
+    await db.suites.create_index([("created_by", 1), ("created_at", -1)])
     await db.test_runs.create_index([("suite_id", 1), ("created_at", -1)])
+    # Serves the recent-runs list and `runs_used_today()`, which counts
+    # a user's server-key runs before *every* submission — the quota
+    # check sat on the hot path with nothing to use.
+    await db.test_runs.create_index([("created_by", 1), ("created_at", -1)])
     # The startup reaper queries status $in [queued, running].
     await db.test_runs.create_index("status")
 

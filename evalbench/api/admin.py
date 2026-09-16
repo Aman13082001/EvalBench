@@ -71,17 +71,30 @@ async def system_stats(admin=Depends(get_current_admin)):
     suites = await db.suites.count_documents({})
     runs = await db.test_runs.count_documents({})
 
-    by_status = {}
-    for state in ("queued", "running", "completed", "failed"):
-        by_status[state] = await db.test_runs.count_documents(
-            {"status": state}
-        )
+    # One query for every status, rather than one query per status —
+    # and it reports states this code has never heard of, which is what
+    # an operator needs from a page like this.
+    by_status = dict.fromkeys(
+        ("queued", "running", "completed", "failed"), 0
+    )
+    async for row in db.test_runs.aggregate(
+        [{"$group": {"_id": "$status", "n": {"$sum": 1}}}]
+    ):
+        # Runs stored before `status` existed have none. Dropping them
+        # made the breakdown disagree with the total — 87 runs, 52
+        # accounted for — with nothing to say where the rest went.
+        by_status[row["_id"] or "unknown"] = row["n"]
 
-    # Total estimated spend across every stored run.
+    # Total estimated spend. Summed by Mongo: iterating every run to add
+    # up its results pulled the whole collection through this process,
+    # which is instant at eighty runs and a timeout at a hundred
+    # thousand.
     spend = 0.0
-    async for doc in db.test_runs.find({}, {"results.cost_usd": 1}):
-        for r in doc.get("results") or []:
-            spend += r.get("cost_usd") or 0.0
+    async for row in db.test_runs.aggregate([
+        {"$unwind": "$results"},
+        {"$group": {"_id": None, "total": {"$sum": "$results.cost_usd"}}},
+    ]):
+        spend = row.get("total") or 0.0
 
     return {
         "users": users,

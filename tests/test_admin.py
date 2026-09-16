@@ -87,11 +87,20 @@ class TestStats:
         mock_db.suites.count_documents.return_value = 5
         mock_db.test_runs.count_documents.return_value = 9
 
-        async def runs():
-            yield {"results": [{"cost_usd": 0.001}, {"cost_usd": 0.002}]}
-            yield {"results": [{"cost_usd": 0.0005}]}
+        # Spend and the status breakdown are aggregations now: Mongo
+        # sums them, rather than this process reading every run.
+        def aggregate(pipeline, *a, **k):
+            unwinds = any("$unwind" in stage for stage in pipeline)
 
-        mock_db.test_runs.find.return_value = runs()
+            async def gen():
+                if unwinds:
+                    yield {"_id": None, "total": 0.0035}
+                else:
+                    yield {"_id": "completed", "n": 9}
+
+            return gen()
+
+        mock_db.test_runs.aggregate = aggregate
 
         r = client.get("/admin/stats")
         assert r.status_code == 200

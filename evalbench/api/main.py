@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from pymongo.errors import DuplicateKeyError, OperationFailure
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -76,8 +77,13 @@ def _check_secrets() -> None:
 async def _ensure_indexes() -> None:
     """Idempotent index creation for the hot query paths."""
     # Auth does users.find_one({api_key}) / ({username}) on every request.
-    await db.users.create_index("api_key")
-    await db.users.create_index("username")
+    # Unique, not merely indexed. Registration checks the name first,
+    # but a check cannot be atomic with the insert that follows it —
+    # two simultaneous registrations both saw a free name and both
+    # wrote, leaving one username on two accounts and login returning
+    # whichever Mongo reached first.
+    await ensure_unique_index(db.users, "api_key")
+    await ensure_unique_index(db.users, "username")
     # list_suites sorts by created_at; list_runs filters suite_id + sorts.
     await db.suites.create_index([("created_at", -1)])
     await db.test_runs.create_index([("suite_id", 1), ("created_at", -1)])
@@ -123,6 +129,49 @@ async def _reaper_loop() -> None:
             await reap_abandoned_runs("periodic sweep")
         except Exception:  # noqa: BLE001 - a sweep failing must not end the loop
             logger.exception("Reaper sweep failed")
+
+
+
+async def ensure_unique_index(collection, field: str) -> bool:
+    """Make `field` a unique index, upgrading one that already exists.
+
+    `create_index(..., unique=True)` does not alter an index that is
+    already there without it — MongoDB refuses with a conflict, and the
+    API then fails to start. Every database created before the constraint
+    existed has the old index, so the upgrade has to be handled here.
+
+    Returns False when the constraint could not be built because the data
+    already violates it. That is logged loudly rather than fatal: two
+    accounts sharing a name is a problem an operator has to resolve, and
+    refusing to boot would take away the tools for resolving it.
+    """
+    try:
+        await collection.create_index(field, unique=True)
+        return True
+    except DuplicateKeyError:
+        logger.error(
+            "Cannot make %s.%s unique: the collection already contains "
+            "duplicates. Two accounts sharing a username means logins can "
+            "land in the wrong one. Merge or remove them, then restart.",
+            collection.name if hasattr(collection, "name") else "?", field,
+        )
+        return False
+    except OperationFailure as e:
+        # 85 IndexOptionsConflict / 86 IndexKeySpecsConflict: same key,
+        # different options. Rebuild it.
+        if e.code not in (85, 86):
+            raise
+        logger.info("Rebuilding index on %s as unique", field)
+        await collection.drop_index(f"{field}_1")
+        try:
+            await collection.create_index(field, unique=True)
+            return True
+        except DuplicateKeyError:
+            logger.error(
+                "Cannot make %s unique: existing duplicates. Merge them, "
+                "then restart.", field,
+            )
+            return False
 
 
 @asynccontextmanager

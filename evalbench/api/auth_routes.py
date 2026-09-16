@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 
 from evalbench.api.auth import (
     create_access_token,
@@ -60,7 +61,16 @@ async def register(user: UserCreate):
         "created_at": datetime.now(timezone.utc),
     }
 
-    await db.users.insert_one(doc)
+    try:
+        await db.users.insert_one(doc)
+    except DuplicateKeyError as e:
+        # Another registration won the race between the check above and
+        # this insert. Indistinguishable from the name having been taken
+        # earlier, so it reads the same.
+        raise HTTPException(
+            status_code=400,
+            detail="Username already registered",
+        ) from e
 
     return {
         "message": "User created",

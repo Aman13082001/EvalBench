@@ -141,12 +141,15 @@ def summarize_run(doc: dict) -> dict:
         "errors": errors,
         "passed": passed,
         "failed": total_scored - passed,
-        "pass_rate": round(passed / total_scored, 4) if total_scored else 0,
-        "avg_score": round(sum(scores) / len(scores), 4) if scores else 0,
+        # None, not 0 — the same distinction the per-category rows make.
+        # "0%" is a measurement meaning every answer was wrong; a run
+        # where nothing was scored has measured nothing at all.
+        "pass_rate": round(passed / total_scored, 4) if total_scored else None,
+        "avg_score": round(sum(scores) / len(scores), 4) if scores else None,
         "pass_rate_ci": bootstrap_ci(pass_flags),
         "avg_score_ci": bootstrap_ci(scores),
         "avg_latency_ms": (
-            round(sum(latencies) / len(latencies), 2) if latencies else 0
+            round(sum(latencies) / len(latencies), 2) if latencies else None
         ),
         "total_tokens": sum(tokens),
         "total_prompt_tokens": sum(prompt_tokens),

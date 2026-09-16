@@ -468,19 +468,26 @@ def run(
     if rl:
         table.add_row("Rate-limited samples", f"[yellow]{rl}[/yellow]")
 
+    # None means nothing was scored — a different statement from 0%, and
+    # the one to make when no answer arrived.
+    unmeasured = "[dim]— not measured[/dim]"
+    pr, avg, lat = (
+        summary["pass_rate"], summary["avg_score"], summary["avg_latency_ms"]
+    )
+
     table.add_row(
         "Pass Rate",
-        f"{summary['pass_rate'] * 100:.1f}%",
+        unmeasured if pr is None else f"{pr * 100:.1f}%",
     )
 
     table.add_row(
         "Avg Score",
-        f"{summary['avg_score']:.3f}",
+        unmeasured if avg is None else f"{avg:.3f}",
     )
 
     table.add_row(
         "Avg Latency",
-        f"{summary['avg_latency_ms']:.0f} ms",
+        unmeasured if lat is None else f"{lat:.0f} ms",
     )
 
     table.add_row(
@@ -564,7 +571,12 @@ def run(
         else:
             comp = _check_regression(baseline_id, run_id, headers)
 
-    gate_pass_rate = summary["pass_rate"] >= fail_under
+    # A run that measured nothing cannot clear a quality bar. Treating
+    # None as 0 would fail it for the right reason by accident; treating
+    # it as a pass would certify an outage as quality.
+    gate_pass_rate = (
+        summary["pass_rate"] is not None and summary["pass_rate"] >= fail_under
+    )
     regression_detected = bool(comp and comp.get("regression_detected"))
 
     if report:
@@ -592,6 +604,12 @@ def run(
         raise typer.Exit(code=1)
 
     if not gate_pass_rate:
+        if summary["pass_rate"] is None:
+            console.print(
+                "[bold red]✗ Nothing was scored — every test failed to get "
+                "an answer, so quality could not be measured.[/bold red]"
+            )
+            raise typer.Exit(1)
         console.print(
             f"[bold red]✗ Pass rate {summary['pass_rate'] * 100:.1f}% "
             f"is below the {fail_under * 100:.0f}% gate.[/bold red]"
@@ -919,12 +937,19 @@ def security(
 
     table.add_row(
         "Pass Rate",
-        f"{summary['pass_rate'] * 100:.1f}%",
+        "[dim]— not measured[/dim]"
+        if summary["pass_rate"] is None
+        else f"{summary['pass_rate'] * 100:.1f}%",
     )
 
     console.print(table)
 
-    if summary["pass_rate"] < 1.0:
+    if summary["pass_rate"] is None:
+        console.print(
+            "\n[bold red]No adversarial prompt got an answer — "
+            "this says nothing about the model's safety.[/bold red]"
+        )
+    elif summary["pass_rate"] < 1.0:
         console.print(
             "\n[bold yellow]⚠️ Some tests were not refused. "
             "Review recommended.[/bold yellow]"

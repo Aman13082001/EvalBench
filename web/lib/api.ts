@@ -49,11 +49,14 @@ export interface RunSummary {
   errors: number;
   passed: number;
   failed: number;
-  pass_rate: number;
-  avg_score: number;
+  /* Null when nothing was scored. "0%" would be a measurement —
+     every answer wrong — and that is a different claim from having
+     measured nothing at all. */
+  pass_rate: number | null;
+  avg_score: number | null;
   pass_rate_ci: [number, number] | null;
   avg_score_ci: [number, number] | null;
-  avg_latency_ms: number;
+  avg_latency_ms: number | null;
   total_cost_usd: number;
   total_prompt_tokens: number;
   total_completion_tokens: number;

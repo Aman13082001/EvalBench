@@ -7,7 +7,10 @@ export type { Comparison };
 
 type Summary = RunSummary;
 
-const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+/* Null means nothing was scored — a different statement from 0%,
+   which would claim every answer was wrong. */
+const pct = (x: number | null) =>
+  x == null ? "—" : `${(x * 100).toFixed(1)}%`;
 
 /** Two CI ranges on a shared 0–100% scale. Overlap is the whole point:
  *  it shows visually why a big-looking gap may not be significant. */
@@ -32,7 +35,7 @@ function CiBars({ a, b }: { a: Summary; b: Summary }) {
           />
           <div
             className={`absolute top-0 h-full w-0.5 ${tone}`}
-            style={{ left: `${s.pass_rate * 100}%` }}
+            style={{ left: `${(s.pass_rate ?? 0) * 100}%` }}
           />
         </div>
       </div>
@@ -110,10 +113,15 @@ export default function ComparisonReport({
     ? explainModelComparison(baseline.model, candidate.model, c)
     : explainComparison(c);
   const significant = c.p_value != null && c.p_value < 0.05;
-  const higher =
-    candidate.pass_rate > baseline.pass_rate
+  // A run that scored nothing is not "lower" — it is not comparable,
+  // and colouring it as a loss would read as a quality verdict.
+  const comparable =
+    candidate.pass_rate != null && baseline.pass_rate != null;
+  const higher = !comparable
+    ? null
+    : candidate.pass_rate! > baseline.pass_rate!
       ? "b"
-      : candidate.pass_rate < baseline.pass_rate
+      : candidate.pass_rate! < baseline.pass_rate!
         ? "a"
         : null;
   const overlap = ciOverlap(baseline, candidate);
@@ -163,7 +171,10 @@ export default function ComparisonReport({
               sub={`${baseline.passed}/${baseline.scored_tests}`}
               tone={higher === "a" ? "success" : higher === "b" ? "error" : "text"}
             />
-            <Metric label="Avg score" value={baseline.avg_score.toFixed(3)} />
+            <Metric
+              label="Avg score"
+              value={baseline.avg_score?.toFixed(3) ?? "—"}
+            />
             <Metric
               label="Cost"
               value={
@@ -174,8 +185,12 @@ export default function ComparisonReport({
             />
             <Metric
               label="Latency"
-              value={String(Math.round(baseline.avg_latency_ms))}
-              unit="ms"
+              value={
+                baseline.avg_latency_ms == null
+                  ? "—"
+                  : String(Math.round(baseline.avg_latency_ms))
+              }
+              unit={baseline.avg_latency_ms == null ? undefined : "ms"}
             />
           </div>
         </Panel>
@@ -187,7 +202,10 @@ export default function ComparisonReport({
               sub={`${candidate.passed}/${candidate.scored_tests}`}
               tone={higher === "b" ? "success" : higher === "a" ? "error" : "text"}
             />
-            <Metric label="Avg score" value={candidate.avg_score.toFixed(3)} />
+            <Metric
+              label="Avg score"
+              value={candidate.avg_score?.toFixed(3) ?? "—"}
+            />
             <Metric
               label="Cost"
               value={
@@ -198,8 +216,12 @@ export default function ComparisonReport({
             />
             <Metric
               label="Latency"
-              value={String(Math.round(candidate.avg_latency_ms))}
-              unit="ms"
+              value={
+                candidate.avg_latency_ms == null
+                  ? "—"
+                  : String(Math.round(candidate.avg_latency_ms))
+              }
+              unit={candidate.avg_latency_ms == null ? undefined : "ms"}
             />
           </div>
         </Panel>

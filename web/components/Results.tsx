@@ -6,6 +6,11 @@ function pct(x: number): string {
   return `${(x * 100).toFixed(1)}%`;
 }
 
+/* Nothing scored. Every tile below would otherwise print a number
+   nobody computed — NaN%, or a confident 0.0 that reads as "the model
+   failed everything" when the truth is that no answer arrived. */
+const UNMEASURED = "—";
+
 export default function Results({ r }: { r: RunSummary }) {
   const cats = Object.entries(r.by_category);
   const atypes = Object.entries(r.assertion_types);
@@ -25,14 +30,24 @@ export default function Results({ r }: { r: RunSummary }) {
       <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
         <Metric
           label="Pass rate"
-          value={pct(r.pass_rate)}
+          value={r.pass_rate == null ? UNMEASURED : pct(r.pass_rate)}
           sub={`${r.passed}/${r.scored_tests}`}
-          caption="Answers that passed every check."
-          tone={r.pass_rate >= 0.8 ? "success" : "error"}
+          caption={
+            r.pass_rate == null
+              ? "Nothing was scored."
+              : "Answers that passed every check."
+          }
+          tone={
+            r.pass_rate == null
+              ? undefined
+              : r.pass_rate >= 0.8
+                ? "success"
+                : "error"
+          }
         />
         <Metric
           label="Avg score"
-          value={r.avg_score.toFixed(3)}
+          value={r.avg_score == null ? UNMEASURED : r.avg_score.toFixed(3)}
           caption="0 = failed, 1 = perfect."
         />
         <Metric
@@ -54,8 +69,12 @@ export default function Results({ r }: { r: RunSummary }) {
         />
         <Metric
           label="Avg latency"
-          value={String(Math.round(r.avg_latency_ms))}
-          unit="ms"
+          value={
+            r.avg_latency_ms == null
+              ? UNMEASURED
+              : String(Math.round(r.avg_latency_ms))
+          }
+          unit={r.avg_latency_ms == null ? undefined : "ms"}
           caption={r.errors > 0 ? "Average over the tests that answered." : "Average time to answer."}
         />
       </div>

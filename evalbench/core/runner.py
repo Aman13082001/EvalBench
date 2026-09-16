@@ -50,6 +50,39 @@ from evalbench.pricing import estimate_cost
 # ────────────────────────────────
 
 
+
+def publishable_metrics(results: list[dict]) -> dict:
+    """The run-level numbers that are safe to publish, and only those.
+
+    Keys are absent rather than zero when nothing was scored. A gauge has
+    no way to say "not measured": a published `0.0` pass rate means
+    "every answer was wrong", so during a provider outage — zero answers,
+    nothing measured — it tripped `evalbench_pass_rate < 0.75` and paged
+    somebody for a quality collapse that never happened. Prometheus copes
+    with an absent series; it cannot cope with an invented one.
+
+    Latency covers scored tests only, matching the run report: a request
+    that timed out reports the timeout, not how fast the model is.
+    """
+    scored = [
+        r for r in results
+        if not (r.get("error") and not r.get("runs", 1))
+    ]
+    if not scored:
+        return {}
+
+    passed = sum(1 for r in scored if r.get("passed"))
+    scores = [r.get("score") for r in scored if r.get("score") is not None]
+    latencies = [r.get("latency_ms") or 0 for r in scored]
+
+    out = {"pass_rate": round(passed / len(scored), 4)}
+    if scores:
+        out["avg_score"] = round(sum(scores) / len(scores), 4)
+    if latencies:
+        out["avg_latency_ms"] = round(sum(latencies) / len(latencies), 2)
+    return out
+
+
 class TestRunner:
     def __init__(self, provider_key: str | None = None):
         self.provider: Provider | None = None
@@ -429,34 +462,32 @@ class TestRunner:
         scored = [r for r in results if not (r.error and r.runs == 0)]
         total_scored = len(scored)
 
-        passed_count = sum(1 for r in scored if r.passed)
-        pass_rate = passed_count / total_scored if total_scored else 0.0
-        avg_score = (
-            sum(r.score for r in scored if r.score is not None) / total_scored
-            if total_scored
-            else 0.0
-        )
-        avg_latency = (
-            sum(r.latency_ms for r in results) / total if total else 0.0
-        )
+        # One rule for these three numbers, shared with the run report —
+        # and no number at all when nothing was scored. A gauge cannot
+        # say "unmeasured", and `0.0` reads as "everything failed": that
+        # is what fired the pass-rate alert during a provider outage.
+        published = publishable_metrics([r.model_dump() for r in results])
 
-        pass_rate_gauge.labels(
-            model=suite.model,
-            evaluator=suite.evaluator,
-            suite_id=suite_id,
-            suite_name=suite_name,
-        ).set(pass_rate)
+        if "pass_rate" in published:
+            pass_rate_gauge.labels(
+                model=suite.model,
+                evaluator=suite.evaluator,
+                suite_id=suite_id,
+                suite_name=suite_name,
+            ).set(published["pass_rate"])
 
-        avg_score_gauge.labels(
-            model=suite.model,
-            evaluator=suite.evaluator,
-            suite_name=suite_name,
-        ).set(avg_score)
+        if "avg_score" in published:
+            avg_score_gauge.labels(
+                model=suite.model,
+                evaluator=suite.evaluator,
+                suite_name=suite_name,
+            ).set(published["avg_score"])
 
-        avg_latency_gauge.labels(
-            model=suite.model,
-            evaluator=suite.evaluator,
-        ).set(avg_latency)
+        if "avg_latency_ms" in published:
+            avg_latency_gauge.labels(
+                model=suite.model,
+                evaluator=suite.evaluator,
+            ).set(published["avg_latency_ms"])
 
         # ── Per-category breakdown for the most recent run ──
         cat_buckets: dict = {}

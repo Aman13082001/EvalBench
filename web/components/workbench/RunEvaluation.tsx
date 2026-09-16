@@ -204,7 +204,7 @@ function ResultHeader({
   model: string;
   suite: string;
   summary: {
-    pass_rate: number;
+    pass_rate: number | null;
     passed: number;
     scored_tests: number;
     total_tests: number;
@@ -212,7 +212,10 @@ function ResultHeader({
   };
   runId: string;
 }) {
-  const pct = (summary.pass_rate * 100).toFixed(1);
+  // Null when nothing scored — the big number then reads "—",
+  // which is the honest answer rather than a confident 0.0%.
+  const pct =
+    summary.pass_rate == null ? null : (summary.pass_rate * 100).toFixed(1);
   const partial = summary.errors > 0;
   return (
     <div className="panel flex flex-wrap items-end justify-between gap-4 p-5">
@@ -222,8 +225,8 @@ function ResultHeader({
           <span className="font-mono text-text">{suite}</span>
         </p>
         <p className="font-display text-5xl leading-none tnum">
-          {summary.scored_tests === 0 ? "—" : pct}
-          {summary.scored_tests > 0 && <span className="text-2xl text-muted">%</span>}
+          {pct ?? "—"}
+          {pct !== null && <span className="text-2xl text-muted">%</span>}
         </p>
         {/* The qualifier lives next to the big number, not three panels
             down. A 93.8% over 16 of 51 tests is a different finding from

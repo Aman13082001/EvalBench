@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # inline = FastAPI BackgroundTasks (default, no worker needed);
     # rq = enqueue to Redis, executed by `python -m evalbench.worker`.
     job_backend: str = "inline"
+
+    # How often the API sweeps for runs whose worker has gone silent.
+    # Only meaningful under `rq`; see evalbench/reaper.py.
+    reap_interval_seconds: int = 300
     worker_metrics_port: int = 9100
     # Runs per user per day that may use the server's own provider key.
     # Runs made with a user-supplied key are not counted. 0 disables the

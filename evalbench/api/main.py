@@ -1,8 +1,9 @@
+import asyncio
 import csv
 import io
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone
 
 from bson import ObjectId
@@ -32,6 +33,7 @@ from evalbench.metrics import (
     regression_mean_diff,
     regression_pvalue,
 )
+from evalbench.reaper import reap_filter, reap_reason
 
 logger = logging.getLogger("evalbench")
 
@@ -83,6 +85,46 @@ async def _ensure_indexes() -> None:
     await db.test_runs.create_index("status")
 
 
+
+async def reap_abandoned_runs(when: str) -> int:
+    """Fail runs that can be proven dead, and only those.
+
+    Under `rq` the work runs in a separate worker that does not restart
+    with the API, so "the API restarted" is not evidence about any run —
+    reaping on that signal failed live runs on every deploy. See
+    evalbench/reaper.py for what counts as proof.
+    """
+    dead = reap_filter(settings.job_backend, datetime.now(timezone.utc))
+    if dead is None:
+        logger.warning(
+            "Unknown JOB_BACKEND %r — not reaping any runs",
+            settings.job_backend,
+        )
+        return 0
+
+    reaped = await db.test_runs.update_many(
+        dead,
+        {"$set": {
+            "status": "failed",
+            "error": reap_reason(settings.job_backend),
+            "finished_at": datetime.now(timezone.utc),
+        }},
+    )
+    count = getattr(reaped, "modified_count", 0) or 0
+    if count:
+        logger.warning("Marked %d abandoned run(s) as failed (%s)", count, when)
+    return count
+
+
+async def _reaper_loop() -> None:
+    while True:
+        await asyncio.sleep(settings.reap_interval_seconds)
+        try:
+            await reap_abandoned_runs("periodic sweep")
+        except Exception:  # noqa: BLE001 - a sweep failing must not end the loop
+            logger.exception("Reaper sweep failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
@@ -112,26 +154,19 @@ async def lifespan(app: FastAPI):
             settings.admin_username,
         )
 
-    # Reap runs orphaned by a crash/restart. Background tasks die with the
-    # process, so any run still queued/running is dead — fail it so it
-    # doesn't hang forever.
-    reaped = await db.test_runs.update_many(
-        {"status": {"$in": ["queued", "running"]}},
-        {"$set": {
-            "status": "failed",
-            "error": "interrupted by API restart",
-            "finished_at": datetime.now(timezone.utc),
-        }},
-    )
-    if getattr(reaped, "modified_count", 0):
-        logger.warning(
-            "Marked %d orphaned run(s) as failed on startup",
-            reaped.modified_count,
-        )
+    await reap_abandoned_runs("startup")
+
+    # Under rq, death is detected by silence rather than by a restart, so
+    # it has to be checked on a clock: a worker can die while the API
+    # stays up for weeks, and that run must not hang forever.
+    reaper = asyncio.create_task(_reaper_loop())
 
     yield
 
     # Graceful shutdown:
+    reaper.cancel()
+    with suppress(asyncio.CancelledError):
+        await reaper
     # Close the shared MongoDB connection pool.
     client.close()
 

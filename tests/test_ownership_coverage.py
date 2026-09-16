@@ -36,6 +36,11 @@ EXEMPT = {
     # Startup: creates indexes and fails runs orphaned by a crash. Runs
     # before any request exists, so there is no caller to scope to.
     ("main.py", "lifespan"),
+    # Housekeeping, not a request: fails runs whose executor has died,
+    # across every account. Scoping it to a caller would leave other
+    # users' runs stuck for ever. It only ever writes `failed` to runs
+    # that are already abandoned — see evalbench/reaper.py.
+    ("main.py", "reap_abandoned_runs"),
 }
 
 

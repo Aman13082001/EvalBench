@@ -66,6 +66,10 @@ async def execute_run_job(
         {"$set": {
             "status": "running",
             "started_at": datetime.now(timezone.utc),
+            # Proof of life for the reaper: under rq the API cannot see
+            # the worker, so silence here is the only evidence that a
+            # run has died. See evalbench/reaper.py.
+            "heartbeat_at": datetime.now(timezone.utc),
         }},
     )
 
@@ -77,6 +81,7 @@ async def execute_run_job(
             {"$set": {
                 "completed_tests": done,
                 "progress": round(done / total, 4) if total else 1.0,
+                "heartbeat_at": datetime.now(timezone.utc),
             }},
         )
 

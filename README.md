@@ -456,6 +456,8 @@ and an admin cannot deactivate their own account.
 
 Secrets are read from environment / `.env` via `evalbench/config.py` — `SECRET_KEY`, `TOKEN_EXPIRE_MINUTES`, `OLLAMA_BASE_URL`, `MONGODB_URL`, timeouts, CORS origins, admin bootstrap. Copy `.env.example` to `.env` and fill it in.
 
+The full picture — threat model, what is in place with the test that keeps each piece true, the known gaps and their fixes, and a dated log — is in [`SECURITY.md`](SECURITY.md).
+
 ---
 
 ## Research: how many tests does a regression gate actually need?

@@ -280,20 +280,30 @@ def _is_grounded(claim: dict) -> bool:
     return bool(claim.get("supported", claim.get("in_context", False)))
 
 
+def rubric_prompt(question: str, criteria: str, response: str) -> str:
+    """The exact prompt an llm-rubric check sends to the judge.
+
+    A function, not an inline string, so the judge-variance study can
+    grade frozen answers with the same prompt the runner uses. "As
+    EvalBench runs its judge" has to mean the same bytes.
+    """
+    return (
+        "You are grading an AI response against a rubric. Think step by "
+        "step, then output ONLY a JSON object "
+        '{"score": <1-5>, "reason": "<one sentence>"}.\n\n'
+        f"QUESTION: {question}\n\n"
+        f"RUBRIC: {criteria}\n\n"
+        f"RESPONSE: {response}"
+    )
+
+
 async def _check_llm_rubric(
     a: Assertion, ctx: AssertionContext
 ) -> AssertionOutcome:
     criteria = a.criteria or str(a.value or "")
     cutoff = a.threshold if a.threshold is not None else 0.6
 
-    prompt = (
-        "You are grading an AI response against a rubric. Think step by "
-        "step, then output ONLY a JSON object "
-        '{"score": <1-5>, "reason": "<one sentence>"}.\n\n'
-        f"QUESTION: {ctx.prompt}\n\n"
-        f"RUBRIC: {criteria}\n\n"
-        f"RESPONSE: {ctx.response_text}"
-    )
+    prompt = rubric_prompt(ctx.prompt, criteria, ctx.response_text)
 
     try:
         score, reason = await _ask_and_parse(ctx, prompt)

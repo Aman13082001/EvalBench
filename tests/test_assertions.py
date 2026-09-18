@@ -325,3 +325,17 @@ class TestSynthesisAndAggregation:
         )
         assert passed is False
         assert score == pytest.approx(0.75)  # (1*3 + 0*1) / 4
+
+
+class TestRubricPromptIsShared:
+    def test_the_study_and_the_runner_build_the_same_prompt(self):
+        """The judge-variance study grades frozen answers with 'the judge
+        as EvalBench runs it'. That claim is only true if the study and
+        the runner build the prompt from the same function."""
+        from evalbench.core.assertions import rubric_prompt
+
+        p = rubric_prompt("Q?", "must be polite", "hello")
+        assert "QUESTION: Q?" in p
+        assert "RUBRIC: must be polite" in p
+        assert "RESPONSE: hello" in p
+        assert '{"score": <1-5>, "reason": "<one sentence>"}' in p

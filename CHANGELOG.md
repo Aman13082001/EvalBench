@@ -5,6 +5,43 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Added — bring your own answers
+
+Score outputs you already have. EvalBench scores answers; calling a
+model was only ever how an answer arrived, and requiring it locked out
+the team with last week's outputs in a CSV, the person whose model is a
+notebook with no endpoint, and anyone who will not paste a key into a
+stranger's website. It also made a whole class of research impossible:
+you cannot separate judge noise from model noise unless you can score
+the *same* answers more than once.
+
+- `POST /suites/{id}/run` takes `answers` — JSON array, JSON Lines or
+  CSV rows of `{test_name | prompt, response}`, lenient about column
+  names — and replays them through the provider that already served the
+  demo. The run records `provider: answers`; the label you give it is
+  the model name. A row matching no test is refused with its name.
+- Only checks that ask an LLM to grade need a model. `suite_needs_judge`
+  decides; string, regex, schema, latency, cost and semantic checks run
+  with zero calls, no key and no cap. A rubric benchmark names its
+  grader (`judge_provider` / `judge_model`) and only the grading counts.
+- `evalbench run suite.yaml --answers out.jsonl` on the CLI, validated
+  locally before any request. `needs_judge` on every benchmark listing
+  so the workbench can hide the grader when there is nothing to grade.
+- Latency is reported as not measured, and a missing row reads as "no
+  answer in the file you supplied", not as a provider failure.
+
+### Fixed — a judge's worst verdict parsed as its best
+
+Every judge prompt asks for `{"score": <1-5>}`. The parser treated any
+score `<= 1.0` as an already-normalised fraction, so a score of **1** —
+the lowest a judge can give — came back as **1.0**, the highest. A
+rubric check on an answer the judge described as "violates the rubric"
+passed with a perfect score. Only 1 inverted; 2 through 5 were fine,
+which is why it survived. Found by scoring a hand-written answer that
+deliberately did the wrong thing. An integer is now always on the 1-5
+scale; only a non-integer strictly between 0 and 1 is read as a
+fraction.
+
 ### Security — a caller's provider key no longer persists in Redis
 
 - The key travelled to the worker as an RQ job argument. RQ persists job

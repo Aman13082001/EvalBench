@@ -17,6 +17,9 @@ from typing import TypedDict
 
 import yaml
 
+from evalbench.answers import suite_needs_judge
+from evalbench.db.schemas import TestSuite
+
 SUITES_DIR = pathlib.Path(__file__).resolve().parents[1] / "suites"
 
 
@@ -101,6 +104,8 @@ def describe_benchmarks() -> list[dict]:
                 "title": b["title"],
                 # what it measures, from the file: one source of truth
                 "description": data.get("description", ""),
+                # whether scoring supplied answers still needs a grader
+                "needs_judge": suite_needs_judge(TestSuite(**data)),
                 "name": data.get("name", b["title"]),
                 "test_count": len(data.get("tests", [])),
                 "provider": data.get("provider", "ollama"),

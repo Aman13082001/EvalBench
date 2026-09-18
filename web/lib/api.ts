@@ -49,6 +49,8 @@ export interface RunSummary {
   errors: number;
   passed: number;
   failed: number;
+  /* "answers" when the caller supplied them — nothing was generated. */
+  provider?: string | null;
   /* Null when nothing was scored. "0%" would be a measurement —
      every answer wrong — and that is a different claim from having
      measured nothing at all. */
@@ -116,6 +118,7 @@ export interface SuiteDoc {
   /* The list endpoint sends a count instead of the test bodies. */
   test_count?: number;
   resolution?: Resolution;
+  needs_judge?: boolean;
   tests?: unknown[];
 }
 
@@ -165,6 +168,11 @@ export interface RunOptions {
   model?: string;
   provider?: string;
   provider_key?: string;
+  /* Bring your own answers: nothing is generated, the file is replayed.
+     Only checks that ask an LLM to grade need judge_provider/judge_model. */
+  answers?: { test_name: string | null; prompt: string | null; response: string }[];
+  judge_provider?: string;
+  judge_model?: string;
 }
 
 export const startRun = (suiteId: string, opts: RunOptions = {}) =>
@@ -211,6 +219,8 @@ export interface Benchmark {
   slug: string;
   title: string;
   description: string;
+  /* Whether scoring supplied answers still needs a grader. */
+  needs_judge?: boolean;
   name: string;
   test_count: number;
   provider: string;

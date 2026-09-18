@@ -18,6 +18,7 @@ import {
   useQuota,
 } from "./pickers";
 import { RunProgress, useRun } from "./useRun";
+import { AnswersPicker, AnswersState } from "./AnswersPicker";
 
 /* ── §1 · Run an evaluation ─────────────────────────────────────
    The primary section. Select a benchmark, select a model, run it,
@@ -37,6 +38,15 @@ export default function RunEvaluation({
   const [bench, setBench] = useState<BenchmarkChoice | null>(null);
   const [model, setModel] = useState<ModelChoice>({ provider: "groq", model: "" });
   const [keyMode, setKeyMode] = useState<KeyMode>({ own: false, key: "" });
+  /* Where the answers come from. "model": EvalBench calls one. "answers":
+     the visitor already has them — nothing is generated, and only the
+     checks that ask an LLM to grade need a model at all. */
+  const [source, setSource] = useState<"model" | "answers">("model");
+  const [answers, setAnswers] = useState<AnswersState | null>(null);
+  const [judge, setJudge] = useState<ModelChoice>({ provider: "groq", model: "" });
+  const [judgeKey, setJudgeKey] = useState<KeyMode>({ own: false, key: "" });
+  // Undefined = unknown; show the grader rather than assume it is not needed.
+  const needsJudge = bench?.needsJudge !== false;
   const [recent, setRecent] = useState<RecentRun[]>([]);
   const [suiteName, setSuiteName] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
@@ -61,6 +71,11 @@ export default function RunEvaluation({
   const costLine = useMemo(() => {
     if (!bench) return null;
     const tests = bench.tests;
+    if (source === "answers") {
+      if (!answers) return `${tests} tests · nothing is generated`;
+      if (!needsJudge) return `${answers.rows.length} answers · no model is called at all`;
+      return `${answers.rows.length} answers · only the grader is called`;
+    }
     const prior = recent.find(
       (r) =>
         r.status === "completed" &&
@@ -73,13 +88,21 @@ export default function RunEvaluation({
     if (prior && prior.total_cost_usd > 0)
       return `${base} · last run on ${model.model} cost $${prior.total_cost_usd.toFixed(4)}`;
     return `${base} · cost known after the first run on this model`;
-  }, [bench, model, recent]);
+  }, [bench, model, recent, source, answers, needsJudge]);
+
+  const graderOk =
+    !needsJudge ||
+    (!!judge.model &&
+      (!isHosted(judge.provider) || !judgeKey.own || judgeKey.key.length > 0) &&
+      !(isHosted(judge.provider) && !judgeKey.own && quota?.remaining === 0));
 
   const canRun =
     !!bench &&
-    !!model.model &&
-    (!isHosted(model.provider) || !keyMode.own || keyMode.key.length > 0) &&
-    !(isHosted(model.provider) && !keyMode.own && quota?.remaining === 0) &&
+    (source === "answers"
+      ? !!answers && answers.rows.length > 0 && graderOk
+      : !!model.model &&
+        (!isHosted(model.provider) || !keyMode.own || keyMode.key.length > 0) &&
+        !(isHosted(model.provider) && !keyMode.own && quota?.remaining === 0)) &&
     state.phase !== "starting" &&
     state.phase !== "running";
 
@@ -95,11 +118,22 @@ export default function RunEvaluation({
       return;
     }
     setSuiteName(resolved.name);
-    await run(resolved.id, {
-      model: model.model,
-      provider: model.provider,
-      provider_key: keyMode.own ? keyMode.key : undefined,
-    });
+    await run(
+      resolved.id,
+      source === "answers" && answers
+        ? {
+            answers: answers.rows,
+            model: answers.label || undefined,
+            judge_provider: needsJudge ? judge.provider : undefined,
+            judge_model: needsJudge ? judge.model : undefined,
+            provider_key: needsJudge && judgeKey.own ? judgeKey.key : undefined,
+          }
+        : {
+            model: model.model,
+            provider: model.provider,
+            provider_key: keyMode.own ? keyMode.key : undefined,
+          }
+    );
     refreshQuota();
     if (bench.kind !== "mine") benchmarks.reload();
   }
@@ -123,15 +157,77 @@ export default function RunEvaluation({
           {benchErr && <p className="text-xs text-error">{benchErr}</p>}
         </div>
 
-        <div className="space-y-2">
-          <span className="label-xs block">Model</span>
-          <ModelPicker value={model} onChange={setModel} idPrefix="eval" />
-          <KeyPicker
-            value={keyMode}
-            onChange={setKeyMode}
-            quota={quota}
-            provider={model.provider}
-          />
+        <div className="space-y-3">
+          {/* Answers from a model, or answers you already have. The
+              second is the path with no key and no endpoint: the file is
+              replayed, and the checks run on it exactly as they would on
+              a live answer. */}
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="label-xs block">Answers from</span>
+            <div className="flex gap-1" role="tablist" aria-label="Where the answers come from">
+              {(["model", "answers"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  role="tab"
+                  aria-selected={source === s}
+                  onClick={() => setSource(s)}
+                  className={`btn px-2 py-1 font-mono text-[11px] ${
+                    source === s ? "btn-primary" : "btn-ghost"
+                  }`}
+                >
+                  {s === "model" ? "a model" : "answers I have"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {source === "model" ? (
+            <>
+              <ModelPicker value={model} onChange={setModel} idPrefix="eval" />
+              <KeyPicker
+                value={keyMode}
+                onChange={setKeyMode}
+                quota={quota}
+                provider={model.provider}
+              />
+            </>
+          ) : (
+            <>
+              <AnswersPicker
+                value={answers}
+                onChange={setAnswers}
+                expectedTests={bench?.tests}
+              />
+              {needsJudge && (
+                <div className="space-y-2 border-t border-line pt-3">
+                  <p className="label-xs">
+                    Grader{" "}
+                    <span className="normal-case text-muted">
+                      — {bench?.needsJudge === undefined
+                        ? "used only if this benchmark has checks that ask a model to grade"
+                        : "this benchmark has checks that ask a model to grade the answers"}
+                    </span>
+                  </p>
+                  <ModelPicker value={judge} onChange={setJudge} idPrefix="judge" />
+                  <KeyPicker
+                    value={judgeKey}
+                    onChange={setJudgeKey}
+                    quota={quota}
+                    provider={judge.provider}
+                    name="judge-keymode"
+                  />
+                </div>
+              )}
+              {!needsJudge && (
+                <p className="text-xs text-muted">
+                  Every check in this benchmark scores without a model — string,
+                  schema and semantic checks only. Nothing is called and nothing
+                  is spent.
+                </p>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -181,7 +277,9 @@ export default function RunEvaluation({
           <Panel>
             <p className="text-sm text-muted">
               {state.phase === "idle"
-                ? "Pick a benchmark and a model above. The result appears here — the verdict first, then every number behind it, then each test."
+                ? source === "answers"
+                  ? "Pick a benchmark and upload the answers above. Nothing is generated; the checks run on what you gave them."
+                  : "Pick a benchmark and a model above. The result appears here — the verdict first, then every number behind it, then each test."
                 : state.phase === "failed"
                   ? "The run did not complete. The error is above."
                   : "Running — the result will appear here when every test has been scored."}

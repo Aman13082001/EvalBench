@@ -51,9 +51,13 @@ export function explainRun(r: RunSummary): string {
   // Errors are named up front. Omitting them let a run where 35 of 51
   // tests never got an answer read as "15 of 16 passed" — true of the
   // sixteen, and silent about the thirty-five.
+  // With supplied answers nothing was called, so nothing could fail to
+  // connect: the file simply had no row for these tests.
   const tail =
     errs > 0
-      ? ` ${errs} test${errs === 1 ? "" : "s"} couldn't run at all — a provider or connection problem, not the model's fault — and ${errs === 1 ? "is" : "are"} left out of the score.`
+      ? r.provider === "answers"
+        ? ` ${errs} test${errs === 1 ? "" : "s"} had no answer in the file you supplied and ${errs === 1 ? "is" : "are"} left out of the score.`
+        : ` ${errs} test${errs === 1 ? "" : "s"} couldn't run at all — a provider or connection problem, not the model's fault — and ${errs === 1 ? "is" : "are"} left out of the score.`
       : "";
   if (n === 0) return `No tests could be scored.${tail}`;
   if (p === n) return `All ${n} answers passed every check you asked for.${tail}`;

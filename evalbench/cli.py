@@ -68,14 +68,20 @@ def _get_headers(api_key: str | None = None):
     return headers
 
 
-def _run_and_wait(suite_id: str, headers: dict, model: str) -> str:
+def _run_and_wait(
+    suite_id: str, headers: dict, model: str, body: dict | None = None
+) -> str:
     """Kick off an async run and poll until it finishes. Returns the run id."""
 
     r = httpx.post(
         f"{API_URL}/suites/{suite_id}/run",
         headers=headers,
+        json=body,
         timeout=30.0,
     )
+    if r.status_code == 400:
+        console.print(f"[red]{r.json().get('detail', r.text)}[/red]")
+        raise typer.Exit(code=1)
     r.raise_for_status()
     body = r.json()
     run_id = body["run_id"]
@@ -383,6 +389,22 @@ def run(
         "--report",
         help="Write a machine-readable JSON report to this path (for CI)",
     ),
+    answers: str | None = typer.Option(
+        None,
+        "--answers",
+        help=(
+            "Score answers you already have instead of calling a model: a "
+            "JSON, JSON Lines or CSV file of {test_name|prompt, response}. "
+            "Only checks that ask an LLM to grade still need a model; name "
+            "it with --judge-provider / --judge-model."
+        ),
+    ),
+    judge_provider: str | None = typer.Option(
+        None, "--judge-provider", help="Who grades supplied answers (e.g. groq)"
+    ),
+    judge_model: str | None = typer.Option(
+        None, "--judge-model", help="Which model grades supplied answers"
+    ),
     strict_cost: bool = typer.Option(
         False,
         "--strict-cost",
@@ -414,6 +436,36 @@ def run(
     if concurrency:
         suite["concurrency"] = concurrency
 
+    run_body: dict | None = None
+    if answers:
+        from evalbench.answers import match_answers, parse_answers
+        from evalbench.db.schemas import TestSuite
+
+        try:
+            rows = parse_answers(
+                Path(answers).read_text(encoding="utf-8"), filename=answers
+            )
+            _, missing = match_answers(TestSuite(**suite), rows)
+        except (OSError, ValueError) as e:
+            console.print(f"[red]--answers: {e}[/red]")
+            raise typer.Exit(code=1) from e
+        if missing:
+            console.print(
+                f"[yellow]{len(missing)} test(s) have no answer in the file "
+                f"and will be reported as unanswered: "
+                f"{', '.join(missing[:5])}{' …' if len(missing) > 5 else ''}[/yellow]"
+            )
+        run_body = {
+            "answers": rows,
+            "model": model or Path(answers).stem,
+            "judge_provider": judge_provider,
+            "judge_model": judge_model,
+        }
+        console.print(
+            f"[dim]Scoring {len(rows)} supplied answers — no model is called "
+            "for generation.[/dim]"
+        )
+
     headers = _get_headers(api_key)
 
     with console.status(
@@ -436,7 +488,7 @@ def run(
         r.raise_for_status()
         suite_id = r.json()["id"]
 
-    run_id = _run_and_wait(suite_id, headers, suite["model"])
+    run_id = _run_and_wait(suite_id, headers, suite["model"], body=run_body)
 
     console.print(
         f"\n[bold green]✓[/bold green] Run completed: "

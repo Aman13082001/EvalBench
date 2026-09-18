@@ -75,7 +75,13 @@ export default function Results({ r }: { r: RunSummary }) {
               : String(Math.round(r.avg_latency_ms))
           }
           unit={r.avg_latency_ms == null ? undefined : "ms"}
-          caption={r.errors > 0 ? "Average over the tests that answered." : "Average time to answer."}
+          caption={
+            r.provider === "answers"
+              ? "Answers were supplied, not generated."
+              : r.errors > 0
+                ? "Average over the tests that answered."
+                : "Average time to answer."
+          }
         />
       </div>
 

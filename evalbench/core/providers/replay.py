@@ -64,9 +64,22 @@ class ReplayProvider(Provider):
     # keeping this modest makes the demo's timing look like a real run.
     max_concurrency = 8
 
-    def __init__(self, recordings: dict[str, dict] | None = None):
+    def __init__(
+        self,
+        recordings: dict[str, dict] | None = None,
+        missing_hint: str | None = None,
+    ):
         self._recordings = (
             recordings if recordings is not None else _load_recordings()
+        )
+        # What to say when asked a prompt that has no recording. The demo
+        # and a caller's own answers are the same mechanism with different
+        # explanations: "the sample suite only knows these prompts" versus
+        # "your file had no row for this test".
+        self._missing_hint = missing_hint or (
+            "This demo replays recorded answers, so it only knows the "
+            "prompts in the sample suite. Add your own provider API key "
+            "above to run new prompts against a live model."
         )
 
     async def generate(
@@ -77,11 +90,7 @@ class ReplayProvider(Provider):
     ) -> LLMResponse:
         entry = self._recordings.get(_normalize(prompt))
         if entry is None:
-            raise NoRecordingError(
-                "This demo replays recorded answers, so it only knows the "
-                "prompts in the sample suite. Add your own provider API key "
-                "above to run new prompts against a live model."
-            )
+            raise NoRecordingError(self._missing_hint)
         return LLMResponse(
             text=entry["response"],
             model=entry.get("model", model),

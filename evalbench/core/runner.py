@@ -84,7 +84,11 @@ def publishable_metrics(results: list[dict]) -> dict:
 
 
 class TestRunner:
-    def __init__(self, provider_key: str | None = None):
+    def __init__(
+        self,
+        provider_key: str | None = None,
+        answers: dict[str, dict] | None = None,
+    ):
         self.provider: Provider | None = None
         # Lazily built when a suite uses the judge / security evaluator.
         self._judge_provider: Provider | None = None
@@ -92,8 +96,20 @@ class TestRunner:
         # Optional per-run API key (bring-your-own-key). When
         # set it overrides the key resolved from settings/env.
         self._provider_key = provider_key
+        # A caller-supplied recording, keyed the way the replay provider
+        # looks prompts up. When set, the "answers" provider serves it.
+        self._answers = answers
 
     def _make_provider(self, name: str) -> Provider:
+        if name == "answers":
+            return get_provider(
+                "answers",
+                recordings=self._answers or {},
+                missing_hint=(
+                    "No answer was supplied for this test — the file had no "
+                    "row with its test_name or prompt."
+                ),
+            )
         if self._provider_key:
             return get_provider(name, api_key=self._provider_key)
         return get_provider(name)

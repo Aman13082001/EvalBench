@@ -126,3 +126,13 @@ def test_cli_and_web_wording_stay_in_step():
                 f"CLI wording for {atype}/{passed} has no match in "
                 f"explain.ts: {sentence!r}"
             )
+
+
+def test_supplied_answers_do_not_blame_the_provider():
+    """Nothing was called, so "a connection problem" is the wrong story
+    for a test that was simply absent from the file."""
+    from evalbench.explain import explain_run
+
+    text = explain_run({"provider": "answers", "scored_tests": 3, "passed": 2, "errors": 1})
+    assert "no answer in the file" in text
+    assert "provider" not in text

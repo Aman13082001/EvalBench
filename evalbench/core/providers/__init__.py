@@ -30,6 +30,9 @@ _PROVIDERS: dict[str, type[Provider]] = {
     # Replays recorded answers so the demo suite runs with no
     # API key at all. See providers/replay.py.
     "demo": ReplayProvider,
+    # The same class, serving a recording the caller supplied. See
+    # evalbench/answers.py. Keyless: the answers already exist.
+    "answers": ReplayProvider,
 }
 
 # name -> (base_url, api-key env var). Key is also read from the matching

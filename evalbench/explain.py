@@ -101,10 +101,19 @@ def explain_run(summary: dict) -> str:
         f"{passed} out of {scored} answers passed everything you checked for."
     ]
     if errors:
-        parts.append(
-            f"{errors} test(s) couldn't run at all (a connection or provider "
-            "problem, not the model's fault) and are left out of the score."
-        )
+        if summary.get("provider") == "answers":
+            # Nothing was called, so nothing could fail to connect: the
+            # file simply had no row for these tests.
+            parts.append(
+                f"{errors} test(s) had no answer in the file you supplied "
+                "and are left out of the score."
+            )
+        else:
+            parts.append(
+                f"{errors} test(s) couldn't run at all (a connection or "
+                "provider problem, not the model's fault) and are left out "
+                "of the score."
+            )
     return " ".join(parts)
 
 

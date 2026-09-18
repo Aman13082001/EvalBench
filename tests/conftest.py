@@ -58,7 +58,7 @@ def mock_db():
     # Test runs collection
     mock.test_runs = MagicMock()
     mock.test_runs.insert_one = AsyncMock()
-    mock.test_runs.find_one = AsyncMock()
+    mock.test_runs.find_one = AsyncMock(return_value=None)
     mock.test_runs.update_one = AsyncMock()
     mock.test_runs.update_many = AsyncMock(
         return_value=MagicMock(modified_count=0)

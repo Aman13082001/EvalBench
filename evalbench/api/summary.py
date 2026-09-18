@@ -133,6 +133,9 @@ def summarize_run(doc: dict) -> dict:
     return {
         "suite_id": doc.get("suite_id"),
         "model": doc.get("model"),
+        # "answers" means the caller supplied them; the view says so
+        # instead of reporting a latency that was never measured.
+        "provider": doc.get("provider"),
         "evaluator": doc.get("evaluator"),
         "status": doc.get("status", "completed"),
         "progress": doc.get("progress", 1.0),
@@ -148,8 +151,12 @@ def summarize_run(doc: dict) -> dict:
         "avg_score": round(sum(scores) / len(scores), 4) if scores else None,
         "pass_rate_ci": bootstrap_ci(pass_flags),
         "avg_score_ci": bootstrap_ci(scores),
+        # Supplied answers were never called for, so there is no
+        # time-to-answer; the replay's 0 ms is not the model's speed.
         "avg_latency_ms": (
-            round(sum(latencies) / len(latencies), 2) if latencies else None
+            None
+            if doc.get("provider") == "answers" or not latencies
+            else round(sum(latencies) / len(latencies), 2)
         ),
         "total_tokens": sum(tokens),
         "total_prompt_tokens": sum(prompt_tokens),

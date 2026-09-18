@@ -25,8 +25,14 @@ def parse_judge_output(text: str) -> tuple[float, str]:
             obj = json.loads(brace.group(0))
             score = float(obj.get("score", obj.get("rating", 3)))
             reason = str(obj.get("reason", obj.get("explanation", ""))).strip()
-            if score <= 1.0:  # already normalised
-                return round(max(0.0, min(1.0, score)), 4), reason or "n/a"
+            # Every prompt asks for 1-5. Only a non-integer strictly
+            # between 0 and 1 is a fraction the model returned anyway;
+            # an integer is on the scale it was asked for. Treating any
+            # score <= 1 as "already normalised" made a 1 — the lowest
+            # verdict — parse as 1.0, the highest, so an answer the judge
+            # said "violates the rubric" passed with a perfect score.
+            if 0.0 < score < 1.0 and not score.is_integer():
+                return round(score, 4), reason or "n/a"
             return round(max(1.0, min(5.0, score)) / 5.0, 4), reason or "n/a"
         except (json.JSONDecodeError, TypeError, ValueError):
             pass

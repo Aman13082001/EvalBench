@@ -1,3 +1,4 @@
+import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 
@@ -13,6 +14,7 @@ from fastapi import (
 )
 from pydantic import BaseModel, Field
 
+from evalbench.answers import match_answers, parse_answers, suite_needs_judge
 from evalbench.api.deps import (
     get_current_user,
     limiter,
@@ -55,6 +57,9 @@ async def _upsert_suite(suite: TestSuite, user, response: Response) -> dict:
     """
     owner = owner_of(user)
     doc = suite.model_dump()
+    # Whether scoring supplied answers still needs a grader. Stored so the
+    # list — which projects the tests out — can say without reading them.
+    doc["needs_judge"] = suite_needs_judge(suite)
     existing = await db.suites.find_one(
         {"name": suite.name, **mine(user)}, {"_id": 1}
     )
@@ -201,6 +206,14 @@ class RunRequest(BaseModel):
     # handed to the job and discarded. Runs made with it do not count
     # against the daily cap, since they spend the caller's quota, not ours.
     provider_key: str | None = Field(default=None, repr=False)
+    # Bring your own answers: score outputs you already have instead of
+    # calling a model. Each entry carries a `response` and a `test_name`
+    # or `prompt`. `provider` is then "answers" and `model` is a label.
+    # Only checks that ask an LLM to grade still need a model — that is
+    # what judge_provider / judge_model name.
+    answers: list[dict] | None = None
+    judge_provider: str | None = None
+    judge_model: str | None = None
 
 
 def _day_start() -> datetime:
@@ -300,6 +313,7 @@ async def adopt_bundled(
     doc["created_at"] = datetime.now(timezone.utc)
     doc["created_by"] = owner_of(user)
     doc["bundled_slug"] = slug
+    doc["needs_judge"] = suite_needs_judge(suite)
     result = await db.suites.insert_one(doc)
     return {"id": str(result.inserted_id), "name": suite.name, "created": True}
 
@@ -425,12 +439,49 @@ async def run_suite(
             status_code=400, detail=f"Unknown provider '{provider}'"
         )
 
+    # Supplied answers replace the model call. Validate them against the
+    # suite now — a typo in the file should come back as a 400 naming
+    # it, not as a run where one test mysteriously never answered.
+    answers: list[dict] | None = None
+    judge_provider = judge_model = None
+    if body.answers is not None:
+        try:
+            answers = parse_answers(json.dumps(body.answers))
+            match_answers(suite, answers)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        provider = "answers"
+        if suite_needs_judge(suite):
+            # The grader has to be a real model. It cannot default to the
+            # suite's provider, which is now the replay of these answers.
+            judge_provider = (
+                body.judge_provider or suite.judge_provider or suite.provider
+            ).lower()
+            judge_model = body.judge_model or suite.judge_model or suite.model
+            if judge_provider in ("answers", "demo", "mock"):
+                judge_provider = "groq"
+            if not body.provider_key and judge_provider not in configured_providers():
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "This benchmark has checks that ask a model to grade "
+                        f"the answers, and this instance has no key for "
+                        f"'{judge_provider}' to do it with. Add your own key, "
+                        "or pick a grader it is configured for: "
+                        f"{', '.join(configured_providers())}."
+                    ),
+                )
+
     # Refuse now, not in the worker. Without a key of their own the run
     # would spend ours — and if we have none for this provider it was
     # accepted, queued, and then died inside the worker with "needs an
     # API key", which reads as a failed evaluation rather than a missing
     # credential.
-    if not body.provider_key and provider not in configured_providers():
+    if (
+        answers is None
+        and not body.provider_key
+        and provider not in configured_providers()
+    ):
         raise HTTPException(
             status_code=400,
             detail=(
@@ -442,9 +493,18 @@ async def run_suite(
 
     # Local providers cost nothing; hosted ones spend a key. If the caller
     # did not bring their own, it is ours, and that is what the cap is for.
-    uses_server_key = (
-        provider not in ("ollama", "mock", "demo") and not body.provider_key
-    )
+    if answers is not None:
+        # The answers are free. Only a hosted grader spends our key.
+        uses_server_key = (
+            judge_provider is not None
+            and judge_provider not in ("ollama", "mock", "demo", "answers")
+            and not body.provider_key
+        )
+    else:
+        uses_server_key = (
+            provider not in ("ollama", "mock", "demo", "answers")
+            and not body.provider_key
+        )
     if uses_server_key and user.get("role") != "admin":
         used = await runs_used_today(user)
         if used >= settings.daily_run_cap:
@@ -460,7 +520,7 @@ async def run_suite(
     queued = TestRun(
         suite_id=suite_id,
         # The run record says what was actually run, override included.
-        model=body.model or suite.model,
+        model=body.model or ("your answers" if answers is not None else suite.model),
         evaluator=suite.evaluator,
         results=[],
         created_at=datetime.now(timezone.utc),
@@ -478,6 +538,10 @@ async def run_suite(
     # samples to rate limits cannot say so — it only knows how many
     # came back.
     run_doc["samples"] = suite.samples
+    if answers is not None:
+        run_doc["answers"] = answers
+        run_doc["judge_provider"] = judge_provider
+        run_doc["judge_model"] = judge_model
     result = await db.test_runs.insert_one(run_doc)
     run_id = str(result.inserted_id)
 

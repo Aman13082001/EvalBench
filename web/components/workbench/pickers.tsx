@@ -22,10 +22,13 @@ import {
    Selection is cheap; resolving to a real suite id (adopting a bundled
    one, importing an upload) only happens when a run actually starts. */
 
+/* needsJudge: whether scoring supplied answers still needs a grader.
+   Undefined means unknown (an uploaded YAML, or a suite stored before the
+   flag existed) — the form then shows the grader rather than guess. */
 export type BenchmarkChoice =
-  | { kind: "bundled"; slug: string; label: string; tests: number; provider: string; model: string }
-  | { kind: "mine"; id: string; label: string; tests: number; provider: string; model: string }
-  | { kind: "upload"; suite: Record<string, unknown>; label: string; tests: number; provider: string; model: string };
+  | { kind: "bundled"; slug: string; label: string; tests: number; provider: string; model: string; needsJudge?: boolean }
+  | { kind: "mine"; id: string; label: string; tests: number; provider: string; model: string; needsJudge?: boolean }
+  | { kind: "upload"; suite: Record<string, unknown>; label: string; tests: number; provider: string; model: string; needsJudge?: boolean };
 
 export async function resolveBenchmark(
   c: BenchmarkChoice
@@ -111,6 +114,7 @@ export function BenchmarkPicker({
           tests: b.test_count,
           provider: b.provider,
           model: b.model,
+          needsJudge: b.needs_judge,
         });
     } else if (k.startsWith("m:")) {
       const s = mine.find((x) => x._id === k.slice(2));
@@ -122,6 +126,7 @@ export function BenchmarkPicker({
           tests: s.test_count ?? s.tests?.length ?? 0,
           provider: s.provider ?? "ollama",
           model: s.model,
+          needsJudge: s.needs_judge,
         });
     } else {
       onChange(null);

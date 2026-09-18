@@ -95,7 +95,7 @@ class TestModelOverride:
         seen = {}
 
         class _Runner:
-            def __init__(self, provider_key=None):
+            def __init__(self, provider_key=None, answers=None):
                 seen["key"] = provider_key
 
             async def run_suite(self, suite, suite_id, progress_cb=None):

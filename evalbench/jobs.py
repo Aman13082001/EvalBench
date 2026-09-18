@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 from bson import ObjectId
 
+from evalbench.answers import match_answers
 from evalbench.config import settings
 from evalbench.core.runner import TestRunner
 from evalbench.db.mongo import db
@@ -120,6 +121,17 @@ async def execute_run_job(
     if run_doc.get("provider"):
         suite.provider = run_doc["provider"]
 
+    # Bring-your-own-answers: generation is replayed from the caller's
+    # file, and the grader — if any check needs one — is whatever the run
+    # named. It must be named: with the suite's provider now "answers",
+    # a judge that defaulted to it would be asked to replay prompts it
+    # has never seen.
+    answers = None
+    if run_doc.get("answers"):
+        answers, _ = match_answers(suite, run_doc["answers"], label=suite.model)
+        suite.judge_provider = run_doc.get("judge_provider") or suite.judge_provider
+        suite.judge_model = run_doc.get("judge_model") or suite.judge_model
+
     await db.test_runs.update_one(
         oid,
         {"$set": {
@@ -132,7 +144,7 @@ async def execute_run_job(
         }},
     )
 
-    runner = TestRunner(provider_key=provider_key)
+    runner = TestRunner(provider_key=provider_key, answers=answers)
 
     async def _report(done: int, total: int) -> None:
         await db.test_runs.update_one(

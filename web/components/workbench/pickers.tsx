@@ -408,7 +408,9 @@ export function KeyPicker({
       <div className="space-y-2 text-sm">
         <p className="text-xs text-muted">
           This EvalBench instance has no {provider} key, so this one runs
-          on yours. It is sent with the job and never stored.
+          on yours. It is encrypted, held only while the run executes,
+          and deleted when it finishes. For real work, use the CLI — your
+          key never leaves your machine.
         </p>
         <input
           type="password"
@@ -459,7 +461,7 @@ export function KeyPicker({
         <input
           type="password"
           className="field font-mono text-xs"
-          placeholder={`${provider} API key — sent to the job, never stored`}
+          placeholder={`${provider} API key — encrypted, held only while the run executes`}
           value={value.key}
           onChange={(e) => onChange({ own: true, key: e.target.value })}
         />

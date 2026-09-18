@@ -5,6 +5,26 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Security — a caller's provider key no longer persists in Redis
+
+- The key travelled to the worker as an RQ job argument. RQ persists job
+  arguments — pickled, in `rq:job:<id>` — and keeps a *failed* job at
+  its default failure_ttl of one year. Measured on the running stack: a
+  failed job's TTL was 31,108,291 seconds. A user who pasted a key and
+  hit a rate limit had it in Redis, in plaintext, for 360 days. The
+  existing test proved the key never reached Mongo, which was true and
+  beside the point.
+- `evalbench/runkeys.py`: the key is written once under its own name,
+  encrypted with Fernet keyed from `SECRET_KEY`, with a six-hour TTL;
+  the job carries only the run id; the worker reads it and deletes it
+  once the run cannot need it again (kept only while RQ retries remain).
+  The TTL is the guarantee, the delete a courtesy. Jobs queued before
+  the change still carry the key as an argument and are honoured.
+- Found while verifying: a bring-your-own-key run on a suite whose judge
+  is a keyless provider (the demo suite judges on the replay provider)
+  crashed with "unexpected keyword argument 'api_key'". `get_provider`
+  now drops a supplied key for providers that take none.
+
 ### Changed — the dashboard actually shows the dashboard
 
 - **Panels were never rendering.** The embed used

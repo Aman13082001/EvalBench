@@ -118,3 +118,36 @@ class TestTheRunEndpointRefusesEarly:
         ), patch("evalbench.api.routes.submit_run"):
             r = as_alice.post(f"/suites/{SUITE_ID}/run", json={"provider": "groq"})
         assert r.status_code == 202, r.text
+
+
+class TestAKeyOnlyGoesWhereAKeyIsWanted:
+    """A caller's key applies to hosted providers. A suite can still route
+    its judge through a keyless one — the demo suite judges with the
+    replay provider, and a suite might judge locally on Ollama — and
+    handing those a key crashed the run with "unexpected keyword argument
+    'api_key'". Found by running a bring-your-own-key job against the
+    demo suite."""
+
+    def test_keyless_providers_ignore_a_supplied_key(self):
+        from evalbench.core.providers import get_provider
+
+        for name in ("demo", "mock", "ollama"):
+            p = get_provider(name, api_key="gsk_whatever")
+            assert p is not None
+
+    def test_hosted_providers_still_receive_it(self):
+        from evalbench.core.providers import get_provider
+
+        p = get_provider("groq", api_key="gsk_mine")
+        assert p._client.headers["Authorization"] == "Bearer gsk_mine"
+
+    @pytest.mark.asyncio
+    async def test_the_runner_survives_a_keyless_judge(self):
+        """The whole path, not just the factory: a key on the run, a
+        judge on a provider that takes none."""
+        from evalbench.core.runner import TestRunner
+
+        r = TestRunner(provider_key="gsk_mine")
+        judge = r._make_provider("demo")
+        assert judge is not None
+        await r.close()

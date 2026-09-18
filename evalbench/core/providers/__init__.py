@@ -131,6 +131,11 @@ def _build_preset(name: str, **overrides) -> OpenAICompatibleProvider:
 def get_provider(name: str = "ollama", **kwargs) -> Provider:
     key = (name or "ollama").lower()
     if key in _PROVIDERS:
+        # A caller's key is for hosted providers. A suite can still route
+        # its judge through a keyless one — the demo suite judges on the
+        # replay provider — and passing the key through crashed the run
+        # with "unexpected keyword argument 'api_key'".
+        kwargs.pop("api_key", None)
         return _PROVIDERS[key](**kwargs)
     if key in _PRESETS:
         return _build_preset(key, **kwargs)

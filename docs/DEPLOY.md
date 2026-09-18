@@ -109,4 +109,7 @@ EVALBENCH_API_URL=https://<api> evalbench run suites/ci-hosted.yaml
   that into a public deployment without putting Grafana behind auth.
 - **Spending the server key.** Runs on the server's key are capped per
   user per day (`DAILY_RUN_CAP`, default 20). Bring-your-own-key runs are
-  not capped and the key is never stored. Admins are uncapped.
+  not capped. The key is encrypted with `SECRET_KEY`, held in Redis
+  only while the run executes (six-hour ceiling), and deleted when it
+  finishes — it is never a job argument and never written to Mongo.
+  Admins are uncapped.

@@ -1,7 +1,7 @@
 # How much of a judged score is the judge?
 
-*Experiment design. Nothing here has been run yet; the budget section
-says what each cut costs.*
+*Experiment design, written before anything ran; the budget section
+says what each cut costs. K = 5 was chosen. Results: REPORT.md.*
 
 ---
 
@@ -45,9 +45,13 @@ reproducible for zero generation calls.
 
 **Then the same 60 answers are scored repeatedly.** Each of three judge
 models scores every answer *K* times, as EvalBench actually runs its
-judge (temperature 0.1, the production prompt, the production parser).
-No special harness: the study uses `TestRunner(answers=…)` exactly as a
-user's BYO run does, so whatever it finds is what a user gets.
+judge: the production prompt (`rubric_prompt`, the same function the
+runner calls), the production call (`LLMJudgeEvaluator._ask_judge`,
+temperature 0.1) and the production parser (`parse_judge_output`). The
+study calls those three directly rather than going through the runner
+so that it can keep every raw reply: a reply the parser could not read
+comes back as 3/5 in production, and that is a parse failure, not a
+judgement — it is counted and excluded, not averaged in.
 
 **Then the scores are decomposed.** Every score is indexed by
 (answer, judge, repeat). A two-way random-effects decomposition splits
@@ -67,11 +71,14 @@ headline — the **judge floor**: the standard deviation of a 30-test
 benchmark's mean score attributable to judge alone, set beside the
 observed strong–weak gap.
 
-**The comparison that makes the point.** The same 60 answers also carry
-the deterministic checks from the power study where they apply. Their
-test–retest variance is zero by construction. Putting the two side by
-side on the same answers is the cleanest statement of what a judge
-costs.
+**The comparison that makes the point.** Deterministic checks — string,
+regex, schema, and the locally-computed semantic similarity — return
+the same score for the same answer every time, by construction. Their
+retest variance is zero and they have no judge term at all. The power
+study measured a 30-test suite built only from those. Setting this
+study's retest and judge terms beside that zero is the cleanest
+statement of what a judge costs, and of why a check should be made
+deterministic wherever it can be.
 
 ## The suite
 
@@ -126,8 +133,9 @@ file.
 
 - `research/judge-variance/answers-{strong,weak}.jsonl` — the frozen
   answers (committed; the study is re-runnable from these alone).
-- `research/judge-variance/scores.json` — every (answer, judge, repeat)
-  score, raw.
+- `research/judge-variance/scores.jsonl` — one line per judge call:
+  set, test, judge, repeat, parsed score, the judge's reason, the raw
+  reply, and how the parser read it.
 - `research/judge-variance/REPORT.md` — the four components, the
   per-judge ICC, the agreement matrix, the judge floor beside the model
   gap, and a plain-language paragraph on what it means.

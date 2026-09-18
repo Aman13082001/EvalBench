@@ -2,14 +2,18 @@
 
 **A platform for evaluating LLMs, catching quality regressions, and monitoring safety — with real statistics, cost tracking, a production monitoring stack, and a web app you can hand to someone who has never opened a terminal.**
 
-EvalBench runs versioned test suites against a model — local via [Ollama](https://ollama.com) or hosted (Groq, Gemini, OpenAI, GitHub Models, OpenRouter) — checks every response against one or more **composable assertions**, aggregates results **per capability category**, estimates the **USD cost** of the run, and tells you — with a paired statistical test against a promoted **baseline** — whether a prompt or model change actually made things *worse*. Runs execute **concurrently** as **async jobs**; every run emits Prometheus metrics and lands on a Grafana dashboard.
+EvalBench runs versioned test suites against a model — local via [Ollama](https://ollama.com), hosted (Groq, Gemini, OpenAI, GitHub Models, OpenRouter), **any OpenAI-compatible endpoint you name**, or **answers you already have** in a file — checks every response against one or more **composable assertions**, aggregates results **per capability category**, estimates the **USD cost** of the run, and tells you — with a paired statistical test against a promoted **baseline** — whether a prompt or model change actually made things *worse*. Runs execute **concurrently** as **async jobs**; every run emits Prometheus metrics and lands on a Grafana dashboard.
 
 Think of it as **`pytest` + CI quality gates for LLM behaviour**.
 
 There is a CLI, a REST API, a GitHub Action, a Grafana stack, a Next.js
 web app — and [a research study](research/REPORT.md)
 showing that most eval suites are too small to detect the regressions they
-were built to catch.
+were built to catch. The thesis underneath all of it: **LLM evaluation is
+itself badly measured.** So every benchmark reports its own *resolution* —
+the smallest drop it could actually detect — and a
+[second study](research/judge-variance/DESIGN.md) is measuring how much of
+a judged score is the judge rather than the answer.
 
 ---
 
@@ -318,6 +322,8 @@ evalbench logout                           # discard the stored credential
 evalbench run <suite.yaml> [--model M] [--evaluator E] [--concurrency N]
               [--fail-under 0.75] [--compare-to-baseline] [--baseline-run ID]
               [--report report.json] [--api-key K]
+              [--answers out.jsonl] [--judge-provider P] [--judge-model M]
+              [--base-url https://…/v1] [--endpoint-key K]
 evalbench baseline <suite_id> <run_id>     # promote a run as the suite's baseline
 evalbench compare <baseline_run_id> <current_run_id>
 evalbench pr-comment --report report.json  # post/update the result on a PR
@@ -332,6 +338,11 @@ evalbench merge-suites [--apply] [--claim U] # fold duplicate suites into one pe
 `run` imports the suite first, as create-or-update by name: running the same file twice runs the same benchmark, and its run history and baseline accrue in one place. (`merge-suites` repairs databases from before that was true — dry run by default.)
 
 `run` exits non-zero when the pass rate is below `--fail-under` (default 0.75) **or**, with `--compare-to-baseline`, when a regression is detected against the suite's `baseline_run_id`. It polls the async job and shows a progress bar. `--report` writes a machine-readable JSON (`summary` + `regression` + `gate`) for CI. `EVALBENCH_API_URL` overrides the API location (default `http://localhost:8000`).
+
+Two ways to run without a provider key at all:
+
+- **`--answers out.jsonl`** scores answers you already have — a JSON array, JSON Lines or CSV of `{test_name | prompt, response}` rows. Nothing is generated; only checks that ask an LLM to grade need a model (`--judge-provider` / `--judge-model`), and only those count against anything. A row matching no test is refused by name before any request.
+- **`--base-url https://my-gateway.example.com/v1`** runs against your own OpenAI-compatible server. The key (`--endpoint-key`) is optional; the server's keys are never sent there. See [Providers](#providers) for how the URL is checked.
 
 ### GitHub Action — PR gate + comment
 
@@ -365,12 +376,12 @@ console for people who have.
 | Route | Auth | What it does |
 |---|---|---|
 | `/` | public | the homepage — the architecture animated stage by stage with captured numbers, why it exists, what it checks, and the research behind it |
-| `/research` | public | the power study, its figure, and how to reproduce it |
+| `/research` | public | "The study": the power study, its figure, and the resolution idea |
 | `/example` | public | a full recorded comparison, expandable check by check — reached from the study |
 | `/login` | public | sign in or register |
 | `/workbench` | user | **the first page after sign-in** — pick a benchmark and a model, run it, read the result; build a benchmark from a form; compare two models |
 | `/compare?a=&b=` | user | two runs paired by the regression engine — shareable, reconstructed from the runs each time |
-| `/suites`, `/suites/[id]` | user | benchmark list, detail, launch a run, promote a baseline |
+| `/suites`, `/suites/[id]` | user | benchmark list — each with what it measures and its **resolution**, the smallest drop it could detect given its run history — detail, launch a run, promote a baseline |
 | `/runs/[id]` | user | run results with per-test assertion detail |
 | `/dashboard` | user | the Grafana dashboard, embedded |
 | `/admin` | admin | users, activate/deactivate, instance stats |
@@ -396,13 +407,23 @@ npm run dev                          # http://localhost:3005
 ```
 
 **The workbench** is where a signed-in user lives. It talks only to
-endpoints the CLI already used, plus four small additions: an optional
+endpoints the CLI already used, plus a few small additions: an optional
 model/provider override on a run (so one benchmark can be run against two
 models without duplicating it), an optional caller-supplied key that never
 touches the database, a per-user daily cap on runs that spend the server's
 key (`DAILY_RUN_CAP`, shown as "N left today" before the click), and a
 curated list of bundled benchmarks a user can adopt exactly once. The UI
 says *benchmark*; the API, YAML and CLI say *suite* — same thing.
+
+Three ways to answer, side by side in the form:
+
+- **a model** — a listed provider, on the server's key or your own;
+- **my own endpoint** — any OpenAI-compatible URL, key optional, also
+  available as Model A or B in a comparison;
+- **answers I have** — upload or paste a file; nothing is generated, the
+  checks run on what you gave them, and a rubric benchmark asks you who
+  should grade. Latency is reported as *not measured* and a missing row
+  reads as "no answer in the file you supplied", not as a provider failure.
 
 The design system lives in `web/app/globals.css` and `web/components/ui`.
 
@@ -494,6 +515,38 @@ python scripts/run_study_power.py      # writes research/*.json, *.svg, REPORT.m
 Full write-up and the power curve: [`research/REPORT.md`](research/REPORT.md).
 Rendered on the site at `/research`.
 
+### Resolution: every benchmark says what it can see
+
+The power study's lesson is applied to every benchmark on the site. From a
+benchmark's own run history, `evalbench/resolution.py` estimates the
+smallest drop in mean score it could detect at 80% power — its
+**resolution** — and the benchmarks page shows it beside the description
+("can detect a drop of about 9 points over 16 tests", or "not measured
+yet" when there is not enough history). A gate that cannot see a 5-point
+regression should say so before it is wired to a deploy.
+
+### Second study: how much of a judged score is the judge?
+
+Deterministic checks return the same score every time. An `llm-rubric`
+check does not: the number has two authors, the model that answered and
+the model that graded. [`research/judge-variance/DESIGN.md`](research/judge-variance/DESIGN.md)
+is the experiment — sixty answers generated once and frozen to files,
+three judge models scoring each of them five times with EvalBench's
+production prompt and parser, and a two-way variance decomposition that
+splits between-answer, between-judge, answer × judge and retest noise,
+then sets the judge's spread beside the strong–weak model gap. The
+frozen answers are committed; `scripts/run_study_judge.py score` is
+resumable and `analyze` is arithmetic on the recorded calls. Results land
+in `research/judge-variance/REPORT.md` and, from there, on each judged
+benchmark's page as its judge-noise floor.
+
+The finding from building it, before a single judge call: the parser
+read a rubric score of **1 — the worst verdict — as a perfect 1.0**,
+because any value ≤ 1 was assumed to already be a fraction. Scores 2–5
+were fine, which is why it survived. You cannot catch that without being
+able to supply a deliberately wrong answer, which is what bring-your-own
+answers is for.
+
 ---
 
 ## Development
@@ -550,19 +603,20 @@ alternative that was rejected and why:
 
 ## Status
 
-**v0.5.0.** What is built and working:
+**main** (v0.5.0 plus unreleased work — see [`CHANGELOG.md`](CHANGELOG.md)). What is built and working:
 
 | | |
 |---|---|
 | **Evaluation** | 14 composable assertion types, repeated sampling, per-category aggregation, RAG groundedness, safety in both directions (refusal *and* over-refusal) |
 | **Statistics** | paired t-test, exact McNemar, Cohen's d, bootstrap CIs, minimum-sample-size estimate |
 | **Execution** | concurrent runs, async job model, inline or RQ backend, horizontally scalable workers, crash reaper |
-| **Providers** | Ollama + five hosted providers behind one interface, with per-provider concurrency ceilings and token/cost normalization |
+| **Providers** | Ollama + five hosted providers + any OpenAI-compatible endpoint you name + answers you already have, behind one interface, with per-provider concurrency ceilings, a shared 429 backoff, and token/cost normalization |
 | **CI** | `--fail-under` and `--compare-to-baseline` gates, a composite **GitHub Action** that runs the suite and posts a PR comment |
 | **Ops** | Prometheus metrics, 9 alert rules, a provisioned Grafana dashboard |
 | **Product** | a Next.js app: homepage, research study, workbench, benchmarks, runs, admin, embedded dashboard |
-| **Research** | an original power study of regression detection, reproducible from `scripts/` |
-| **Quality** | 274 tests, ruff-clean, four ADRs, and three *structural* tests that fail a whole class of bug rather than one instance: every route requires auth, every handler touching owned data is scoped to its caller, and every service that can run a suite is scraped by Prometheus |
+| **Research** | an original power study of regression detection; per-benchmark resolution computed from run history; a judge-variance study with its answers frozen and its arithmetic tested before it ran — all reproducible from `scripts/` |
+| **Security** | documented in [`SECURITY.md`](SECURITY.md): a caller's key never persists (encrypted, six-hour Redis stash), the server's keys go only to their own providers, custom endpoints are checked at the socket (no private addresses, no DNS rebinding, no redirects), the API refuses to boot on placeholder secrets — and the known gaps, with their fixes |
+| **Quality** | 598 tests, ruff-clean, four ADRs, and three *structural* tests that fail a whole class of bug rather than one instance: every route requires auth, every handler touching owned data is scoped to its caller, and every service that can run a suite is scraped by Prometheus |
 
 Not done yet: a hosted public deployment (see [`docs/DEPLOY.md`](docs/DEPLOY.md)),
 publishing the Action to the GitHub Marketplace, and multi-turn / agentic

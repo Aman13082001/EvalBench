@@ -130,8 +130,18 @@ Set real values in `.env` **before** the first `docker compose up`. If the DB al
 | `github` | `gpt-4o-mini` | `GITHUB_TOKEN` (a PAT) | yes |
 | `openrouter` | `meta-llama/llama-3.3-70b-instruct:free` | `OPENROUTER_API_KEY` | yes |
 | `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` | paid |
+| `custom` | whatever your server expects | optional, per run | your endpoint |
 
 A missing key fails with the exact variable to set. Each provider has a concurrency ceiling (`groq` 4, `gemini` 2, `github` 1, `ollama` 8) that caps `concurrency:` so free-tier rate limits are respected. The `judge` / `llm-rubric` grader can run on a **different** provider via `judge_provider:` / `judge_model:`.
+
+**Your own endpoint.** Anything that speaks the OpenAI chat API — a vLLM, Ollama behind a tunnel, a gateway, a fine-tune you host — can be evaluated without being listed here:
+
+```bash
+evalbench run suites/general.yaml --base-url https://my-gateway.example.com/v1 --model my-7b
+evalbench run suites/general.yaml --base-url https://… --endpoint-key sk-…   # if it needs one
+```
+
+The key is optional and the server's own keys are never sent to your endpoint. Because the worker is making requests to a URL a stranger typed, the URL is checked the way a server-side request has to be: public https only, no credentials in the URL, every address it resolves to must be public, and the connection is opened to the address that was checked — so a hostname that changes its mind between submission and connect (DNS rebinding) is refused, not followed. Redirects are never followed. `ALLOW_PRIVATE_ENDPOINTS=true` relaxes this for a self-hosted instance that should reach a model server on its own LAN; never set it on anything reachable from the internet. `evalbench/core/endpoint.py` has the details and `tests/test_endpoint_url.py` the cases.
 
 ---
 

@@ -405,6 +405,20 @@ def run(
     judge_model: str | None = typer.Option(
         None, "--judge-model", help="Which model grades supplied answers"
     ),
+    base_url: str | None = typer.Option(
+        None,
+        "--base-url",
+        help=(
+            "Run against your own OpenAI-compatible endpoint, e.g. "
+            "https://my-gateway.example.com/v1. With --answers, it grades "
+            "them instead. The server's keys are never sent to it."
+        ),
+    ),
+    endpoint_key: str | None = typer.Option(
+        None,
+        "--endpoint-key",
+        help="The key your endpoint expects, if it needs one",
+    ),
     strict_cost: bool = typer.Option(
         False,
         "--strict-cost",
@@ -465,6 +479,21 @@ def run(
             f"[dim]Scoring {len(rows)} supplied answers — no model is called "
             "for generation.[/dim]"
         )
+
+    if base_url:
+        # Your endpoint, your key or none. The API checks the URL and
+        # says why if it refuses; _run_and_wait prints that verbatim.
+        if run_body is None:
+            run_body = {
+                "provider": "custom",
+                "model": model or suite.get("model"),
+            }
+        else:
+            run_body["judge_provider"] = judge_provider or "custom"
+        run_body["base_url"] = base_url
+        if endpoint_key:
+            run_body["provider_key"] = endpoint_key
+        console.print(f"[dim]Endpoint: {base_url}[/dim]")
 
     headers = _get_headers(api_key)
 

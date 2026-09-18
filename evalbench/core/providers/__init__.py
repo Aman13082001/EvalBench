@@ -8,6 +8,9 @@ Two kinds of entries:
   an OpenAI-compatible endpoint resolved to an
   :class:`OpenAICompatibleProvider` using a ``base_url`` and an API key read
   from settings / the environment.
+* **custom** — the same adapter pointed at a ``base_url`` the caller
+  names, with the caller's key or none. Never a server key, and only
+  through the guarded transport in :mod:`evalbench.core.endpoint`.
 
 ``get_provider("groq")`` returns a ready client (or raises with the exact
 env var to set).
@@ -17,7 +20,10 @@ from __future__ import annotations
 
 import os
 
+import httpx
+
 from evalbench.config import settings
+from evalbench.core.endpoint import CONNECT_TIMEOUT, GuardedTransport, validate_endpoint
 from evalbench.core.providers.base import LLMResponse, Provider
 from evalbench.core.providers.mock import MockProvider
 from evalbench.core.providers.ollama import OllamaProvider
@@ -57,6 +63,11 @@ _PRESET_CONCURRENCY: dict[str, int] = {
     "openrouter": 4,
 }
 
+# The caller's own OpenAI-compatible endpoint. Not a preset: it has no
+# fixed URL and no server key, so it is neither in `_PROVIDERS` nor
+# `_PRESETS` — `configured_providers()` must never list it.
+CUSTOM = "custom"
+
 
 # Substrings that mark a model as something other than a chat model —
 # speech, audio, moderation classifiers, embeddings. Provider model lists
@@ -88,7 +99,7 @@ def available_providers() -> list[str]:
     Not the same question as whether *this server* can reach it: a caller
     supplying their own key can use any of these.
     """
-    return sorted([*_PROVIDERS, *_PRESETS])
+    return sorted([*_PROVIDERS, *_PRESETS, CUSTOM])
 
 
 def configured_providers() -> list[str]:
@@ -131,8 +142,37 @@ def _build_preset(name: str, **overrides) -> OpenAICompatibleProvider:
     )
 
 
+def _build_custom(**overrides) -> OpenAICompatibleProvider:
+    """The caller's endpoint, with the caller's key or none.
+
+    ``api_key`` is whatever the caller supplied. It is never resolved
+    from settings: an endpoint that received our Groq key in its
+    Authorization header would be a one-line key exfiltration.
+    """
+    base_url = overrides.pop("base_url", "") or ""
+    if not base_url:
+        raise ValueError(
+            "Provider 'custom' needs a base_url — the OpenAI-compatible "
+            "endpoint to call, for example https://my-gateway.example.com/v1."
+        )
+    allow_private = settings.allow_private_endpoints
+    endpoint = validate_endpoint(base_url, allow_private=allow_private)
+    return OpenAICompatibleProvider(
+        base_url=endpoint.url,
+        api_key=overrides.pop("api_key", None) or None,
+        name=CUSTOM,
+        transport=GuardedTransport(allow_private=allow_private),
+        timeout=httpx.Timeout(
+            settings.default_request_timeout, connect=CONNECT_TIMEOUT
+        ),
+        max_concurrency=overrides.pop("max_concurrency", 4),
+    )
+
+
 def get_provider(name: str = "ollama", **kwargs) -> Provider:
     key = (name or "ollama").lower()
+    if key == CUSTOM:
+        return _build_custom(**kwargs)
     if key in _PROVIDERS:
         # A caller's key is for hosted providers. A suite can still route
         # its judge through a keyless one — the demo suite judges on the

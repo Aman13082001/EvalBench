@@ -26,6 +26,7 @@ from evalbench.api.deps import (
 from evalbench.api.summary import RUN_ROW_FIELDS, run_row
 from evalbench.benchmarks import describe_benchmarks, load_benchmark
 from evalbench.config import settings
+from evalbench.core.endpoint import EndpointError, validate_endpoint
 from evalbench.core.providers import (
     available_providers,
     configured_providers,
@@ -136,6 +137,10 @@ async def list_models(
     provider: str = "ollama",
     user=Depends(get_current_user),
 ):
+    if provider.lower() == "custom":
+        # There is no endpoint to ask until the caller names one, and the
+        # run itself is where a URL gets validated. The model is typed.
+        return {"provider": provider, "models": [], "hidden": []}
     client = get_provider(provider)
     try:
         models = await client.list_models()
@@ -214,6 +219,11 @@ class RunRequest(BaseModel):
     answers: list[dict] | None = None
     judge_provider: str | None = None
     judge_model: str | None = None
+    # Your own OpenAI-compatible endpoint, with `provider: custom` (or
+    # `judge_provider: custom` to grade supplied answers on it). The key
+    # is optional; the server's keys are never sent to it. Checked here
+    # and again at connect time — see evalbench/core/endpoint.py.
+    base_url: str | None = None
 
 
 def _day_start() -> datetime:
@@ -256,11 +266,14 @@ async def list_providers(user=Depends(get_current_user)):
     dead run minutes later.
     """
     configured = set(configured_providers())
-    keyless = {"ollama", "mock", "demo"}
+    # "custom" is keyless in the sense that matters to the picker: the
+    # key is optional. What it needs instead is a URL.
+    keyless = {"ollama", "mock", "demo", "custom"}
     labels = {
         "groq": "Groq", "gemini": "Gemini", "github": "GitHub Models",
         "openrouter": "OpenRouter", "openai": "OpenAI",
         "ollama": "Ollama (local)", "demo": "Demo (replayed)",
+        "custom": "My own endpoint",
     }
     return [
         {
@@ -269,9 +282,10 @@ async def list_providers(user=Depends(get_current_user)):
             "needs_key": name not in keyless,
             # False means: usable, but only with a key of your own.
             "server_key": name in configured and name not in keyless,
+            "needs_url": name == "custom",
         }
         for name in available_providers()
-        if name != "mock"
+        if name not in ("mock", "answers")
     ]
 
 
@@ -439,6 +453,49 @@ async def run_suite(
             status_code=400, detail=f"Unknown provider '{provider}'"
         )
 
+    # A custom endpoint: the caller names the URL. Refuse a bad one here,
+    # with the reason, rather than let the worker discover it. The
+    # worker checks again regardless — a name can change its mind
+    # between now and then, and that check is the one that counts.
+    base_url: str | None = None
+    wants_custom = provider == "custom" or (
+        (body.judge_provider or "").lower() == "custom"
+    )
+    if body.base_url and not wants_custom:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "base_url only applies to provider 'custom' (or "
+                "judge_provider 'custom'). Pick 'custom' to use it."
+            ),
+        )
+    if wants_custom:
+        if not body.base_url:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Provider 'custom' needs a base_url — the OpenAI-"
+                    "compatible endpoint to call, for example "
+                    "https://my-gateway.example.com/v1."
+                ),
+            )
+        try:
+            base_url = validate_endpoint(
+                body.base_url, allow_private=settings.allow_private_endpoints
+            ).url
+        except EndpointError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        if provider == "custom" and body.answers is None and not body.model:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "A custom endpoint needs a model name. There is no "
+                    "list to pick from, and the benchmark's default names "
+                    f"a {suite.provider} model your endpoint has never "
+                    "heard of."
+                ),
+            )
+
     # Supplied answers replace the model call. Validate them against the
     # suite now — a typo in the file should come back as a 400 naming
     # it, not as a run where one test mysteriously never answered.
@@ -460,7 +517,11 @@ async def run_suite(
             judge_model = body.judge_model or suite.judge_model or suite.model
             if judge_provider in ("answers", "demo", "mock"):
                 judge_provider = "groq"
-            if not body.provider_key and judge_provider not in configured_providers():
+            if (
+                judge_provider != "custom"
+                and not body.provider_key
+                and judge_provider not in configured_providers()
+            ):
                 raise HTTPException(
                     status_code=400,
                     detail=(
@@ -479,6 +540,7 @@ async def run_suite(
     # credential.
     if (
         answers is None
+        and provider != "custom"
         and not body.provider_key
         and provider not in configured_providers()
     ):
@@ -493,18 +555,17 @@ async def run_suite(
 
     # Local providers cost nothing; hosted ones spend a key. If the caller
     # did not bring their own, it is ours, and that is what the cap is for.
+    # A custom endpoint is never ours: it gets the caller's key or none.
+    free = ("ollama", "mock", "demo", "answers", "custom")
     if answers is not None:
         # The answers are free. Only a hosted grader spends our key.
         uses_server_key = (
             judge_provider is not None
-            and judge_provider not in ("ollama", "mock", "demo", "answers")
+            and judge_provider not in free
             and not body.provider_key
         )
     else:
-        uses_server_key = (
-            provider not in ("ollama", "mock", "demo", "answers")
-            and not body.provider_key
-        )
+        uses_server_key = provider not in free and not body.provider_key
     if uses_server_key and user.get("role") != "admin":
         used = await runs_used_today(user)
         if used >= settings.daily_run_cap:
@@ -542,6 +603,9 @@ async def run_suite(
         run_doc["answers"] = answers
         run_doc["judge_provider"] = judge_provider
         run_doc["judge_model"] = judge_model
+    if base_url:
+        # The address is part of what was run. The key is not stored.
+        run_doc["base_url"] = base_url
     result = await db.test_runs.insert_one(run_doc)
     run_id = str(result.inserted_id)
 

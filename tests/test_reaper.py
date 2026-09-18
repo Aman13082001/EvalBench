@@ -96,7 +96,7 @@ class TestHeartbeat:
         mock_db.test_runs.find_one.return_value = {"_id": ObjectId(run_id)}
 
         class _Runner:
-            def __init__(self, provider_key=None, answers=None):
+            def __init__(self, provider_key=None, **_):
                 pass
 
             async def run_suite(self, suite, sid, progress_cb=None):

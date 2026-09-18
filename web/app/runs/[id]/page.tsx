@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getRun, getRunSummary, RunSummary } from "@/lib/api";
+import { endpointHost, getRun, getRunSummary, RunSummary } from "@/lib/api";
 import { RequireAuth } from "@/components/AuthProvider";
 import Results from "@/components/Results";
 
@@ -38,6 +38,7 @@ function RunReport({ id }: { id: string }) {
         <h1 className="font-display text-3xl">Run report</h1>
         <p className="font-mono text-xs text-muted">
           {id} · {run.model}
+          {run.base_url && ` at ${endpointHost(run.base_url)}`}
         </p>
       </header>
 

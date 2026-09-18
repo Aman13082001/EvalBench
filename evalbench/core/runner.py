@@ -88,6 +88,7 @@ class TestRunner:
         self,
         provider_key: str | None = None,
         answers: dict[str, dict] | None = None,
+        base_url: str | None = None,
     ):
         self.provider: Provider | None = None
         # Lazily built when a suite uses the judge / security evaluator.
@@ -99,8 +100,15 @@ class TestRunner:
         # A caller-supplied recording, keyed the way the replay provider
         # looks prompts up. When set, the "answers" provider serves it.
         self._answers = answers
+        # The caller's own OpenAI-compatible endpoint, for the "custom"
+        # provider. Their key (if any) goes with it; a server key never.
+        self._base_url = base_url
 
     def _make_provider(self, name: str) -> Provider:
+        if name == "custom":
+            return get_provider(
+                "custom", base_url=self._base_url, api_key=self._provider_key
+            )
         if name == "answers":
             return get_provider(
                 "answers",

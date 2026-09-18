@@ -5,6 +5,38 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Added — evaluate your own endpoint
+
+A model that is not in the list can still be measured: `provider: custom`
+with a `base_url` points a run at any OpenAI-compatible server — a
+vLLM, Ollama behind a tunnel, a gateway, a fine-tune you host. The key
+is optional (a personal server behind a tunnel often has none) and it
+travels the same encrypted, short-lived road as any caller key; the
+server's own keys are never sent there, and nothing counts against the
+daily cap. `evalbench run --base-url … [--endpoint-key …]` on the CLI;
+"My own endpoint" in the workbench and the comparison, where A and B
+can be two different servers. Supplied answers can be graded on one
+too (`judge_provider: custom`).
+
+A URL a stranger typed, fetched by the server, is server-side request
+forgery unless it is made not to be. `evalbench/core/endpoint.py`:
+
+- The URL is checked at submission — https only, a host and nothing
+  else (no `user:pass@`, no query), and every address it resolves to
+  must be public — and refused with the reason as a 400, not a dead run.
+- The check happens again *inside* the connection. A hostname can
+  resolve to a public address when checked and to `127.0.0.1` when
+  dialled; `PinnedBackend` resolves, checks every answer, and opens the
+  socket to the address it approved. There is no second resolution to
+  rebind. TLS still verifies against the hostname.
+- Redirects are never followed, an environment proxy cannot route
+  around the pin, and a response is cut off past 8 MB. A refusal never
+  echoes what an internal name resolved to — on a public instance that
+  would be a map of the network, one request at a time.
+- `ALLOW_PRIVATE_ENDPOINTS=true` is the escape hatch for a self-hosted
+  instance and a model server on the same LAN. It is documented as
+  never-on-a-public-deployment and defaults off.
+
 ### Added — bring your own answers
 
 Score outputs you already have. EvalBench scores answers; calling a

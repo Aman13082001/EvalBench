@@ -51,6 +51,8 @@ export interface RunSummary {
   failed: number;
   /* "answers" when the caller supplied them — nothing was generated. */
   provider?: string | null;
+  /* "custom" runs: the endpoint they went to. See endpointHost(). */
+  base_url?: string | null;
   /* Null when nothing was scored. "0%" would be a measurement —
      every answer wrong — and that is a different claim from having
      measured nothing at all. */
@@ -168,6 +170,10 @@ export interface RunOptions {
   model?: string;
   provider?: string;
   provider_key?: string;
+  /* Your own OpenAI-compatible endpoint, with provider "custom" (or
+     judge_provider "custom"). Checked server-side; the reason comes back
+     as the run error if it is refused. */
+  base_url?: string;
   /* Bring your own answers: nothing is generated, the file is replayed.
      Only checks that ask an LLM to grade need judge_provider/judge_model. */
   answers?: { test_name: string | null; prompt: string | null; response: string }[];
@@ -245,6 +251,8 @@ export interface ProviderInfo {
   needs_key: boolean;
   /** This instance has a key for it — so "use EvalBench's key" works. */
   server_key: boolean;
+  /** The caller names the endpoint; the key is optional. */
+  needs_url?: boolean;
 }
 
 export const listProviders = () =>
@@ -338,3 +346,14 @@ export const adminSetActive = (username: string, active: boolean) =>
     `/admin/users/${username}/${active ? "activate" : "deactivate"}`,
     { method: "POST" }
   );
+
+/** The host of a custom endpoint, for display: the same model name
+    means different things on different servers. */
+export function endpointHost(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}

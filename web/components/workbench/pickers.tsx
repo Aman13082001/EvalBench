@@ -11,6 +11,7 @@ import {
   listModels,
   listSuites,
   Quota,
+  RunOptions,
   SuiteDoc,
   listProviders,
   ProviderInfo,
@@ -235,9 +236,56 @@ export function BenchmarkPicker({
 const FALLBACK_PROVIDERS: ProviderInfo[] = [
   { id: "groq", label: "Groq", needs_key: true, server_key: false },
   { id: "ollama", label: "Ollama (local)", needs_key: false, server_key: false },
+  {
+    id: "custom",
+    label: "My own endpoint",
+    needs_key: false,
+    server_key: false,
+    needs_url: true,
+  },
 ];
 
-export type ModelChoice = { provider: string; model: string };
+/* baseUrl / endpointKey belong to the choice, not to the shared key
+   picker: in a comparison, A and B can be two different endpoints with
+   two different keys. The key is optional — a personal model server
+   behind a tunnel often has none. */
+export type ModelChoice = {
+  provider: string;
+  model: string;
+  baseUrl?: string;
+  endpointKey?: string;
+};
+
+/** Whether the choice names a URL the server needs. */
+export function needsUrl(provider: string, list?: ProviderInfo[] | null) {
+  const all = list ?? providerCache ?? FALLBACK_PROVIDERS;
+  return all.find((p) => p.id === provider)?.needs_url ?? provider === "custom";
+}
+
+/** Enough of a URL to send. The server does the real check and says why
+    if it refuses; this only keeps the button honest. */
+export function looksLikeUrl(s: string | undefined) {
+  return !!s && /^https?:\/\/[^\s/]+/.test(s.trim());
+}
+
+/** A model choice the run button can accept. */
+export function modelReady(m: ModelChoice) {
+  return !!m.model && (!needsUrl(m.provider) || looksLikeUrl(m.baseUrl));
+}
+
+/** The request for this choice. `key` is the shared own-key field for
+    hosted providers; a custom endpoint carries its own. */
+export function toRunOptions(m: ModelChoice, key?: string): RunOptions {
+  if (needsUrl(m.provider)) {
+    return {
+      model: m.model,
+      provider: m.provider,
+      base_url: m.baseUrl?.trim(),
+      provider_key: m.endpointKey || undefined,
+    };
+  }
+  return { model: m.model, provider: m.provider, provider_key: key };
+}
 
 /** Shared across pickers: fetched once, not per component. */
 let providerCache: ProviderInfo[] | null = null;
@@ -314,39 +362,83 @@ export function ModelPicker({
   }, [value.provider]);
 
   const listId = `${idPrefix}-models`;
+  const custom = needsUrl(value.provider, providers);
 
   return (
-    <div className="grid gap-2 sm:grid-cols-[11rem_1fr]">
-      <select
-        id={`${idPrefix}-provider`}
-        aria-label="Provider"
-        className="field font-mono text-sm"
-        value={value.provider}
-        onChange={(e) => onChange({ provider: e.target.value, model: "" })}
-      >
-        {(providers ?? FALLBACK_PROVIDERS).map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.label}
-            {p.needs_key && !p.server_key ? " · your key only" : ""}
-          </option>
-        ))}
-      </select>
-      <div>
-        <input
-          id={`${idPrefix}-name`}
-          aria-label="Model"
-          list={listId}
+    <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-[11rem_1fr]">
+        <select
+          id={`${idPrefix}-provider`}
+          aria-label="Provider"
           className="field font-mono text-sm"
-          placeholder="model name"
-          value={value.model}
-          onChange={(e) => onChange({ ...value, model: e.target.value })}
-        />
-        <datalist id={listId}>
-          {models.map((m) => (
-            <option key={m} value={m} />
+          value={value.provider}
+          onChange={(e) =>
+            onChange({
+              provider: e.target.value,
+              model: "",
+              baseUrl: value.baseUrl,
+              endpointKey: value.endpointKey,
+            })
+          }
+        >
+          {(providers ?? FALLBACK_PROVIDERS).map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+              {p.needs_key && !p.server_key ? " · your key only" : ""}
+            </option>
           ))}
-        </datalist>
+        </select>
+        <div>
+          <input
+            id={`${idPrefix}-name`}
+            aria-label="Model"
+            list={listId}
+            className="field font-mono text-sm"
+            placeholder="model name"
+            value={value.model}
+            onChange={(e) => onChange({ ...value, model: e.target.value })}
+          />
+          <datalist id={listId}>
+            {models.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+        </div>
       </div>
+
+      {/* Your own OpenAI-compatible endpoint. The server checks the URL
+          — public https only, and it re-checks at connect time — and
+          never sends its own keys to it. */}
+      {custom && (
+        <div className="space-y-2 border-l-2 border-line pl-3">
+          <input
+            id={`${idPrefix}-base-url`}
+            aria-label="Endpoint base URL"
+            type="url"
+            className="field font-mono text-sm"
+            placeholder="https://my-gateway.example.com/v1"
+            spellCheck={false}
+            value={value.baseUrl ?? ""}
+            onChange={(e) => onChange({ ...value, baseUrl: e.target.value })}
+          />
+          <input
+            id={`${idPrefix}-endpoint-key`}
+            aria-label="Endpoint API key (optional)"
+            type="password"
+            className="field font-mono text-xs"
+            placeholder="API key, if your endpoint needs one — encrypted, held only while the run executes"
+            value={value.endpointKey ?? ""}
+            onChange={(e) => onChange({ ...value, endpointKey: e.target.value })}
+          />
+          <p className="text-xs leading-relaxed text-muted">
+            Anything that speaks the OpenAI chat API — vLLM, Ollama behind a
+            tunnel, a gateway, a fine-tune you host. EvalBench appends{" "}
+            <span className="font-mono text-text">/chat/completions</span>. Public
+            https only; its own keys are never sent there. Type the model name
+            your endpoint expects.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -396,6 +488,9 @@ export function KeyPicker({
     if (ownOnly && !value.own) onChange({ own: true, key: value.key });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownOnly]);
+
+  // The endpoint's key lives with the endpoint, in the model picker.
+  if (needsUrl(provider, providers)) return null;
 
   if (!isHosted(provider, providers)) {
     return (

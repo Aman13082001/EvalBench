@@ -165,7 +165,7 @@ class TestTheJobReplaysThem:
         seen = {}
 
         class _Runner:
-            def __init__(self, provider_key=None, answers=None):
+            def __init__(self, provider_key=None, answers=None, **_):
                 seen["answers"] = answers
 
             async def run_suite(self, suite, suite_id, progress_cb=None):

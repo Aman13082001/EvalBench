@@ -31,6 +31,7 @@ RUN_ROW_FIELDS = {
     "completed_tests": 1,
     "error": 1,
     "used_server_key": 1,
+    "base_url": 1,
     "results.passed": 1,
     "results.error": 1,
     "results.runs": 1,
@@ -136,6 +137,8 @@ def summarize_run(doc: dict) -> dict:
         # "answers" means the caller supplied them; the view says so
         # instead of reporting a latency that was never measured.
         "provider": doc.get("provider"),
+        # Where a custom run went. The address is part of what was run.
+        "base_url": doc.get("base_url"),
         "evaluator": doc.get("evaluator"),
         "status": doc.get("status", "completed"),
         "progress": doc.get("progress", 1.0),

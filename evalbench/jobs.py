@@ -144,7 +144,13 @@ async def execute_run_job(
         }},
     )
 
-    runner = TestRunner(provider_key=provider_key, answers=answers)
+    runner = TestRunner(
+        provider_key=provider_key,
+        answers=answers,
+        # The caller's own endpoint, when the run is on one. Checked
+        # again at connect time — see evalbench/core/endpoint.py.
+        base_url=run_doc.get("base_url"),
+    )
 
     async def _report(done: int, total: int) -> None:
         await db.test_runs.update_one(

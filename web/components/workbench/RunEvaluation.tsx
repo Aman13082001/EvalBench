@@ -9,6 +9,9 @@ import {
   BenchmarkChoice,
   BenchmarkPicker,
   isHosted,
+  modelReady,
+  needsUrl,
+  toRunOptions,
   KeyMode,
   KeyPicker,
   ModelChoice,
@@ -19,6 +22,7 @@ import {
 } from "./pickers";
 import { RunProgress, useRun } from "./useRun";
 import { AnswersPicker, AnswersState } from "./AnswersPicker";
+import { endpointHost } from "@/lib/api";
 
 /* ── §1 · Run an evaluation ─────────────────────────────────────
    The primary section. Select a benchmark, select a model, run it,
@@ -84,6 +88,7 @@ export default function RunEvaluation({
         r.total_tests === tests
     );
     const base = `${tests} tests`;
+    if (needsUrl(model.provider)) return `${base} · your endpoint, nothing of ours is spent`;
     if (!isHosted(model.provider)) return `${base} · local model, nothing spent`;
     if (prior && prior.total_cost_usd > 0)
       return `${base} · last run on ${model.model} cost $${prior.total_cost_usd.toFixed(4)}`;
@@ -92,7 +97,7 @@ export default function RunEvaluation({
 
   const graderOk =
     !needsJudge ||
-    (!!judge.model &&
+    (modelReady(judge) &&
       (!isHosted(judge.provider) || !judgeKey.own || judgeKey.key.length > 0) &&
       !(isHosted(judge.provider) && !judgeKey.own && quota?.remaining === 0));
 
@@ -100,7 +105,7 @@ export default function RunEvaluation({
     !!bench &&
     (source === "answers"
       ? !!answers && answers.rows.length > 0 && graderOk
-      : !!model.model &&
+      : modelReady(model) &&
         (!isHosted(model.provider) || !keyMode.own || keyMode.key.length > 0) &&
         !(isHosted(model.provider) && !keyMode.own && quota?.remaining === 0)) &&
     state.phase !== "starting" &&
@@ -121,18 +126,20 @@ export default function RunEvaluation({
     await run(
       resolved.id,
       source === "answers" && answers
-        ? {
-            answers: answers.rows,
-            model: answers.label || undefined,
-            judge_provider: needsJudge ? judge.provider : undefined,
-            judge_model: needsJudge ? judge.model : undefined,
-            provider_key: needsJudge && judgeKey.own ? judgeKey.key : undefined,
-          }
-        : {
-            model: model.model,
-            provider: model.provider,
-            provider_key: keyMode.own ? keyMode.key : undefined,
-          }
+        ? (() => {
+            // The grader is a model choice like any other; a custom
+            // endpoint carries its URL and key inside it.
+            const g = needsJudge ? toRunOptions(judge, judgeKey.own ? judgeKey.key : undefined) : {};
+            return {
+              answers: answers.rows,
+              model: answers.label || undefined,
+              judge_provider: g.provider,
+              judge_model: g.model,
+              provider_key: g.provider_key,
+              base_url: g.base_url,
+            };
+          })()
+        : toRunOptions(model, keyMode.own ? keyMode.key : undefined)
     );
     refreshQuota();
     if (bench.kind !== "mine") benchmarks.reload();
@@ -307,6 +314,7 @@ function ResultHeader({
     scored_tests: number;
     total_tests: number;
     errors: number;
+    base_url?: string | null;
   };
   runId: string;
 }) {
@@ -315,12 +323,20 @@ function ResultHeader({
   const pct =
     summary.pass_rate == null ? null : (summary.pass_rate * 100).toFixed(1);
   const partial = summary.errors > 0;
+  // A custom run is "this model, at that endpoint". Name the host: the
+  // same model name means different things on different servers.
+  const at = endpointHost(summary.base_url);
   return (
     <div className="panel flex flex-wrap items-end justify-between gap-4 p-5">
       <div className="space-y-1">
         <p className="label-xs">
-          <span className="font-mono text-text">{model}</span> on{" "}
-          <span className="font-mono text-text">{suite}</span>
+          <span className="font-mono text-text">{model}</span>
+          {at && (
+            <>
+              {" "}at <span className="font-mono text-text">{at}</span>
+            </>
+          )}{" "}
+          on <span className="font-mono text-text">{suite}</span>
         </p>
         <p className="font-display text-5xl leading-none tnum">
           {pct ?? "—"}

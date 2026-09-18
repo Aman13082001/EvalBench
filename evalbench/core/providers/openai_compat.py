@@ -32,11 +32,12 @@ class OpenAICompatibleProvider(Provider):
     def __init__(
         self,
         base_url: str,
-        api_key: str,
+        api_key: str | None,
         name: str = "openai-compat",
         extra_headers: dict[str, str] | None = None,
-        timeout: float | None = None,
+        timeout: float | httpx.Timeout | None = None,
         max_concurrency: int | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
     ):
         self.name = name
         self.base_url = base_url.rstrip("/")
@@ -45,12 +46,21 @@ class OpenAICompatibleProvider(Provider):
         self._paused_until = 0.0
         if max_concurrency is not None:
             self.max_concurrency = max_concurrency
-        headers = {"Authorization": f"Bearer {api_key}"}
+        # No key, no header. A personal model server behind a tunnel has
+        # no key to send, and "Bearer None" is not the same as none.
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         if extra_headers:
             headers.update(extra_headers)
         self._client = httpx.AsyncClient(
             headers=headers,
             timeout=timeout or settings.default_request_timeout,
+            # A 302 from a model endpoint has no honest meaning, and a
+            # 302 to an internal address is an attack. httpx already
+            # defaults to this; it is spelled out so it stays.
+            follow_redirects=False,
+            # Custom endpoints get the transport that checks where it is
+            # connecting. See evalbench/core/endpoint.py.
+            transport=transport,
         )
 
     async def generate(

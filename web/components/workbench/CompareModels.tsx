@@ -6,6 +6,8 @@ import {
   BenchmarkChoice,
   BenchmarkPicker,
   isHosted,
+  modelReady,
+  toRunOptions,
   KeyMode,
   KeyPicker,
   ModelChoice,
@@ -51,9 +53,9 @@ export default function CompareModels({
 
   const canRun =
     !!bench &&
-    !!a.model &&
-    !!b.model &&
-    !(a.provider === b.provider && a.model === b.model) &&
+    modelReady(a) &&
+    modelReady(b) &&
+    !(a.provider === b.provider && a.model === b.model && a.baseUrl === b.baseUrl) &&
     (!hosted || !keyMode.own || keyMode.key.length > 0) &&
     !capBlocks &&
     !busy;
@@ -71,8 +73,8 @@ export default function CompareModels({
     const key = keyMode.own ? keyMode.key : undefined;
     // both in parallel — the worker queue handles the rest
     const [sa, sb] = await Promise.all([
-      runA.run(suite.id, { model: a.model, provider: a.provider, provider_key: key }),
-      runB.run(suite.id, { model: b.model, provider: b.provider, provider_key: key }),
+      runA.run(suite.id, toRunOptions(a, key)),
+      runB.run(suite.id, toRunOptions(b, key)),
     ]);
     refreshQuota();
     if (bench.kind !== "mine") benchmarks.reload();

@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # How often the API sweeps for runs whose worker has gone silent.
     # Only meaningful under `rq`; see evalbench/reaper.py.
     reap_interval_seconds: int = 300
+    # Let a custom endpoint be plain http or a private address. For an
+    # operator pointing their own EvalBench at a vLLM on their own LAN.
+    # Never on a public deployment: it turns the worker into a proxy
+    # into whatever network it sits on. See evalbench/core/endpoint.py.
+    allow_private_endpoints: bool = False
     worker_metrics_port: int = 9100
     # Runs per user per day that may use the server's own provider key.
     # Runs made with a user-supplied key are not counted. 0 disables the

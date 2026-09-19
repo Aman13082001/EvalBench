@@ -536,15 +536,32 @@ production prompt and parser, and a two-way variance decomposition that
 splits between-answer, between-judge, answer × judge and retest noise,
 then sets the judge's spread beside the strong–weak model gap. The
 frozen answers are committed; `scripts/run_study_judge.py score` is
-resumable and `analyze` is arithmetic on the recorded calls. Results land
-in `research/judge-variance/REPORT.md` and, from there, on each judged
-benchmark's page as its judge-noise floor.
+resumable and `analyze` is arithmetic on the recorded calls.
 
-The finding from building it, before a single judge call: the parser
-read a rubric score of **1 — the worst verdict — as a perfect 1.0**,
-because any value ≤ 1 was assumed to already be a fraction. Scores 2–5
-were fine, which is why it survived. You cannot catch that without being
-able to supply a deliberately wrong answer, which is what bring-your-own
+**Findings** ([`research/judge-variance/REPORT.md`](research/judge-variance/REPORT.md)):
+89% of the variance is the answers, 7% is judges disagreeing on specific
+answers, 4% is re-asking, and no judge scored everything higher than
+another. For telling two models 0.31 apart the judge is not the problem
+(test–retest ICC 0.95–0.97). For catching a **5-point regression** it is a
+third of the budget: a judge switch moves a 30-test mean by ±1.4 points
+and a re-run by ±1.0 before the model has changed. And judges matter most
+where answers are best — near the ceiling, 48% of what variance remains is
+the judge. The design's falsification clause, evaluated as written, was
+not met; the premise stands, narrowly, and the report says so.
+
+**On the site:** every judged benchmark shows its **judge floor** under its
+resolution — the study's per-answer spread scaled to that benchmark's
+size — so a drop inside it is not read as evidence about the model.
+
+Two parser bugs came out of being able to score frozen answers. Before a
+single judge call: a rubric score of **1 — the worst verdict — was read as
+a perfect 1.0**, because any value ≤ 1 was assumed to already be a
+fraction. During the study: **9 of 900 judge replies came back empty**,
+all on refusal prompts — the judge would not engage with a grading prompt
+that quotes a harmful request — and an empty reply was read as 3 of 5,
+which is the pass cutoff. A lock-picking walkthrough graded by a judge
+that refused to look at it passed. Neither is visible unless you can feed
+a judge a deliberately wrong answer twice, which is what bring-your-own
 answers is for.
 
 ---
@@ -616,7 +633,7 @@ alternative that was rejected and why:
 | **Product** | a Next.js app: homepage, research study, workbench, benchmarks, runs, admin, embedded dashboard |
 | **Research** | an original power study of regression detection; per-benchmark resolution computed from run history; a judge-variance study with its answers frozen and its arithmetic tested before it ran — all reproducible from `scripts/` |
 | **Security** | documented in [`SECURITY.md`](SECURITY.md): a caller's key never persists (encrypted, six-hour Redis stash), the server's keys go only to their own providers, custom endpoints are checked at the socket (no private addresses, no DNS rebinding, no redirects), the API refuses to boot on placeholder secrets — and the known gaps, with their fixes |
-| **Quality** | 598 tests, ruff-clean, four ADRs, and three *structural* tests that fail a whole class of bug rather than one instance: every route requires auth, every handler touching owned data is scoped to its caller, and every service that can run a suite is scraped by Prometheus |
+| **Quality** | 611 tests, ruff-clean, four ADRs, and three *structural* tests that fail a whole class of bug rather than one instance: every route requires auth, every handler touching owned data is scoped to its caller, and every service that can run a suite is scraped by Prometheus |
 
 Not done yet: a hosted public deployment (see [`docs/DEPLOY.md`](docs/DEPLOY.md)),
 publishing the Action to the GitHub Marketplace, and multi-turn / agentic

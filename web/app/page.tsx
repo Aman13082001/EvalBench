@@ -4,6 +4,39 @@ import { useState } from "react";
 import ArchitectureFlow from "@/components/ArchitectureFlow";
 import LoginDialog from "@/components/LoginDialog";
 import { Rule } from "@/components/ui";
+import judgeStudy from "@/lib/fixtures/judge-study.json";
+
+/* ── §3c · Three findings ───────────────────────────────────────
+   The thesis is that LLM evaluation is itself badly measured. These
+   are the three numbers that say so, each from a study in this repo,
+   each read live from the study's own output so the page cannot
+   drift from the report. */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const J = judgeStudy as any;
+const FINDINGS: { n: string; value: string; claim: string; detail: string; href: string }[] = [
+  {
+    n: "01",
+    value: "21%",
+    claim: "A ten-test suite catches a real regression one time in five.",
+    detail:
+      "Real paired outputs from two models, resampled 2,000 times at each suite size, with EvalBench's own detector run on every draw. Power does not reach 80% until somewhere past forty tests — and the failure is silent, toward false confidence.",
+    href: "/research#power",
+  },
+  {
+    n: "02",
+    value: `${Math.round(J.gate.both_vs_mde * 100)}%`,
+    claim: "Of a 5-point deploy gate, a third is the judge.",
+    detail: `Sixty answers frozen, three judge models, five repeats each: a judge switch moves a ${J.n_tests}-test mean by ±${(J.floor.switch_judge_sd * 100).toFixed(1)} points and a re-run by ±${(J.floor.rerun_same_judge_sd * 100).toFixed(1)} before the model changes at all. Every judged benchmark here now shows its share of that floor.`,
+    href: "/research#judge",
+  },
+  {
+    n: "03",
+    value: "2",
+    claim: "Parser bugs found by being able to score frozen answers.",
+    detail: `A rubric score of 1 — the worst verdict — was read as a perfect 1.0. Then ${J.no_verdict.total} of ${J.calls} judge replies came back empty, all on refusal prompts, and an empty reply was read as 3 of 5: the pass cutoff. Neither is visible unless you can feed a judge a deliberately wrong answer twice.`,
+    href: "/research#judge",
+  },
+];
 
 /* ── §3 · What it can do ────────────────────────────────────────
    Written as a specification rather than a feature grid: what it
@@ -140,37 +173,41 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── §3c · The research behind it ────────────────────── */}
+      {/* ── §3c · Three findings ────────────────────────────── */}
       <section className="space-y-4">
-        <Rule label="The research behind it" />
-        <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-end">
-          <div className="max-w-2xl space-y-3">
-            <p className="text-base leading-relaxed">
-              The statistics above are not decoration. Before building the
-              regression gate I measured whether a typical eval suite is even
-              large enough to answer the question it is asked.
-            </p>
-            <p className="text-sm leading-relaxed text-muted">
-              Real paired outputs from two models across 30 prompts, resampled
-              2,000 times at each suite size, with EvalBench&rsquo;s own
-              detector run on every resample. A ten-prompt suite detects a
-              genuine regression <strong className="text-text">21%</strong> of
-              the time — it misses four in five, and it fails toward false
-              confidence, which is the dangerous direction for something wired
-              to a deploy gate. That is why every result here carries a
-              confidence interval and a minimum-sample estimate.
-            </p>
-            <p className="font-mono text-[11px] text-muted tnum">
-              reproducible: python scripts/run_study_power.py
-            </p>
-          </div>
-          <a href="/research" className="btn btn-secondary shrink-0">
-            Read the study
-          </a>
+        <Rule label="§4 · Three findings" />
+        <div className="max-w-2xl space-y-2">
+          <p className="text-base leading-relaxed">
+            The statistics above are not decoration. The instrument was built
+            on the premise that <strong>LLM evaluation is itself badly
+            measured</strong> — and then used to measure that.
+          </p>
         </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {FINDINGS.map((f) => (
+            <a
+              key={f.n}
+              href={f.href}
+              className="panel group flex flex-col gap-3 p-4 transition-colors hover:border-primary"
+            >
+              <div className="flex items-baseline justify-between">
+                <span className="label-xs font-mono">{f.n}</span>
+                <span className="font-display text-4xl leading-none tnum">{f.value}</span>
+              </div>
+              <p className="font-display text-lg leading-snug">{f.claim}</p>
+              <p className="text-sm leading-relaxed text-muted">{f.detail}</p>
+              <span className="mt-auto font-mono text-[11px] text-muted group-hover:text-text">
+                read the study →
+              </span>
+            </a>
+          ))}
+        </div>
+        <p className="font-mono text-[11px] text-muted tnum">
+          reproducible: python scripts/run_study_power.py · python scripts/run_study_judge.py
+        </p>
       </section>
 
-      {/* ── §4 · The door ───────────────────────────────────────
+      {/* ── §5 · The door ───────────────────────────────────────
           The whole block is the control, not a small button beside a
           heading. "Sign in" is a chore; the invitation is to go and
           check, so the action says that. */}
@@ -185,7 +222,7 @@ export default function Home() {
         >
           <span className="flex flex-wrap items-stretch justify-between gap-5 sm:flex-nowrap">
             <span className="space-y-1.5">
-              <span className="label-xs block text-accent">§4 · Go and check</span>
+              <span className="label-xs block text-accent">§5 · Go and check</span>
               <span className="block font-display text-3xl leading-none">
                 Check it for yourself
               </span>

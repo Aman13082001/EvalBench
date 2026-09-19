@@ -104,6 +104,18 @@ export interface Resolution {
   reason: string | null;
 }
 
+/* What the judge alone does to a benchmark's mean, from the judge-variance
+   study (research/judge-variance/). Two floors because two things happen:
+   re-running on the same judge (rerun), and switching judge model (switch).
+   Null when no check in the benchmark asks a model to grade. */
+export interface JudgeFloor {
+  rerun: number;
+  switch: number;
+  judged: number;
+  tests: number;
+  source: string;
+}
+
 export interface SuiteDoc {
   _id: string;
   name: string;
@@ -121,6 +133,8 @@ export interface SuiteDoc {
   test_count?: number;
   resolution?: Resolution;
   needs_judge?: boolean;
+  judged_tests?: number;
+  judge_floor?: JudgeFloor | null;
   tests?: unknown[];
 }
 
@@ -227,6 +241,8 @@ export interface Benchmark {
   description: string;
   /* Whether scoring supplied answers still needs a grader. */
   needs_judge?: boolean;
+  judged_tests?: number;
+  judge_floor?: JudgeFloor | null;
   name: string;
   test_count: number;
   provider: string;

@@ -23,6 +23,17 @@ from evalbench.core.stats import mde_for_n
 # A comparison is only as good as the tests both runs actually scored.
 MIN_PAIRS = 2
 
+# What a judge adds to a score, per answer, on the 0-1 scale. Measured
+# in research/judge-variance/ (sixty frozen answers, three judges, five
+# repeats): re-asking the same judge moves an answer's score by this
+# much; different judges disagree on an answer by this much; and no
+# judge scored everything higher than another. Copied from study.json,
+# with the date — tests/test_judge_floor.py fails if they drift.
+JUDGE_RETEST_SD = 0.0554
+JUDGE_INTERACTION_SD = 0.0778
+JUDGE_OFFSET_SD = 0.0
+JUDGE_STUDY_DATE = "2026-09-19"
+
 
 @dataclass
 class Resolution:
@@ -35,6 +46,46 @@ class Resolution:
     tests: int
     reason: str | None = None
     """Set when ``mde`` is None: what is missing, in the user's words."""
+
+
+@dataclass
+class JudgeFloor:
+    """What the judge alone does to a benchmark's mean score.
+
+    Two floors, because two different things happen in practice. A team
+    re-runs the same benchmark on the same judge and sees the mean move:
+    that is `rerun`. A team switches judge model — a deprecation, a cost
+    cut — and every score shifts a little and differently: `switch`. A
+    drop smaller than these is not evidence about the model.
+    """
+
+    rerun: float
+    """SD of the mean from re-asking the same judge, as a score fraction."""
+
+    switch: float
+    """SD of the mean from changing judge model."""
+
+    judged: int
+    tests: int
+    source: str = JUDGE_STUDY_DATE
+
+
+def judge_floor(judged: int | None, tests: int | None) -> JudgeFloor | None:
+    """The judge's contribution to the spread of a benchmark's mean.
+
+    Judge noise lands on the `judged` tests only; the mean is over all
+    `tests`. Independent per-answer noise of SD s on n of N tests moves
+    the mean by s*sqrt(n)/N — for an all-judged benchmark, s/sqrt(N).
+    """
+    if not judged or not tests:
+        return None
+    n, total = int(judged), int(tests)
+    rerun = JUDGE_RETEST_SD * n ** 0.5 / total
+    switch = (
+        JUDGE_OFFSET_SD ** 2 * (n / total) ** 2
+        + JUDGE_INTERACTION_SD ** 2 * n / total ** 2
+    ) ** 0.5
+    return JudgeFloor(round(rerun, 4), round(switch, 4), n, total)
 
 
 def _scores(run: dict) -> dict[str, float]:

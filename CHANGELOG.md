@@ -5,6 +5,21 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Added — the instrument reflects the findings
+
+- Every judged benchmark carries a **judge floor** under its resolution:
+  what the grader alone does to its mean between runs and across a
+  judge change, the study's per-answer spread scaled to that benchmark's
+  size (`evalbench/resolution.py: judge_floor`, `judged_tests` stored
+  on import and adopt). The constants are copied from `study.json` with
+  the date, and a test fails if they drift.
+- `/research` is now two studies under one thesis, with the second
+  study's figure drawn from its data in the site's theme, its four
+  findings, and the falsification clause evaluated as it was written.
+- The homepage's research section became three findings — 21%, a third,
+  two bugs — each read from the studies' own output so the page cannot
+  disagree with the report. The nav link reads "The studies".
+
 ### Added — the judge-variance study
 
 `research/judge-variance/`: sixty answers generated once and frozen,

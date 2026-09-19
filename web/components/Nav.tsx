@@ -6,11 +6,11 @@ import StatusStrip from "@/components/StatusStrip";
 import SignIn from "@/components/SignIn";
 import ThemeToggle from "@/components/ThemeToggle";
 
-/* One public link. "The study" rather than "Research": it promises one
-   specific thing to read, which is both truer and more clickable than a
-   category. The example evaluation is reached from the end of the study,
-   not the nav — a visitor's path is home → study → example → sign in. */
-const PUBLIC = [{ href: "/research", label: "The study" }];
+/* One public link. "The studies" rather than "Research": it promises
+   specific things to read, which is both truer and more clickable than a
+   category. The example evaluation is reached from the end of the page,
+   not the nav — a visitor's path is home → studies → example → sign in. */
+const PUBLIC = [{ href: "/research", label: "The studies" }];
 
 const PRIVATE = [
   { href: "/workbench", label: "Workbench" },

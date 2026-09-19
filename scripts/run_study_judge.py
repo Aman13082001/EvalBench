@@ -410,6 +410,23 @@ def analyze() -> None:
         "both_vs_mde": round(both / 0.05, 3),
     }
 
+    # Every answer, every judge: mean and range over repeats, sorted by
+    # the answer's grand mean. This is the figure, as data, so the site
+    # can draw it with its own theme rather than embed a baked image.
+    grand = {x: _mean([_mean(cells[(x, y)]) for y in judges]) for x in answers}
+    spread = [
+        {
+            "set": x[0], "test": x[1], "category": categories[x],
+            "judges": [
+                {"mean": round(_mean(cells[(x, y)]), 4),
+                 "min": round(min(cells[(x, y)]), 4),
+                 "max": round(max(cells[(x, y)]), 4)}
+                for y in judges
+            ],
+        }
+        for x in sorted(answers, key=lambda x: grand[x])
+    ]
+
     study = {
         "generated": date.today().isoformat(),
         "suite": SUITE.name,
@@ -431,6 +448,7 @@ def analyze() -> None:
         "near_ceiling": near_ceiling,
         "by_category": by_cat,
         "pass_cutoff": PASS_CUTOFF,
+        "spread": spread,
     }
     (OUT / "study.json").write_text(json.dumps(study, indent=2), encoding="utf-8")
     (OUT / "judge-spread.svg").write_text(render_svg(cells, answers, judges), encoding="utf-8")

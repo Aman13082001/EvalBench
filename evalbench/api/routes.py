@@ -14,7 +14,12 @@ from fastapi import (
 )
 from pydantic import BaseModel, Field
 
-from evalbench.answers import match_answers, parse_answers, suite_needs_judge
+from evalbench.answers import (
+    judged_tests,
+    match_answers,
+    parse_answers,
+    suite_needs_judge,
+)
 from evalbench.api.deps import (
     get_current_user,
     limiter,
@@ -36,7 +41,7 @@ from evalbench.core.providers import (
 from evalbench.db.mongo import db
 from evalbench.db.schemas import TestRun, TestSuite
 from evalbench.jobs import submit_run
-from evalbench.resolution import resolution_from_runs
+from evalbench.resolution import judge_floor, resolution_from_runs
 from evalbench.security.adversarial_suite import ADVERSARIAL_TESTS
 
 router = APIRouter(prefix="/suites", tags=["suites"])
@@ -58,9 +63,11 @@ async def _upsert_suite(suite: TestSuite, user, response: Response) -> dict:
     """
     owner = owner_of(user)
     doc = suite.model_dump()
-    # Whether scoring supplied answers still needs a grader. Stored so the
-    # list — which projects the tests out — can say without reading them.
+    # Whether scoring supplied answers still needs a grader, and how many
+    # tests a judge has a hand in. Stored so the list — which projects the
+    # tests out — can say without reading them.
     doc["needs_judge"] = suite_needs_judge(suite)
+    doc["judged_tests"] = judged_tests(suite)
     existing = await db.suites.find_one(
         {"name": suite.name, **mine(user)}, {"_id": 1}
     )
@@ -118,17 +125,25 @@ async def list_suites(user=Depends(get_current_user)):
     # benchmark. Reading the wording from the file keeps one source of
     # truth and spares every old copy a migration — but never overwrites
     # what the user wrote themselves.
-    bundled = {b["slug"]: b["description"] for b in describe_benchmarks()}
+    bundled = {b["slug"]: b for b in describe_benchmarks()}
     never_measured = asdict(resolution_from_runs([]))
     for s in suites:
+        # The judge floor needs only the count of judged tests. Stored at
+        # import; a copy of a bundled benchmark from before that can be
+        # counted from the file; anything else is honestly unknown.
+        judged = s.get("judged_tests")
+        if judged is None and s.get("bundled_slug") in bundled:
+            judged = bundled[s["bundled_slug"]]["judged_tests"]
+        f = judge_floor(judged, s.get("test_count"))
+        s["judge_floor"] = asdict(f) if f else None
         # Stored when a run finishes; benchmarks that predate that, or
         # have never been run, fall back to saying so. Computing it here
         # meant reading run history on every page load, and a window
         # shared across benchmarks that silently reported "not yet
         # measured" for older ones once a busier benchmark filled it.
         s.setdefault("resolution", never_measured)
-        if not s.get("description") and s.get("bundled_slug"):
-            s["description"] = bundled.get(s["bundled_slug"])
+        if not s.get("description") and s.get("bundled_slug") in bundled:
+            s["description"] = bundled[s["bundled_slug"]]["description"]
     return suites
 
 
@@ -328,6 +343,7 @@ async def adopt_bundled(
     doc["created_by"] = owner_of(user)
     doc["bundled_slug"] = slug
     doc["needs_judge"] = suite_needs_judge(suite)
+    doc["judged_tests"] = judged_tests(suite)
     result = await db.suites.insert_one(doc)
     return {"id": str(result.inserted_id), "name": suite.name, "created": True}
 

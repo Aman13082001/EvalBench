@@ -169,6 +169,22 @@ def match_answers(
     return recordings, missing
 
 
+def judged_tests(suite: TestSuite) -> int:
+    """How many tests in the suite have a check that asks an LLM to grade.
+
+    The count, not just the fact: the judge floor on a benchmark's
+    resolution scales with how much of its mean a judge has a hand in.
+    """
+    n = 0
+    for t in suite.tests:
+        if t.assert_:
+            if any(a.type in LLM_ASSERTIONS for a in t.assert_):
+                n += 1
+        elif (t.evaluator or suite.evaluator) in LLM_EVALUATORS:
+            n += 1
+    return n
+
+
 def suite_needs_judge(suite: TestSuite) -> bool:
     """Whether any check in the suite asks an LLM to grade.
 
@@ -177,10 +193,4 @@ def suite_needs_judge(suite: TestSuite) -> bool:
     zero model calls; one with a rubric needs a grader, and only for the
     grading.
     """
-    for t in suite.tests:
-        if t.assert_:
-            if any(a.type in LLM_ASSERTIONS for a in t.assert_):
-                return True
-        elif (t.evaluator or suite.evaluator) in LLM_EVALUATORS:
-            return True
-    return False
+    return judged_tests(suite) > 0

@@ -12,13 +12,15 @@ from __future__ import annotations
 
 import pathlib
 from copy import deepcopy
+from dataclasses import asdict
 from functools import cache
 from typing import TypedDict
 
 import yaml
 
-from evalbench.answers import suite_needs_judge
+from evalbench.answers import judged_tests, suite_needs_judge
 from evalbench.db.schemas import TestSuite
+from evalbench.resolution import judge_floor
 
 SUITES_DIR = pathlib.Path(__file__).resolve().parents[1] / "suites"
 
@@ -90,6 +92,11 @@ def load_benchmark(slug: str) -> dict | None:
 load_benchmark.cache_clear = _parse.cache_clear  # type: ignore[attr-defined]
 
 
+def _floor(judged: int, tests: int) -> dict | None:
+    f = judge_floor(judged, tests)
+    return asdict(f) if f else None
+
+
 def describe_benchmarks() -> list[dict]:
     """The list the workspace shows, with live counts read from the files
     so the numbers can't drift from what is actually there."""
@@ -106,6 +113,12 @@ def describe_benchmarks() -> list[dict]:
                 "description": data.get("description", ""),
                 # whether scoring supplied answers still needs a grader
                 "needs_judge": suite_needs_judge(TestSuite(**data)),
+                # and how much of the mean a judge has a hand in — the
+                # floor under the benchmark's resolution
+                "judged_tests": judged_tests(TestSuite(**data)),
+                "judge_floor": _floor(
+                    judged_tests(TestSuite(**data)), len(data.get("tests", []))
+                ),
                 "name": data.get("name", b["title"]),
                 "test_count": len(data.get("tests", [])),
                 "provider": data.get("provider", "ollama"),

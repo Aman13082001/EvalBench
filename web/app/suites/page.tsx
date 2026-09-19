@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import yaml from "js-yaml";
-import { importSuite, listSuites, Resolution, SuiteDoc } from "@/lib/api";
+import { importSuite, JudgeFloor, listSuites, Resolution, SuiteDoc } from "@/lib/api";
 import { EXAMPLE_SUITE } from "@/lib/example";
 import { RequireAuth } from "@/components/AuthProvider";
 import { Panel, Rule } from "@/components/ui";
@@ -28,6 +28,29 @@ function ResolutionLine({ r }: { r?: Resolution }) {
       resolution: detects a drop of{" "}
       <span className="text-text">{points} points</span> or more · 80% power ·
       from {r.runs_used} runs
+    </p>
+  );
+}
+
+/* The judge's own contribution, under the resolution. A benchmark that
+   asks a model to grade carries the grader's spread whatever its history
+   says: research/judge-variance/ measured it, and this is that number
+   scaled to this benchmark's size. A drop inside it is not evidence. */
+function JudgeFloorLine({ f }: { f?: JudgeFloor | null }) {
+  if (!f) return null;
+  const pts = (x: number) => {
+    const p = x * 100;
+    return p < 1 ? "under 1 point" : `about ${p.toFixed(p < 3 ? 1 : 0)} points`;
+  };
+  return (
+    <p className="font-mono text-[11px] text-muted tnum">
+      judge floor: the grader alone moves the mean{" "}
+      <span className="text-text">±{pts(f.rerun)}</span> between runs,{" "}
+      <span className="text-text">±{pts(f.switch)}</span> across a judge change ·{" "}
+      {f.judged === f.tests ? "every test judged" : `${f.judged} of ${f.tests} tests judged`} ·{" "}
+      <Link href="/research#judge" className="underline decoration-line underline-offset-2 hover:text-text" onClick={(e) => e.stopPropagation()}>
+        the study
+      </Link>
     </p>
   );
 }
@@ -152,6 +175,7 @@ function Suites() {
                 )}
               </p>
               <ResolutionLine r={s.resolution} />
+              <JudgeFloorLine f={s.judge_floor} />
             </div>
           </Link>
         ))}

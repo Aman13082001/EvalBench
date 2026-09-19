@@ -41,6 +41,10 @@ EXEMPT = {
     # users' runs stuck for ever. It only ever writes `failed` to runs
     # that are already abandoned — see evalbench/reaper.py.
     ("main.py", "reap_abandoned_runs"),
+    # Startup migration: counts judged tests on suites stored before the
+    # field existed, across every account, once. Reads tests, writes a
+    # count; touches nothing a user can see as theirs or not.
+    ("main.py", "_backfill_judged_tests"),
 }
 
 

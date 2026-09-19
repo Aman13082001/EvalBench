@@ -13,6 +13,7 @@ from pymongo.errors import DuplicateKeyError, OperationFailure
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from evalbench.answers import judged_tests, suite_needs_judge
 from evalbench.api.admin import router as admin_router
 from evalbench.api.auth import get_password_hash
 from evalbench.api.auth_routes import router as auth_router
@@ -27,7 +28,7 @@ from evalbench.api.summary import RUN_ROW_FIELDS, run_row, summarize_run
 from evalbench.config import settings
 from evalbench.core.regression import RegressionDetector
 from evalbench.db.mongo import client, db
-from evalbench.db.schemas import TestRun
+from evalbench.db.schemas import TestRun, TestSuite
 from evalbench.metrics import (
     init_metrics,
     regression_detected,
@@ -97,6 +98,39 @@ async def _ensure_indexes() -> None:
     # The startup reaper queries status $in [queued, running].
     await db.test_runs.create_index("status")
 
+
+
+async def _backfill_judged_tests() -> int:
+    """Count judged tests on suites stored before the count existed.
+
+    `judged_tests` is what the benchmark list needs to show a judge
+    floor; it is stored at import. A suite from before that would show
+    no floor for ever — honest, but wrong the way a missed migration is
+    wrong. Runs once per suite: after this, nothing lacks the field.
+    """
+    n = 0
+    cursor = db.suites.find(
+        {"judged_tests": {"$exists": False}}, {"tests": 1, "evaluator": 1}
+    )
+    async for doc in cursor:
+        try:
+            suite = TestSuite(name="x", model="x", **{
+                k: v for k, v in doc.items() if k in ("tests", "evaluator")
+            })
+        except Exception:  # noqa: BLE001 - a malformed suite is not a reason to not start
+            logger.warning("Could not count judged tests on suite %s", doc.get("_id"))
+            continue
+        await db.suites.update_one(
+            {"_id": doc["_id"]},
+            {"$set": {
+                "judged_tests": judged_tests(suite),
+                "needs_judge": suite_needs_judge(suite),
+            }},
+        )
+        n += 1
+    if n:
+        logger.info("Backfilled judged_tests on %d suite(s)", n)
+    return n
 
 
 async def reap_abandoned_runs(when: str) -> int:
@@ -211,6 +245,7 @@ async def lifespan(app: FastAPI):
         )
 
     await reap_abandoned_runs("startup")
+    await _backfill_judged_tests()
 
     # Under rq, death is detected by silence rather than by a restart, so
     # it has to be checked on a clock: a worker can die while the API

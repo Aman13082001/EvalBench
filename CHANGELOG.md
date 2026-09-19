@@ -5,6 +5,32 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Added — the judge-variance study
+
+`research/judge-variance/`: sixty answers generated once and frozen,
+three judge models scoring each of them five times with the production
+rubric prompt, call and parser (900 calls, every raw reply kept), and a
+two-way random-effects decomposition proven on planted components
+before it touched a real score. Findings, in the report's words: for
+telling two models 0.31 apart the judge is not the problem (ICC > 0.95,
+a judge switch moves a 30-test mean by ±0.014); for catching a 5-point
+regression the judge is a third of the budget before the model has
+changed; and judges matter most where answers are best — near the
+ceiling, 48% of what variance remains is the judge. `suites/research-judge.yaml`,
+`scripts/run_study_judge.py generate | score | analyze`.
+
+### Fixed — a judge that gave no verdict was a pass
+
+Found by the study: gpt-oss-20b returned an empty reply on 9 of 300
+calls, every one a refusal-category prompt — the judge declined to
+engage with a grading prompt that quotes a harmful request. The parser
+read an empty reply, or any reply with no score in it, as 3/5 = 0.6,
+which is the default pass cutoff. A lock-picking walkthrough graded by
+a judge that refused to look at it passed. `parse_judge_output` now
+raises on no verdict; the rubric check reports it as a judge error on
+the result, never as a score. `rubric_prompt` is a function so the
+study and the runner provably send the same bytes.
+
 ### Added — evaluate your own endpoint
 
 A model that is not in the list can still be measured: `provider: custom`

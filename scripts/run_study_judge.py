@@ -358,6 +358,58 @@ def analyze() -> None:
         d = decompose(sub, xs, judges)
         by_cat[c] = {"n_answers": len(xs), "share": d["share"], "sd": d["sd"], "grand_mean": d["grand_mean"]}
 
+    # The design committed to a falsification test before anything ran:
+    # residual + interaction under ~5% of variance AND every judge pair
+    # above 0.9 rank correlation means judges are a fine instrument.
+    noise_share = comp["share"]["answer_x_judge"] + comp["share"]["retest"]
+    min_rho = min(p["spearman"] for p in agreement)
+    premise = {
+        "noise_share": round(noise_share, 4),
+        "noise_share_threshold": 0.05,
+        "min_spearman": round(min_rho, 4),
+        "spearman_threshold": 0.9,
+        "falsified": noise_share < 0.05 and min_rho > 0.9,
+    }
+
+    # Where the judge matters most is where the answers are all good:
+    # near the ceiling there is little answer variance left, so what
+    # remains is the judge's taste. Named from the data, not assumed.
+    ceiling = max(by_cat.items(), key=lambda kv: kv[1]["share"]["judge"] + kv[1]["share"]["answer_x_judge"])
+    near_ceiling = {
+        "category": ceiling[0],
+        "mean": ceiling[1]["grand_mean"],
+        "judge_share": round(ceiling[1]["share"]["judge"] + ceiling[1]["share"]["answer_x_judge"], 4),
+        "highest_mean_category": max(by_cat.items(), key=lambda kv: kv[1]["grand_mean"])[0],
+    }
+
+    # Replies with no verdict in them. The production parser used to read
+    # these as 3/5 = 0.6, the pass cutoff — fixed in the same commit as
+    # this analysis. Counted by judge and by category so the pattern shows.
+    all_rows = _read_jsonl(_scores_path())
+    no_verdict = [
+        r for r in all_rows
+        if r.get("parsed") == "fallback" or "empty reply" in (r.get("error") or "")
+    ]
+    from collections import Counter
+
+    no_verdict_by = {
+        "total": len(no_verdict),
+        "by_judge": dict(Counter(r["judge"] for r in no_verdict)),
+        "by_category": dict(Counter(r["category"] for r in no_verdict)),
+        "empty": sum(1 for r in no_verdict if not (r.get("raw") or "").strip()),
+    }
+
+    # Beside the number the product talks about: a 5-point regression.
+    both = math.sqrt(floor["rerun_same_judge_sd"] ** 2 + floor["switch_judge_sd"] ** 2)
+    gate = {
+        "mde": 0.05,
+        "rerun_vs_mde": round(floor["rerun_same_judge_sd"] / 0.05, 3),
+        "switch_vs_mde": round(floor["switch_judge_sd"] / 0.05, 3),
+        # a re-run on a different judge: both, combined in quadrature
+        "both_sd": round(both, 4),
+        "both_vs_mde": round(both / 0.05, 3),
+    }
+
     study = {
         "generated": date.today().isoformat(),
         "suite": SUITE.name,
@@ -368,11 +420,15 @@ def analyze() -> None:
         "repeats": comp["repeats_harmonic"],
         "calls": len(rows),
         "parse_fallbacks": len(fallback),
+        "no_verdict": no_verdict_by,
         "components": comp,
         "retest": retest,
         "agreement": agreement,
         "gap": gap,
         "floor": floor,
+        "gate": gate,
+        "premise": premise,
+        "near_ceiling": near_ceiling,
         "by_category": by_cat,
         "pass_cutoff": PASS_CUTOFF,
     }
@@ -532,20 +588,72 @@ def render_report(s: dict) -> str:
         f"- the strong–weak model gap was **{f['observed_gap_mean']:+.3f}** on average across judges (from {f['observed_gap_min']:+.3f} to {f['observed_gap_max']:+.3f} depending on the judge).",
         "",
     ]
-    ratio = f["switch_judge_sd"] / abs(f["observed_gap_mean"]) if f["observed_gap_mean"] else float("inf")
-    if ratio < 0.25:
-        verdict = "The judge is a small part of the story here: a judge switch moves the mean by well under a quarter of the model gap."
-    elif ratio < 0.6:
-        verdict = "The judge is a real part of the story: a judge switch moves the mean by a sizeable fraction of the model gap, so a score history spanning a judge change is not comparable without re-scoring."
-    else:
-        verdict = "The judge is most of the story: a judge switch moves the mean by as much as the difference between the two models. On this benchmark a judged score without the judge's name is not a measurement."
-    lines += [verdict, "", "### By category", "", "| category | answers | judge + answer×judge share | retest share | mean |", "|---|---:|---:|---:|---:|"]
+    g = s["gate"]
+    pr = s["premise"]
+    nc = s["near_ceiling"]
+    nv = s["no_verdict"]
+    lines += [
+        f"Against the gate the product talks about — a **5-point** regression — that is "
+        f"**{g['rerun_vs_mde']*100:.0f}%** of the effect from a re-run and "
+        f"**{g['switch_vs_mde']*100:.0f}%** from a judge switch.",
+        "",
+        "### By category",
+        "",
+        "| category | answers | judge + answer×judge share | retest share | mean |",
+        "|---|---:|---:|---:|---:|",
+    ]
     for cat, b in s["by_category"].items():
         lines.append(
             f"| {cat} | {b['n_answers']} | {_pct(b['share']['judge'] + b['share']['answer_x_judge'])} | "
             f"{_pct(b['share']['retest'])} | {b['grand_mean']:.3f} |"
         )
+    nv_judges = ", ".join(f"{short.get(j, j)} ({n})" for j, n in nv["by_judge"].items()) or "none"
+    nv_cats = ", ".join(f"{c} ({n})" for c, n in nv["by_category"].items()) or "none"
     lines += [
+        "",
+        "## Reading",
+        "",
+        "**The premise, tested as written.** The design said in advance that if",
+        "answer×judge plus retest came in under 5% of variance *and* every pair",
+        "of judges rank-correlated above 0.9, judges are a fine instrument and",
+        f"the premise is wrong for this class of check. Measured: **{_pct(pr['noise_share'])}** and",
+        f"**ρ ≥ {pr['min_spearman']:.2f}**. "
+        + (
+            "Both thresholds were met: the premise is falsified on this benchmark."
+            if pr["falsified"]
+            else "Neither threshold was met, so the premise stands — but it stands narrowly, and the "
+            "honest headline is the one in the numbers above, not the one in the title."
+        ),
+        "",
+        "**For telling two models apart, the judge is not the problem.** The",
+        f"strong–weak gap is {f['observed_gap_mean']:+.2f}; a judge switch moves the mean by",
+        f"±{f['switch_judge_sd']:.3f} and a re-run by ±{f['rerun_same_judge_sd']:.3f}. Every judge",
+        "sees the gap, and sees it at nearly the same size. Test–retest ICCs above",
+        "0.95 are excellent by any conventional standard.",
+        "",
+        "**For catching a small regression, the judge is a real part of the",
+        "budget.** A 5-point drop is what a deploy gate looks for. Judge switch and",
+        f"re-run together come to ±{g['both_sd']:.3f} — roughly {g['both_vs_mde']*100:.0f}% of that on a 30-test",
+        "benchmark before the model has changed at all. That is not noise you",
+        "can ignore; it is noise you have to subtract.",
+        "",
+        f"**Judges matter most where answers are best.** In *{nc['category']}* the",
+        f"answers averaged {nc['mean']:.2f} and judge terms were **{_pct(nc['judge_share'])}** of what",
+        "variance remained — the highest of any category. Near the ceiling there",
+        "is little answer variance left, so what is left is the judge's taste.",
+        "That is exactly the regime a mature product lives in, and exactly where",
+        "teams watch for small drops.",
+        "",
+        f"**A judge can decline to judge, and that used to be a pass.** {nv['total']} of",
+        f"{s['calls']} replies contained no verdict — {nv['empty']} of them completely empty —",
+        f"from {nv_judges}, on {nv_cats}. The judge would not engage with a grading",
+        "prompt that quotes a harmful request. EvalBench's parser read an empty",
+        "reply as 3/5 = 0.6, which is the default pass cutoff: a lock-picking",
+        "walkthrough graded by a judge that refused to look at it *passed*.",
+        "Fixed in the same commit as this report: no verdict is now a judge",
+        "error, visible on the result, never a score. This is the second parser",
+        "bug found by being able to score frozen answers; the first was a 1/5",
+        "reading as perfect.",
         "",
         "## What this means for a team",
         "",
@@ -553,10 +661,14 @@ def render_report(s: dict) -> str:
         "  `judge_model` with every run; EvalBench does. Compare only within",
         "  one judge, or re-score the old answers with the new judge — which",
         "  bring-your-own-answers exists for.",
-        "- **The retest component is the floor on resolution.** No number of",
-        "  tests removes a judge's per-answer disagreement with itself below",
-        "  `retest_sd / sqrt(n)`; the benchmark page's resolution figure for",
-        "  judged benchmarks now includes it.",
+        "- **Subtract the judge floor from your gate's resolution.** A judged",
+        "  benchmark's smallest detectable drop is bounded below by",
+        "  `retest_sd / sqrt(n)` and, across a judge change, by the switch",
+        "  floor. The benchmark page's resolution for judged benchmarks now",
+        "  carries it.",
+        "- **Watch the ceiling.** When a benchmark's mean is above ~0.9, most of",
+        "  the movement you see is the judge. Add harder tests or make the",
+        "  check deterministic.",
         "- **Deterministic checks have none of this.** String, schema and",
         "  semantic checks return the same score every time by construction.",
         "  Where a check can be made deterministic, it should be.",

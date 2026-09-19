@@ -1,0 +1,235 @@
+{
+  "generated": "2026-09-19",
+  "suite": "research-judge.yaml",
+  "answerers": {
+    "strong": "openai/gpt-oss-120b",
+    "weak": "allam-2-7b"
+  },
+  "judges": [
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+    "qwen/qwen3.8-27b"
+  ],
+  "n_answers": 60,
+  "n_tests": 30,
+  "repeats": 4.898,
+  "calls": 900,
+  "parse_fallbacks": 9,
+  "no_verdict": {
+    "total": 9,
+    "by_judge": {
+      "openai/gpt-oss-20b": 9
+    },
+    "by_category": {
+      "refusal": 9
+    },
+    "empty": 9
+  },
+  "components": {
+    "variance": {
+      "answer": 0.077271,
+      "judge": 0.0,
+      "answer_x_judge": 0.006051,
+      "retest": 0.003075
+    },
+    "share": {
+      "answer": 0.8944,
+      "judge": 0.0,
+      "answer_x_judge": 0.07,
+      "retest": 0.0356
+    },
+    "sd": {
+      "answer": 0.278,
+      "judge": 0.0,
+      "answer_x_judge": 0.0778,
+      "retest": 0.0554
+    },
+    "grand_mean": 0.8063,
+    "judge_means": {
+      "openai/gpt-oss-20b": 0.8028,
+      "openai/gpt-oss-120b": 0.808,
+      "qwen/qwen3.8-27b": 0.808
+    },
+    "repeats_harmonic": 4.898
+  },
+  "retest": {
+    "openai/gpt-oss-20b": {
+      "icc": 0.9507,
+      "retest_sd": 0.0676,
+      "answers_that_moved_a_point": 8,
+      "answers_whose_verdict_flipped": 3,
+      "n_answers": 60
+    },
+    "openai/gpt-oss-120b": {
+      "icc": 0.9737,
+      "retest_sd": 0.0462,
+      "answers_that_moved_a_point": 5,
+      "answers_whose_verdict_flipped": 1,
+      "n_answers": 60
+    },
+    "qwen/qwen3.8-27b": {
+      "icc": 0.9665,
+      "retest_sd": 0.0535,
+      "answers_that_moved_a_point": 5,
+      "answers_whose_verdict_flipped": 4,
+      "n_answers": 60
+    }
+  },
+  "agreement": [
+    {
+      "a": "openai/gpt-oss-20b",
+      "b": "openai/gpt-oss-120b",
+      "spearman": 0.8874,
+      "mean_abs_diff": 0.0455,
+      "same_verdict": 0.9667
+    },
+    {
+      "a": "openai/gpt-oss-20b",
+      "b": "qwen/qwen3.8-27b",
+      "spearman": 0.8304,
+      "mean_abs_diff": 0.0702,
+      "same_verdict": 0.9333
+    },
+    {
+      "a": "openai/gpt-oss-120b",
+      "b": "qwen/qwen3.8-27b",
+      "spearman": 0.8409,
+      "mean_abs_diff": 0.052,
+      "same_verdict": 0.9667
+    }
+  ],
+  "gap": {
+    "openai/gpt-oss-20b": {
+      "strong": 0.9657,
+      "weak": 0.64,
+      "gap": 0.3257,
+      "strong_pass_rate": 1.0,
+      "weak_pass_rate": 0.6
+    },
+    "openai/gpt-oss-120b": {
+      "strong": 0.9573,
+      "weak": 0.6587,
+      "gap": 0.2987,
+      "strong_pass_rate": 1.0,
+      "weak_pass_rate": 0.6
+    },
+    "qwen/qwen3.8-27b": {
+      "strong": 0.9587,
+      "weak": 0.6573,
+      "gap": 0.3013,
+      "strong_pass_rate": 0.9667,
+      "weak_pass_rate": 0.5667
+    }
+  },
+  "floor": {
+    "n_tests": 30,
+    "rerun_same_judge_sd": 0.0101,
+    "switch_judge_sd": 0.0142,
+    "observed_gap_mean": 0.3086,
+    "observed_gap_min": 0.2987,
+    "observed_gap_max": 0.3257
+  },
+  "gate": {
+    "mde": 0.05,
+    "rerun_vs_mde": 0.202,
+    "switch_vs_mde": 0.284,
+    "both_sd": 0.0174,
+    "both_vs_mde": 0.349
+  },
+  "premise": {
+    "noise_share": 0.1056,
+    "noise_share_threshold": 0.05,
+    "min_spearman": 0.8304,
+    "spearman_threshold": 0.9,
+    "falsified": false
+  },
+  "near_ceiling": {
+    "category": "explanation",
+    "mean": 0.9092,
+    "judge_share": 0.4845,
+    "highest_mean_category": "explanation"
+  },
+  "by_category": {
+    "code-review": {
+      "n_answers": 10,
+      "share": {
+        "answer": 0.9117,
+        "judge": 0.0034,
+        "answer_x_judge": 0.0307,
+        "retest": 0.0542
+      },
+      "sd": {
+        "answer": 0.2505,
+        "judge": 0.0152,
+        "answer_x_judge": 0.046,
+        "retest": 0.0611
+      },
+      "grand_mean": 0.8613
+    },
+    "constraint": {
+      "n_answers": 12,
+      "share": {
+        "answer": 0.9629,
+        "judge": 0.0005,
+        "answer_x_judge": 0.0123,
+        "retest": 0.0244
+      },
+      "sd": {
+        "answer": 0.3377,
+        "judge": 0.0075,
+        "answer_x_judge": 0.0381,
+        "retest": 0.0537
+      },
+      "grand_mean": 0.8022
+    },
+    "explanation": {
+      "n_answers": 16,
+      "share": {
+        "answer": 0.3867,
+        "judge": 0.0,
+        "answer_x_judge": 0.4845,
+        "retest": 0.1288
+      },
+      "sd": {
+        "answer": 0.1013,
+        "judge": 0.0,
+        "answer_x_judge": 0.1134,
+        "retest": 0.0585
+      },
+      "grand_mean": 0.9092
+    },
+    "refusal": {
+      "n_answers": 10,
+      "share": {
+        "answer": 0.9165,
+        "judge": 0.0111,
+        "answer_x_judge": 0.0521,
+        "retest": 0.0203
+      },
+      "sd": {
+        "answer": 0.3288,
+        "judge": 0.0362,
+        "answer_x_judge": 0.0783,
+        "retest": 0.049
+      },
+      "grand_mean": 0.6603
+    },
+    "summarisation": {
+      "n_answers": 12,
+      "share": {
+        "answer": 0.9432,
+        "judge": 0.0104,
+        "answer_x_judge": 0.0219,
+        "retest": 0.0245
+      },
+      "sd": {
+        "answer": 0.3271,
+        "judge": 0.0344,
+        "answer_x_judge": 0.0498,
+        "retest": 0.0527
+      },
+      "grand_mean": 0.7489
+    }
+  },
+  "pass_cutoff": 0.6
+}

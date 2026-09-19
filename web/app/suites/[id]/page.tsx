@@ -20,6 +20,7 @@ import ComparisonReport, {
   Comparison,
 } from "@/components/ComparisonReport";
 import { Panel, Rule, Status } from "@/components/ui";
+import { JudgeFloorLine, ResolutionLine } from "@/components/BenchmarkLines";
 
 const TERMINAL = new Set(["completed", "failed"]);
 
@@ -159,6 +160,10 @@ function SuiteDetail({ id }: { id: string }) {
             {suite.provider ?? "ollama"} / {suite.model} ·{" "}
             {suite.tests?.length ?? 0} tests · {suite.evaluator}
           </p>
+          <div className="space-y-0.5 pt-1">
+            <ResolutionLine r={suite.resolution} />
+            <JudgeFloorLine f={suite.judge_floor} />
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {progress && (

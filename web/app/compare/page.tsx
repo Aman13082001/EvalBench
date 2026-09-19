@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import {
   Comparison,
   compareRuns,
+  endpointHost,
   getRunSummary,
   RunSummary,
 } from "@/lib/api";
@@ -68,7 +69,13 @@ function ComparePage() {
     );
 
   const { a, b, c } = state;
-  const sameModel = a.model === b.model;
+  // A custom endpoint is part of the name; two runs of one model on two
+  // servers are not "two runs of" the same thing.
+  const nameOf = (r: { model: string; base_url?: string | null }) => {
+    const host = endpointHost(r.base_url);
+    return host ? `${r.model} at ${host}` : r.model;
+  };
+  const sameModel = nameOf(a) === nameOf(b);
 
   return (
     <div className="space-y-8">
@@ -80,7 +87,7 @@ function ComparePage() {
           / Compare
         </p>
         <h1 className="font-display text-3xl">
-          {sameModel ? `Two runs of ${a.model}` : `${a.model} vs ${b.model}`}
+          {sameModel ? `Two runs of ${nameOf(a)}` : `${nameOf(a)} vs ${nameOf(b)}`}
         </h1>
         <p className="font-mono text-[11px] text-muted tnum">
           {c.test_count} paired tests · runs {idA?.slice(-8)} and {idB?.slice(-8)}

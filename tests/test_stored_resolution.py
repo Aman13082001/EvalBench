@@ -110,15 +110,17 @@ class TestTheListJustReadsIt:
             }
 
         mock_db.suites.aggregate.return_value = suites()
-        mock_db.test_runs.find = MagicMock(
-            side_effect=AssertionError("the list must not read runs")
-        )
 
         app.dependency_overrides[get_current_user] = lambda: {
             "username": "alice", "role": "user", "_id": "a"
         }
         try:
             with TestClient(app) as c:
+                # Startup is allowed to read runs (it backfills the
+                # status of pre-job-model runs, once). The endpoint is not.
+                mock_db.test_runs.find = MagicMock(
+                    side_effect=AssertionError("the list must not read runs")
+                )
                 row = c.get("/suites").json()[0]
         finally:
             from tests.conftest import override_get_current_user

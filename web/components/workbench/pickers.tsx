@@ -167,7 +167,7 @@ export function BenchmarkPicker({
         <optgroup label="EvalBench benchmarks">
           {bundled.map((b) => (
             <option key={b.slug} value={`b:${b.slug}`}>
-              {b.title} · {b.test_count} tests
+              {b.title} · {b.test_count} {b.test_count === 1 ? "test" : "tests"}
             </option>
           ))}
         </optgroup>
@@ -175,14 +175,15 @@ export function BenchmarkPicker({
           <optgroup label="Your benchmarks">
             {mine.map((s) => (
               <option key={s._id} value={`m:${s._id}`}>
-                {s.name} · {s.test_count ?? s.tests?.length ?? 0} tests
+                {s.name} · {s.test_count ?? s.tests?.length ?? 0}{" "}
+                {(s.test_count ?? s.tests?.length ?? 0) === 1 ? "test" : "tests"}
               </option>
             ))}
           </optgroup>
         )}
         {value?.kind === "upload" && (
           <option value="upload">
-            {value.label} · {value.tests} tests (uploaded)
+            {value.label} · {value.tests} {value.tests === 1 ? "test" : "tests"} (uploaded)
           </option>
         )}
       </select>
@@ -201,7 +202,7 @@ export function BenchmarkPicker({
       {value && (
         <div className="space-y-1">
           <p className="font-mono text-[11px] text-muted tnum">
-            {value.tests} tests
+            {value.tests} {value.tests === 1 ? "test" : "tests"}
             {value.kind === "bundled" &&
               ` · ${bundled.find((b) => b.slug === value.slug)?.categories.length ?? 0} categories`}
           </p>
@@ -316,6 +317,15 @@ export function useProviders(): ProviderInfo[] | null {
   return list;
 }
 
+/* Ready first: what runs on this instance's key with no setup, then what
+   needs nothing (local, replayed), then what needs your key, then your
+   own endpoint. The API sorts by id, which put "custom" above Groq. */
+export function orderProviders(list: ProviderInfo[]): ProviderInfo[] {
+  const rank = (p: ProviderInfo) =>
+    p.needs_url ? 3 : p.server_key ? 0 : !p.needs_key ? 1 : 2;
+  return [...list].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label));
+}
+
 export function isHosted(provider: string, list?: ProviderInfo[] | null) {
   const all = list ?? providerCache ?? FALLBACK_PROVIDERS;
   return all.find((p) => p.id === provider)?.needs_key ?? true;
@@ -381,7 +391,7 @@ export function ModelPicker({
             })
           }
         >
-          {(providers ?? FALLBACK_PROVIDERS).map((p) => (
+          {orderProviders(providers ?? FALLBACK_PROVIDERS).map((p) => (
             <option key={p.id} value={p.id}>
               {p.label}
               {p.needs_key && !p.server_key ? " · your key only" : ""}

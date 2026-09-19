@@ -45,6 +45,9 @@ EXEMPT = {
     # field existed, across every account, once. Reads tests, writes a
     # count; touches nothing a user can see as theirs or not.
     ("main.py", "_backfill_judged_tests"),
+    # Startup migration: gives pre-job-model runs (results, no status)
+    # the status they earned, across every account, once.
+    ("main.py", "_backfill_run_status"),
 }
 
 

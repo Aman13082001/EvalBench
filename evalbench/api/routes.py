@@ -369,7 +369,10 @@ async def get_suite(suite_id: str, user=Depends(get_current_user)):
     require_owner(doc, user, "Suite")
 
     doc["_id"] = str(doc["_id"])
-
+    # The list computes this from the stored count; the detail page
+    # shows the same line, so it gets the same number.
+    f = judge_floor(doc.get("judged_tests"), len(doc.get("tests") or []))
+    doc["judge_floor"] = asdict(f) if f else None
     return doc
 
 

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import ArchitectureFlow from "@/components/ArchitectureFlow";
+import { useAuth } from "@/components/AuthProvider";
 import LoginDialog from "@/components/LoginDialog";
 import { Rule } from "@/components/ui";
 import judgeStudy from "@/lib/fixtures/judge-study.json";
@@ -102,6 +104,9 @@ const CAPABILITIES: { title: string; body: string; detail: string }[] = [
 
 export default function Home() {
   const [loginOpen, setLoginOpen] = useState(false);
+  // Someone already signed in does not need the dialog; the door opens.
+  const { user } = useAuth();
+  const router = useRouter();
 
   return (
     <div className="space-y-12">
@@ -214,7 +219,7 @@ export default function Home() {
       <Rule />
       <section className="pb-4">
         <button
-          onClick={() => setLoginOpen(true)}
+          onClick={() => (user ? router.push("/workbench") : setLoginOpen(true))}
           className="group block w-full border border-line-strong bg-surface px-5 py-6 text-left
                      transition-colors duration-100 hover:border-accent hover:bg-accent-soft
                      focus:border-accent focus:outline-none sm:px-7 sm:py-7"
@@ -239,7 +244,7 @@ export default function Home() {
               style={{ borderRadius: 2 }}
             >
               <span className="label-xs whitespace-nowrap text-accent">
-                Sign in
+                {user ? "Open the workbench" : "Sign in"}
               </span>
               <span
                 aria-hidden

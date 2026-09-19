@@ -3,59 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import yaml from "js-yaml";
-import { importSuite, JudgeFloor, listSuites, Resolution, SuiteDoc } from "@/lib/api";
+import { importSuite, listSuites, SuiteDoc } from "@/lib/api";
 import { EXAMPLE_SUITE } from "@/lib/example";
 import { RequireAuth } from "@/components/AuthProvider";
 import { Panel, Rule } from "@/components/ui";
-
-/* The line that makes this a list of instruments rather than a list of
-   files. A benchmark's precision is not a property of its YAML — it is
-   the spread between runs of it, so a benchmark nobody has run twice
-   reports nothing and says why. See research/REPORT.md: at ten tests a
-   real regression is caught about 21% of the time. */
-function ResolutionLine({ r }: { r?: Resolution }) {
-  if (!r) return null;
-  if (r.mde === null) {
-    return (
-      <p className="mt-2 font-mono text-[11px] text-muted">
-        resolution: <span className="italic">{r.reason}</span>
-      </p>
-    );
-  }
-  const points = Math.round(r.mde * 100);
-  return (
-    <p className="mt-2 font-mono text-[11px] text-muted tnum">
-      resolution: detects a drop of{" "}
-      <span className="text-text">{points} points</span> or more · 80% power ·
-      from {r.runs_used} runs
-    </p>
-  );
-}
-
-/* The judge's own contribution, under the resolution. A benchmark that
-   asks a model to grade carries the grader's spread whatever its history
-   says: research/judge-variance/ measured it, and this is that number
-   scaled to this benchmark's size. A drop inside it is not evidence. */
-function JudgeFloorLine({ f }: { f?: JudgeFloor | null }) {
-  if (!f) return null;
-  const pts = (x: number) => {
-    const p = x * 100;
-    if (p < 1) return "under ±1 point";
-    const n = p.toFixed(p < 3 ? 1 : 0);
-    return `about ±${n} point${n === "1" || n === "1.0" ? "" : "s"}`;
-  };
-  return (
-    <p className="font-mono text-[11px] text-muted tnum">
-      judge floor: the grader alone moves the mean{" "}
-      <span className="text-text">{pts(f.rerun)}</span> between runs,{" "}
-      <span className="text-text">{pts(f.switch)}</span> across a judge change ·{" "}
-      {f.judged === f.tests ? "every test judged" : `${f.judged} of ${f.tests} tests judged`} ·{" "}
-      <Link href="/research#judge" className="underline decoration-line underline-offset-2 hover:text-text" onClick={(e) => e.stopPropagation()}>
-        the study
-      </Link>
-    </p>
-  );
-}
+import { JudgeFloorLine, ResolutionLine } from "@/components/BenchmarkLines";
 
 function Suites() {
   const [suites, setSuites] = useState<SuiteDoc[] | null>(null);
@@ -176,8 +128,10 @@ function Suites() {
                   </span>
                 )}
               </p>
-              <ResolutionLine r={s.resolution} />
-              <JudgeFloorLine f={s.judge_floor} />
+              <div className="mt-2 space-y-0.5">
+                <ResolutionLine r={s.resolution} />
+                <JudgeFloorLine f={s.judge_floor} />
+              </div>
             </div>
           </Link>
         ))}

@@ -1,5 +1,5 @@
 import { Disclosure, Metric, Panel, Rule, Status } from "@/components/ui";
-import type { Comparison, RunSummary } from "@/lib/api";
+import { endpointHost, type Comparison, type RunSummary } from "@/lib/api";
 import { explainComparison, explainModelComparison } from "@/lib/explain";
 
 /* Re-exported so pages can import the type alongside the component. */
@@ -109,8 +109,23 @@ export default function ComparisonReport({
   const labelA = models ? "Model A" : "Baseline";
   const labelB = models ? "Model B" : "Candidate";
 
+  // What to call each side. A custom endpoint is part of the name — the
+  // same model name means different things on different servers. And
+  // two runs of the same model are told apart by their panel letters,
+  // not by a sentence that says "X scored higher than X".
+  const nameOf = (r: RunSummary) => {
+    const host = endpointHost(r.base_url);
+    return host ? `${r.model} at ${host}` : r.model;
+  };
+  let nameA = nameOf(baseline);
+  let nameB = nameOf(candidate);
+  if (nameA === nameB) {
+    nameA = labelA;
+    nameB = labelB;
+  }
+
   const verdict = models
-    ? explainModelComparison(baseline.model, candidate.model, c)
+    ? explainModelComparison(nameA, nameB, c)
     : explainComparison(c);
   const significant = c.p_value != null && c.p_value < 0.05;
   // A run that scored nothing is not "lower" — it is not comparable,
@@ -163,7 +178,7 @@ export default function ComparisonReport({
 
       {/* ── Side by side ── */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Panel title={labelA} fig="A" caption={baseline.model}>
+        <Panel title={labelA} fig="A" caption={nameOf(baseline)}>
           <div className="grid grid-cols-2 gap-4">
             <Metric
               label="Pass rate"
@@ -194,7 +209,7 @@ export default function ComparisonReport({
             />
           </div>
         </Panel>
-        <Panel title={labelB} fig="B" caption={candidate.model}>
+        <Panel title={labelB} fig="B" caption={nameOf(candidate)}>
           <div className="grid grid-cols-2 gap-4">
             <Metric
               label="Pass rate"

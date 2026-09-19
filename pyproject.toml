@@ -1,7 +1,7 @@
 [project]
 name = "evalbench"
 version = "0.5.0"
-description = "Local LLM evaluation, regression testing, and safety monitoring platform"
+description = "LLM evaluation with real statistics: regression gates, safety in both directions, and a measurement of what the measurement can see"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

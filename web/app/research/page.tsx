@@ -176,12 +176,15 @@ export default function ResearchPage() {
           assurance without evidence.
         </p>
         <p className="text-muted">
-          Two mitigations follow directly, and EvalBench implements both:
-          report a <strong>confidence interval</strong> on the pass rate rather
-          than a bare number, so overlap is visible at a glance; and report the{" "}
-          <strong>required sample size</strong> next to the verdict, so
+          Three mitigations follow directly, and EvalBench implements all of
+          them: report a <strong>confidence interval</strong> on the pass rate
+          rather than a bare number, so overlap is visible at a glance; report
+          the <strong>required sample size</strong> next to the verdict, so
           &ldquo;no regression detected&rdquo; reads as &ldquo;not detectable
-          at this n&rdquo; rather than &ldquo;no regression exists&rdquo;.
+          at this n&rdquo; rather than &ldquo;no regression exists&rdquo;; and
+          give every benchmark a <strong>resolution</strong> — the smallest drop
+          it could detect, from its own run history — shown before anyone
+          relies on it.
         </p>
       </section>
 
@@ -371,7 +374,8 @@ export default function ResearchPage() {
         <div>
           <p className="font-display text-2xl">See it on a real comparison.</p>
           <p className="mt-1 text-sm text-muted">
-            The example report shows this exact tension on eight tests.
+            The example report shows both tensions on eight tests — a verdict
+            from a small suite, graded partly by a judge.
           </p>
         </div>
         <Link href="/example" className="btn btn-primary shrink-0">

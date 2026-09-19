@@ -1,4 +1,7 @@
 export const EXAMPLE_SUITE = `name: Quick Capability Check
+description: >-
+  Four quick checks — a fact, a sum, a JSON shape, a definition — to see
+  a model answer and a benchmark report in under a minute.
 provider: groq
 model: openai/gpt-oss-20b
 evaluator: icontains

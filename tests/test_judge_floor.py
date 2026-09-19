@@ -179,3 +179,47 @@ class TestOldSuitesGetTheCountOnStartup:
         sets = [c.args[1]["$set"] for c in mock_db.suites.update_one.call_args_list
                 if c.args[0] == {"_id": old["_id"]}]
         assert sets == [{"judged_tests": 2, "needs_judge": True}]
+
+
+class TestOldRunsGetAStatusOnStartup:
+    """Runs from before the job model have results but no `status`. Every
+    list that asks for completed runs — history, resolution, the admin
+    count — skips them, and the admin page files them under 'unknown'.
+    They finished; the field did not exist yet. Startup says so, once."""
+
+    @pytest.mark.asyncio
+    async def test_startup_marks_statusless_runs_with_results_completed(self, mock_db):
+        from unittest.mock import AsyncMock, patch
+
+        from evalbench.api import main
+
+        finished = {"_id": ObjectId(), "results": [{"test_name": "a", "score": 1.0}] * 3}
+        empty = {"_id": ObjectId(), "results": []}
+
+        async def find(query, projection=None):
+            assert query.get("status") is None and "status" in query
+            for d in (finished, empty):
+                yield d
+
+        async def suites_find(query, projection=None):
+            return
+            yield  # pragma: no cover
+
+        mock_db.test_runs.find = find
+        mock_db.suites.find = suites_find
+        mock_db.test_runs.update_one = AsyncMock()
+        mock_db.users.create_index = AsyncMock()
+        with patch.object(main, "db", mock_db), patch.object(
+            main.settings, "job_backend", "inline"
+        ):
+            async with main.lifespan(app):
+                pass
+
+        calls = {c.args[0]["_id"]: c.args[1]["$set"] for c in mock_db.test_runs.update_one.call_args_list
+                 if "_id" in c.args[0]}
+        assert calls[finished["_id"]]["status"] == "completed"
+        assert calls[finished["_id"]]["completed_tests"] == 3
+        assert calls[finished["_id"]]["total_tests"] == 3
+        assert calls[finished["_id"]]["progress"] == 1.0
+        # nothing scored, nothing known: leave it alone rather than guess
+        assert empty["_id"] not in calls

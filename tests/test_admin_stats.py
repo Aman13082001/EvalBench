@@ -21,6 +21,9 @@ from evalbench.api.main import app
 @pytest.fixture
 def client(mock_db):
     with TestClient(app) as c:
+        # Startup reads runs once (the status backfill); the endpoints
+        # under test must not, and that is what the assertions check.
+        mock_db.test_runs.find.reset_mock()
         yield c
 
 

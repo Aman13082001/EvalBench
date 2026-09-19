@@ -367,6 +367,31 @@ class TestModels:
         assert "llama3.1:latest" in result.stdout
         assert "qwen3:8b" in result.stdout
 
+    @patch("evalbench.cli._get_headers", return_value={"X-API-Key": "k"})
+    @patch("evalbench.cli.httpx.get")
+    def test_it_asks_for_the_provider_and_sends_the_credential(self, mock_get, _hdr):
+        """The endpoint requires a user and takes a provider. The command
+        sent neither: every call was a 401, and only Ollama was ever
+        asked. README promised `--provider` all along."""
+        mock_get.return_value = mock_response(200, {"models": ["openai/gpt-oss-20b"], "hidden": ["whisper-large-v3"]})
+
+        result = runner.invoke(app, ["models", "--provider", "groq"])
+
+        assert result.exit_code == 0, result.stdout
+        assert "openai/gpt-oss-20b" in result.stdout
+        assert "1 hidden" in result.stdout
+        kw = mock_get.call_args.kwargs
+        assert kw["params"] == {"provider": "groq"}
+        assert kw["headers"] == {"X-API-Key": "k"}
+
+    @patch("evalbench.cli._get_headers", return_value={})
+    @patch("evalbench.cli.httpx.get")
+    def test_without_a_credential_it_says_so(self, mock_get, _hdr):
+        mock_get.return_value = mock_response(401, {"detail": "Not authenticated"})
+        result = runner.invoke(app, ["models"])
+        assert result.exit_code == 1
+        assert "evalbench login" in result.stdout
+
 
 # ─────────────────────────────────────────────────────────────
 # INIT
@@ -396,6 +421,24 @@ class TestInit:
         assert "llama3.1" in content
         assert "semantic" in content
         assert "What is 2+2?" in content
+
+    def test_the_scaffold_is_a_valid_suite_in_the_modern_shape(self, tmp_path):
+        """A description, a provider line, and an `assert` block: the
+        shape the bundled benchmarks use, not the shape from the first
+        week. And it must parse as a TestSuite, or `init` hands out a
+        file that `run` refuses."""
+        import yaml
+
+        from evalbench.db.schemas import TestSuite
+
+        output_file = tmp_path / "suite.yaml"
+        runner.invoke(app, ["init", "--output", str(output_file)])
+        data = yaml.safe_load(output_file.read_text(encoding="utf-8"))
+        suite = TestSuite(**data)
+        assert suite.description
+        assert data["provider"] == "ollama"
+        assert any(t.assert_ for t in suite.tests)
+        assert any(a.type == "llm-rubric" for t in suite.tests for a in (t.assert_ or []))
 
 
 # ─────────────────────────────────────────────────────────────

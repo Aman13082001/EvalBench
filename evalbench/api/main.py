@@ -133,6 +133,40 @@ async def _backfill_judged_tests() -> int:
     return n
 
 
+async def _backfill_run_status() -> int:
+    """Give runs from before the job model the status they earned.
+
+    Until 2026-09-02 a run executed synchronously and its document was
+    written when it finished, so it never needed a `status`. Every list
+    that has asked for `status == "completed"` since — run history, the
+    resolution estimate, the admin count — has skipped those runs, and
+    the admin page files them under "unknown". A run with results and
+    no status finished; say so, once. One with no results and no status
+    is not guessed at.
+    """
+    n = 0
+    cursor = db.test_runs.find(
+        {"status": None}, {"results": 1}
+    )
+    async for doc in cursor:
+        results = doc.get("results") or []
+        if not results:
+            continue
+        await db.test_runs.update_one(
+            {"_id": doc["_id"]},
+            {"$set": {
+                "status": "completed",
+                "progress": 1.0,
+                "completed_tests": len(results),
+                "total_tests": len(results),
+            }},
+        )
+        n += 1
+    if n:
+        logger.info("Backfilled status on %d pre-job-model run(s)", n)
+    return n
+
+
 async def reap_abandoned_runs(when: str) -> int:
     """Fail runs that can be proven dead, and only those.
 
@@ -246,6 +280,7 @@ async def lifespan(app: FastAPI):
 
     await reap_abandoned_runs("startup")
     await _backfill_judged_tests()
+    await _backfill_run_status()
 
     # Under rq, death is detected by silence rather than by a restart, so
     # it has to be checked on a clock: a worker can die while the API

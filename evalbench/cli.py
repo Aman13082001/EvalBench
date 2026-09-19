@@ -33,7 +33,7 @@ for _stream in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-app = typer.Typer(help="EvalBench — Local LLM Evaluation CLI")
+app = typer.Typer(help="EvalBench — evaluate LLMs, gate regressions, and know what the measurement can see.")
 console = Console()
 API_URL = os.getenv("EVALBENCH_API_URL", "http://localhost:8000")
 
@@ -865,23 +865,41 @@ def compare(
 
 
 @app.command()
-def models():
-    """List available Ollama models."""
+def models(
+    provider: str = typer.Option(
+        "ollama", "--provider", "-p",
+        help="Which provider to ask (ollama, groq, gemini, github, openrouter, openai)",
+    ),
+    api_key: str | None = typer.Option(None, "--api-key", help="API key for CI"),
+):
+    """List the chat models a provider offers."""
     r = httpx.get(
         f"{API_URL}/suites/models",
-        timeout=10.0,
+        params={"provider": provider},
+        headers=_get_headers(api_key),
+        timeout=30.0,
     )
+    if r.status_code == 401:
+        console.print(
+            "[red]Authentication required. "
+            "Run `evalbench login` or use --api-key[/red]"
+        )
+        raise typer.Exit(code=1)
     r.raise_for_status()
 
     data = r.json()
+    shown = data.get("models", [])
+    hidden = data.get("hidden", [])
 
-    table = Table(title="Available Models")
+    table = Table(title=f"{provider}: {len(shown)} chat models")
     table.add_column("Model", style="cyan")
-
-    for m in data.get("models", []):
+    for m in shown:
         table.add_row(m)
-
     console.print(table)
+    if hidden:
+        # speech, audio, classifier and embedding models the provider
+        # also lists; not usable as a model under test
+        console.print(f"[dim]{len(hidden)} hidden (not chat models): {', '.join(hidden[:6])}{' …' if len(hidden) > 6 else ''}[/dim]")
 
 
 @app.command()
@@ -893,41 +911,52 @@ def init(
         help="Output file path",
     ),
 ):
-    """Create a sample test suite."""
-    sample = {
-        "name": "My Test Suite",
-        "model": "llama3.1",
-        "evaluator": "semantic",
-        "temperature": 0.0,
-        "samples": 3,
-        "tests": [
-            {
-                "name": "Example Question",
-                "category": "arithmetic",
-                "difficulty": "easy",
-                "evaluator": "contains",
-                "prompt": "What is 2+2?",
-                "expected": "4",
-                "threshold": 0.99,
-            },
-            {
-                "name": "Example Definition",
-                "category": "definitions",
-                "difficulty": "medium",
-                "evaluator": "semantic",
-                "prompt": "In one sentence, what is an operating system?",
-                "expected": (
-                    "An operating system is software that manages a "
-                    "computer's hardware and provides services for "
-                    "running application programs."
-                ),
-                "threshold": 0.55,
-            },
-        ],
-    }
+    """Create a sample test suite to start from."""
+    # One of each shape a suite can take: a cheap exact check, a semantic
+    # check, and a composable `assert` block with a rubric — the form the
+    # bundled benchmarks use. A description, because the benchmark page
+    # shows it, and a provider line, because the default is easy to miss.
+    sample = """# A starting point. Everything except `name` and `tests` has a default.
+name: My Test Suite
+description: >-
+  One line on what this benchmark measures — it is shown on the
+  benchmarks page, next to what the benchmark can resolve.
+provider: ollama          # ollama | groq | gemini | github | openrouter | openai
+model: llama3.1
+evaluator: semantic       # default check for tests without an `assert` block
+temperature: 0.0
+samples: 3                # run each test 3x; the score is the average
 
-    with open(path, "w") as f:
-        yaml.dump(sample, f, sort_keys=False)
+tests:
+  - name: arithmetic
+    category: arithmetic
+    prompt: "What is 2+2? Number only."
+    expected: "4"
+    evaluator: exact
+
+  - name: definition
+    category: definitions
+    prompt: "In one sentence, what is an operating system?"
+    expected: >-
+      An operating system is software that manages a computer's hardware
+      and provides services for running application programs.
+    threshold: 0.55       # semantic similarity needed to pass
+
+  - name: explanation
+    category: quality
+    prompt: "Explain what a race condition is to a junior developer."
+    assert:
+      - type: llm-rubric  # graded by a model; judge_provider/judge_model pick which
+        criteria: >-
+          Defines a race condition as operations depending on timing,
+          gives a concrete example, and is understandable without a CS
+          degree.
+      - type: latency
+        max_ms: 8000
+"""
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(sample)
 
     console.print(
         f"[bold green]✓[/bold green] Created sample suite: "

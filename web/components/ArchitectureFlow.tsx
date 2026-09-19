@@ -59,7 +59,13 @@ const BOXES: Box[] = [
    box so the left edge carries real information instead of air. */
 const ENTRYPOINTS = ["evalbench run", "web workbench", "GitHub Action"];
 
-const PROVIDERS = ["ollama", "groq", "gemini", "github", "openrouter", "openai"];
+/* Six providers, your own endpoint, or answers you already have — the
+   last two are the paths that need no key at all. Eight lines at 14px
+   fit the block; the list is the truth, so it is not cut to fit. */
+const PROVIDERS = [
+  "ollama", "groq", "gemini", "github", "openrouter", "openai",
+  "your endpoint", "your answers",
+];
 
 type Stage = {
   /** Edge being traversed: [from, to]. */
@@ -91,7 +97,7 @@ const STAGES: Stage[] = [
     edge: ["worker", "providers"],
     d: "M740 42 H780",
     caption:
-      "The same suite runs against a local model or any hosted one, through a single interface.",
+      "The same suite runs against a local model, a hosted one, your own endpoint, or answers you already have — one interface.",
   },
   {
     edge: ["providers", "assert"],
@@ -282,7 +288,7 @@ export default function ArchitectureFlow() {
                     <text
                       key={p}
                       x={b.x + 12}
-                      y={b.y + 44 + i * 16}
+                      y={b.y + 40 + i * 14}
                       className="fill-muted font-mono text-[10px]"
                     >
                       {p}

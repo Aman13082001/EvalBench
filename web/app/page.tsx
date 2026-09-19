@@ -84,9 +84,9 @@ const CAPABILITIES: { title: string; body: string; detail: string }[] = [
     detail: "19 tests across 9 safety categories · refusal and over-refusal scored separately",
   },
   {
-    title: "It runs the same suite on any model",
-    body: "Local Ollama or five hosted providers behind one interface, with per-provider concurrency ceilings so free-tier rate limits are respected. Token counts and estimated cost come back normalised, so comparing two models is a config change.",
-    detail: "ollama · groq · gemini · github · openrouter · openai",
+    title: "It runs the same suite on any model — or on no model",
+    body: "Local Ollama, five hosted providers, any OpenAI-compatible endpoint you name, or a file of answers you already have, behind one interface. Per-provider concurrency ceilings respect free-tier limits; token counts and cost come back normalised, so comparing two models is a config change. A custom endpoint is checked at the socket so the worker can never be pointed at the internal network.",
+    detail: "ollama · groq · gemini · github · openrouter · openai · your endpoint · your answers",
   },
   {
     title: "It gates CI",

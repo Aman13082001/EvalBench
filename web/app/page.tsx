@@ -227,8 +227,8 @@ export default function Home() {
                 Check it for yourself
               </span>
               <span className="block max-w-xl text-sm leading-relaxed text-muted">
-                Run a real evaluation against your own model and keep the
-                history — or run one right now without an account.
+                Run a real evaluation against your own model, your own
+                endpoint, or answers you already have — and keep the history.
               </span>
             </span>
 

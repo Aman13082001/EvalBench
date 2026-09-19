@@ -434,7 +434,11 @@ def analyze() -> None:
         "judges": judges,
         "n_answers": len(answers),
         "n_tests": n,
-        "repeats": comp["repeats_harmonic"],
+        # what was asked for, and what the arithmetic actually had
+        # (a cell short a repeat to an empty reply pulls the harmonic
+        # mean under the design value)
+        "repeats": max(len(v) for v in cells.values()),
+        "repeats_harmonic": comp["repeats_harmonic"],
         "calls": len(rows),
         "parse_fallbacks": len(fallback),
         "no_verdict": no_verdict_by,

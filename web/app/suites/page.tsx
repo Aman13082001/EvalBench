@@ -40,13 +40,15 @@ function JudgeFloorLine({ f }: { f?: JudgeFloor | null }) {
   if (!f) return null;
   const pts = (x: number) => {
     const p = x * 100;
-    return p < 1 ? "under 1 point" : `about ${p.toFixed(p < 3 ? 1 : 0)} points`;
+    if (p < 1) return "under ±1 point";
+    const n = p.toFixed(p < 3 ? 1 : 0);
+    return `about ±${n} point${n === "1" || n === "1.0" ? "" : "s"}`;
   };
   return (
     <p className="font-mono text-[11px] text-muted tnum">
       judge floor: the grader alone moves the mean{" "}
-      <span className="text-text">±{pts(f.rerun)}</span> between runs,{" "}
-      <span className="text-text">±{pts(f.switch)}</span> across a judge change ·{" "}
+      <span className="text-text">{pts(f.rerun)}</span> between runs,{" "}
+      <span className="text-text">{pts(f.switch)}</span> across a judge change ·{" "}
       {f.judged === f.tests ? "every test judged" : `${f.judged} of ${f.tests} tests judged`} ·{" "}
       <Link href="/research#judge" className="underline decoration-line underline-offset-2 hover:text-text" onClick={(e) => e.stopPropagation()}>
         the study

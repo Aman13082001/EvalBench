@@ -12,7 +12,8 @@
   ],
   "n_answers": 60,
   "n_tests": 30,
-  "repeats": 4.898,
+  "repeats": 5,
+  "repeats_harmonic": 4.898,
   "calls": 900,
   "parse_fallbacks": 9,
   "no_verdict": {

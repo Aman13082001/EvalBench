@@ -17,6 +17,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 _PUBLIC_USER_FIELDS = {
     "hashed_password": 0,
     "api_key": 0,  # never re-expose a key, even to an admin
+    "api_key_hash": 0,  # nor what stands in for it
 }
 
 
@@ -52,7 +53,9 @@ async def _set_active(username: str, active: bool, admin: dict) -> dict:
 async def deactivate_user(
     request: Request, username: str, admin=Depends(get_current_admin)
 ):
-    """Block a user from authenticating without deleting their data."""
+    """Ban: the account cannot sign in, every request with its token or
+    key is refused, and no new account can be registered from an address
+    it used. Its data stays; `activate` reverses all of it."""
     return await _set_active(username, False, admin)
 
 

@@ -51,7 +51,8 @@ async def test_ensure_indexes_covers_hot_paths(mock_db):
     await _ensure_indexes()
 
     users_idx = [c.args[0] for c in mock_db.users.create_index.call_args_list]
-    assert "api_key" in users_idx
+    assert "api_key_hash" in users_idx
+    assert "api_key" not in users_idx  # keys are stored hashed
     assert "username" in users_idx
 
     run_idx = [c.args[0] for c in mock_db.test_runs.create_index.call_args_list]

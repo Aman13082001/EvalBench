@@ -1,5 +1,6 @@
 """JWT and password utilities for EvalBench."""
 
+import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -73,3 +74,13 @@ def decode_token(
 
 def generate_api_key() -> str:
     return "eb_" + secrets.token_urlsafe(32)
+
+
+def hash_api_key(key: str) -> str:
+    """What the database stores instead of the key.
+
+    A plain SHA-256, not bcrypt: the key is 32 random bytes, so there is
+    nothing for a dictionary to guess, and the lookup runs on every
+    request. A database leak now leaks nothing usable.
+    """
+    return hashlib.sha256(key.encode()).hexdigest()

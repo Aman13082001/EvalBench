@@ -12,6 +12,7 @@ os.environ.setdefault("EVALBENCH_ALLOW_INSECURE", "1")
 from evalbench import jobs as jobs_module  # noqa: E402
 from evalbench.api import admin as admin_module  # noqa: E402
 from evalbench.api import auth_routes as auth_routes_module  # noqa: E402
+from evalbench.api import deps as deps_module  # noqa: E402
 from evalbench.api import main as main_module  # noqa: E402
 from evalbench.api import routes as routes_module  # noqa: E402
 from evalbench.api.deps import get_current_user, limiter  # noqa: E402
@@ -76,6 +77,7 @@ def mock_db():
         return_value=1
     )
     mock.users.create_index = AsyncMock()
+    mock.users.drop_index = AsyncMock()
     mock.users.find = MagicMock()
 
     mock.command = AsyncMock(
@@ -111,6 +113,13 @@ def mock_db():
         ),
         patch.object(
             auth_routes_module,
+            "db",
+            mock
+        ),
+        # Auth itself: the key and token lookups. Unpatched, every test
+        # that sent a key was querying the real database on 27017.
+        patch.object(
+            deps_module,
             "db",
             mock
         ),

@@ -260,19 +260,44 @@ async def runs_used_today(user: dict) -> int:
     )
 
 
+async def runs_used_today_total() -> int:
+    """Runs everyone started today on the server's key."""
+    return await db.test_runs.count_documents(
+        {"created_at": {"$gte": _day_start()}, "used_server_key": True}
+    )
+
+
+async def quota_for(user: dict) -> dict:
+    """What the caller may still spend of the server's key today: their
+    own allowance and the instance's, and the smaller of the two, which
+    is the one that will actually stop them."""
+    if user.get("role") == "admin":
+        return {"cap": None, "used": 0, "remaining": None, "instance": None}
+    used = await runs_used_today(user)
+    remaining = max(settings.daily_run_cap - used, 0)
+    instance = None
+    if settings.daily_run_cap_total:
+        total = await runs_used_today_total()
+        instance = {
+            "cap": settings.daily_run_cap_total,
+            "used": total,
+            "remaining": max(settings.daily_run_cap_total - total, 0),
+        }
+        remaining = min(remaining, instance["remaining"])
+    return {
+        "cap": settings.daily_run_cap,
+        "used": used,
+        "remaining": remaining,
+        "instance": instance,
+    }
+
+
 @router.get("/quota")
 async def run_quota(user=Depends(get_current_user)):
     """How many server-key runs the caller has left today. Admins are
     uncapped. Surfaced in the UI so the cap is visible before a run,
     not discovered as a 429 after clicking."""
-    if user.get("role") == "admin":
-        return {"cap": None, "used": 0, "remaining": None}
-    used = await runs_used_today(user)
-    return {
-        "cap": settings.daily_run_cap,
-        "used": used,
-        "remaining": max(settings.daily_run_cap - used, 0),
-    }
+    return await quota_for(user)
 
 
 @router.get("/providers")
@@ -647,6 +672,20 @@ async def run_suite(
                     "keep going, or try again tomorrow."
                 ),
             )
+        # The key has one quota, shared by everyone here. When it is
+        # spent for the day nobody's personal allowance can un-spend it.
+        if settings.daily_run_cap_total:
+            total = await runs_used_today_total()
+            if total >= settings.daily_run_cap_total:
+                raise HTTPException(
+                    status_code=429,
+                    detail=(
+                        f"EvalBench's key has done its "
+                        f"{settings.daily_run_cap_total} runs for today, "
+                        "across everyone. Add your own provider key to keep "
+                        "going, or try again tomorrow."
+                    ),
+                )
 
     queued = TestRun(
         suite_id=suite_id,

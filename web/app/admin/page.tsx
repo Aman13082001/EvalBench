@@ -99,12 +99,18 @@ function Admin() {
             key={u.username}
             className="panel flex flex-wrap items-center justify-between gap-3 p-3"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="font-mono text-sm">{u.username}</span>
               <span className="label-xs">{u.role}</span>
               <Status state={u.active ? "pass" : "fail"}>
-                {u.active ? "active" : "deactivated"}
+                {u.active ? "active" : "banned"}
               </Status>
+              {u.last_ip && (
+                <span className="font-mono text-[11px] text-muted">
+                  last from {u.last_ip}
+                  {(u.ips?.length ?? 0) > 1 ? ` · ${u.ips!.length} addresses` : ""}
+                </span>
+              )}
             </div>
             <button
               className="btn btn-ghost px-2 py-1 font-mono text-[11px]"
@@ -112,11 +118,13 @@ function Admin() {
               disabled={u.username === user?.username}
               title={
                 u.username === user?.username
-                  ? "You cannot deactivate your own account"
-                  : undefined
+                  ? "You cannot ban your own account"
+                  : u.active
+                    ? "Signs the account out everywhere, refuses its key, and blocks new accounts from the addresses it used. Its data stays."
+                    : "Lets the account sign in again and reopens its addresses."
               }
             >
-              {u.active ? "deactivate" : "activate"}
+              {u.active ? "ban" : "unban"}
             </button>
           </div>
         ))}

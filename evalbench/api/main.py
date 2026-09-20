@@ -15,7 +15,7 @@ from slowapi.errors import RateLimitExceeded
 
 from evalbench.answers import judged_tests, suite_needs_judge
 from evalbench.api.admin import router as admin_router
-from evalbench.api.auth import get_password_hash
+from evalbench.api.auth import get_password_hash, hash_api_key
 from evalbench.api.auth_routes import router as auth_router
 from evalbench.api.deps import (
     get_current_user,
@@ -83,7 +83,12 @@ async def _ensure_indexes() -> None:
     # two simultaneous registrations both saw a free name and both
     # wrote, leaving one username on two accounts and login returning
     # whichever Mongo reached first.
-    await ensure_unique_index(db.users, "api_key")
+    # Keys are stored hashed. The old unique index on the plaintext
+    # field would refuse a second document without it (missing counts
+    # as null, and null must be unique too), so it goes.
+    with suppress(OperationFailure):
+        await db.users.drop_index("api_key_1")
+    await ensure_unique_index(db.users, "api_key_hash")
     await ensure_unique_index(db.users, "username")
     # list_suites sorts by created_at; list_runs filters suite_id + sorts.
     await db.suites.create_index([("created_at", -1)])
@@ -98,6 +103,25 @@ async def _ensure_indexes() -> None:
     # The startup reaper queries status $in [queued, running].
     await db.test_runs.create_index("status")
 
+
+
+async def _backfill_api_key_hashes() -> int:
+    """Accounts from before keys were hashed carry the key in the clear.
+    Each becomes its hash, and the plaintext is removed. The key itself
+    keeps working — the lookup hashes what the caller sends."""
+    n = 0
+    async for u in db.users.find({"api_key": {"$exists": True}}):
+        await db.users.update_one(
+            {"_id": u["_id"]},
+            {
+                "$set": {"api_key_hash": hash_api_key(u["api_key"])},
+                "$unset": {"api_key": ""},
+            },
+        )
+        n += 1
+    if n:
+        logger.info("Hashed %d API key(s) that were stored in the clear", n)
+    return n
 
 
 async def _backfill_judged_tests() -> int:
@@ -249,34 +273,36 @@ async def ensure_unique_index(collection, field: str) -> bool:
             return False
 
 
+async def _bootstrap_admin() -> None:
+    """Create the default admin if no users exist."""
+    count = await db.users.count_documents({})
+    if count != 0:
+        return
+    await db.users.insert_one({
+        "username": settings.admin_username,
+        "hashed_password": get_password_hash(settings.admin_password),
+        "api_key_hash": hash_api_key(settings.admin_api_key),
+        "role": "admin",
+        "created_at": datetime.now(timezone.utc),
+    })
+    logger.info(
+        "Default admin created (username=%s). "
+        "Rotate the credentials and API key immediately.",
+        settings.admin_username,
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
 
     logging.basicConfig(level=settings.log_level.upper())
     _check_secrets()
+    # Hash before indexing: the unique index on the hash must not meet
+    # a collection where every old account still lacks one.
+    await _backfill_api_key_hashes()
     await _ensure_indexes()
-
-    # Create default admin if no users exist.
-    count = await db.users.count_documents({})
-
-    if count == 0:
-
-        await db.users.insert_one({
-            "username": settings.admin_username,
-            "hashed_password": get_password_hash(
-                settings.admin_password
-            ),
-            "api_key": settings.admin_api_key,
-            "role": "admin",
-            "created_at": datetime.now(timezone.utc),
-        })
-
-        logger.info(
-            "Default admin created (username=%s). "
-            "Rotate the credentials and API key immediately.",
-            settings.admin_username,
-        )
+    await _bootstrap_admin()
 
     await reap_abandoned_runs("startup")
     await _backfill_judged_tests()

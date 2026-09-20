@@ -34,6 +34,33 @@ changed; and judges matter most where answers are best — near the
 ceiling, 48% of what variance remains is the judge. `suites/research-judge.yaml`,
 `scripts/run_study_judge.py generate | score | analyze`.
 
+### Added — before the key goes public
+
+None of the server's keys can produce a bill — card-less free tiers —
+so what needed protecting was the quota and the database.
+
+- **An instance-wide daily cap** (`DAILY_RUN_CAP_TOTAL`, 200) beside the
+  per-user one. The per-user cap stopped one greedy account; five
+  hundred free registrations at 20 each was the whole free tier gone.
+  The quota endpoint reports the tighter of the two and the workbench
+  says when it is the shared one.
+- **Registration is a switch** (`ALLOW_REGISTRATION`), rate limited to
+  five an hour per address when open. Closed, the admin makes accounts.
+- **Bans hold.** A banned account gets no token at login, every request
+  with its key or token is refused, and no new account can register
+  from an address it signed in from. Only those addresses; a VPN steps
+  over it and that is said in `SECURITY.md`. `TRUST_PROXY` decides
+  whether `X-Forwarded-For` is believed. The admin page shows where an
+  account was last seen from.
+- **User API keys are stored hashed** (SHA-256, looked up by hash). Old
+  accounts are migrated at startup and the plaintext removed. The
+  unique index moves to the hash.
+- **Compose publishes Mongo, Redis, Ollama and Prometheus on loopback.**
+  A copy of the file on a VPS no longer puts the user table and the key
+  stash on the internet.
+- The test fixture was not patching `deps.db`, so every test that sent
+  an API key was querying the real Mongo on 27017. Fixed.
+
 ### Added — the question sheet
 
 "Bring your own answers" took a file of `{test_name, response}` rows but

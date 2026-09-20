@@ -11,9 +11,11 @@ from evalbench.api.auth import (
     create_access_token,
     generate_api_key,
     get_password_hash,
+    hash_api_key,
     verify_password,
 )
-from evalbench.api.deps import get_current_user, limiter
+from evalbench.api.deps import client_ip, get_current_user, limiter
+from evalbench.config import settings
 from evalbench.db.mongo import db
 
 router = APIRouter(
@@ -38,7 +40,17 @@ class ApiKeyResponse(BaseModel):
 
 
 @router.post("/register", status_code=201)
-async def register(user: UserCreate):
+@limiter.limit("5/hour")
+async def register(request: Request, user: UserCreate):
+    if not settings.allow_registration:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Registration is closed on this instance. "
+                "Ask the admin for an account."
+            ),
+        )
+
     existing = await db.users.find_one(
         {"username": user.username}
     )
@@ -49,6 +61,20 @@ async def register(user: UserCreate):
             detail="Username already registered",
         )
 
+    # An account the admin banned does not come back under a new name
+    # from the same address. Only addresses a banned account actually
+    # used; everyone else at a shared address is unaffected.
+    ip = client_ip(request)
+    banned = await db.users.find_one({"active": False, "ips": ip})
+    if banned:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Registration from this address is closed: an account "
+                "that used it was banned. Contact the admin."
+            ),
+        )
+
     api_key = generate_api_key()
 
     doc = {
@@ -56,9 +82,12 @@ async def register(user: UserCreate):
         "hashed_password": get_password_hash(
             user.password
         ),
-        "api_key": api_key,
+        # The key is shown once, now, and stored only as a hash.
+        "api_key_hash": hash_api_key(api_key),
         "role": "user",
         "created_at": datetime.now(timezone.utc),
+        "ips": [ip],
+        "last_ip": ip,
     }
 
     try:
@@ -104,6 +133,25 @@ async def login(
             },
         )
 
+    # A banned account gets no token: every request would refuse it
+    # anyway, but a token that works nowhere is a confusing thing to be
+    # handed. Say it here, once.
+    if user.get("active") is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been deactivated",
+        )
+
+    # Where the account is used from, for the ban to key on.
+    ip = client_ip(request)
+    await db.users.update_one(
+        {"username": user["username"]},
+        {
+            "$addToSet": {"ips": ip},
+            "$set": {"last_ip": ip, "last_login_at": datetime.now(timezone.utc)},
+        },
+    )
+
     access_token = create_access_token(
         data={"sub": user["username"]}
     )
@@ -125,7 +173,12 @@ async def rotate_api_key(
 
     await db.users.update_one(
         {"username": user["username"]},
-        {"$set": {"api_key": new_key}},
+        {
+            "$set": {"api_key_hash": hash_api_key(new_key)},
+            # An account from before keys were hashed still carries the
+            # old one in the clear; rotating is the moment it goes.
+            "$unset": {"api_key": ""},
+        },
     )
 
     return {

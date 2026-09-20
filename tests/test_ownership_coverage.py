@@ -48,6 +48,11 @@ EXEMPT = {
     # Startup migration: gives pre-job-model runs (results, no status)
     # the status they earned, across every account, once.
     ("main.py", "_backfill_run_status"),
+    # The instance-wide daily cap: how many runs everyone together made
+    # on the server's key today. A count, across every account by
+    # design — the key has one quota, and it is shared. Returns a number,
+    # never a document.
+    ("routes.py", "runs_used_today_total"),
 }
 
 

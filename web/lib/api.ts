@@ -267,7 +267,12 @@ export const listRecentRuns = (limit = 20) =>
 export interface Quota {
   cap: number | null;
   used: number;
+  /* The smaller of the caller's allowance and the instance's — the one
+     that will actually stop the next run. */
   remaining: number | null;
+  /* The instance-wide cap on server-key runs, shared by everyone; null
+     when there is none, or for an admin. */
+  instance: { cap: number; used: number; remaining: number } | null;
 }
 
 /** Runs left today on EvalBench's own key. null cap = uncapped (admin). */
@@ -379,6 +384,11 @@ export interface AdminUser {
   role: string;
   active: boolean;
   created_at?: string;
+  /* Addresses the account has signed in from. A ban keeps new accounts
+     off them. */
+  ips?: string[];
+  last_ip?: string;
+  last_login_at?: string;
 }
 
 export interface AdminStats {

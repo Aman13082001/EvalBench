@@ -167,8 +167,39 @@ gone from Redis afterwards.
   (`evalbench/core/providers/openai_compat.py`, `tests/test_rate_limits.py`).
 - A reaper for runs whose worker died mid-run, so a stuck job cannot
   hold a "running" state forever (`evalbench/reaper.py`).
+- **Two caps on the server's key**, not one. `DAILY_RUN_CAP` (20) is per
+  user; `DAILY_RUN_CAP_TOTAL` (200) is for everyone together. The first
+  guards against one greedy account; the second against many — the key
+  has one free tier, and registration is free. The quota endpoint
+  reports the tighter of the two, and the workbench says when it is the
+  shared one (`tests/test_public_deploy.py::TestTheInstanceCap`).
+- **Registration is a switch.** `ALLOW_REGISTRATION=false` closes it
+  (403, "ask the admin"); open, it is rate limited to 5 an hour per
+  address. A public deployment runs it closed and the admin makes the
+  accounts.
+- **A ban sticks.** The admin's "ban" (`/admin/users/{u}/deactivate`)
+  refuses the account's token and key on every request, refuses it a
+  new token at login, and refuses new registrations from every address
+  the account signed in from. Only those addresses — everyone else
+  behind a shared NAT is unaffected — and it is a fence, not a wall: a
+  VPN steps over it. Addresses come from the socket unless
+  `TRUST_PROXY=true`, because a client can write `X-Forwarded-For`
+  itself and a ban keyed on a header the banned can choose is no ban.
 
-### 8. Input handling
+### 8. Credentials at rest
+
+- User API keys are stored as SHA-256 hashes (`users.api_key_hash`) and
+  looked up by hash; the key is shown once, at creation or rotation. A
+  plain hash rather than bcrypt: the key is 32 random bytes, so there is
+  nothing for a dictionary to guess, and the lookup is on every request.
+  Accounts from before are migrated at startup and the plaintext
+  removed (`_backfill_api_key_hashes`).
+- Passwords are bcrypt.
+- The server's provider keys live in the environment only. They are in
+  no response, no log line, no run document and no client bundle
+  (`tests/test_configured_providers.py`, `tests/test_admin.py`).
+
+### 9. Input handling
 
 - Every id is validated as an ObjectId before it reaches a query.
 - Suite YAML is read with `yaml.safe_load`, never `yaml.load`.
@@ -177,11 +208,15 @@ gone from Redis afterwards.
   that matches nothing is refused by name.
 - Model output is rendered as text by React, never as HTML.
 
-### 9. Containers
+### 10. Containers
 
 Both images run as an unprivileged user (`evalbench` uid 1000 in the
 API/worker image, `nextjs` uid 1001 in the web image). Every service
-has a healthcheck.
+has a healthcheck. Mongo, Redis, Ollama and Prometheus are published on
+`127.0.0.1` only: the browser never talks to them, the containers reach
+them over the compose network, and a copy of the file on a VPS no longer
+puts an unauthenticated database on the internet
+(`tests/test_public_deploy.py::TestComposeBindsStateToLoopback`).
 
 ---
 
@@ -191,8 +226,7 @@ Listed so nobody has to discover them. Each has its fix.
 
 | gap | why it matters | the fix |
 |---|---|---|
-| `docker-compose.yml` publishes Mongo (27017), Redis (6379), Ollama, Prometheus and Grafana on **all host interfaces**, with no authentication on Mongo or Redis | fine on a laptop; on a VPS with the compose file as-is, the database is on the internet | bind to loopback (`"127.0.0.1:27017:27017"`) or drop the `ports:` for services the browser never needs. The planned $0 deployment (Atlas + a single API container) has no such exposure |
-| API keys are stored in plaintext in `users.api_key` | a database leak leaks every key | store a SHA-256 of the key and look up by hash |
+| Mongo and Redis have no authentication of their own | on loopback that is the host's business; anyone with a shell on the host has the database | `MONGO_INITDB_ROOT_*` and `requirepass`, with the URLs in `.env` carrying them |
 | the JWT lives in `localStorage` | readable by any script that runs on the page (XSS) | an `httpOnly` cookie. Mitigated today by rendering no user-supplied HTML |
 | the rate limiter is in-process | with N API replicas the limit is N× the number written | slowapi's Redis storage backend |
 | the daily cap is check-then-insert | two simultaneous submissions at 19/20 both pass | count inside the insert (a conditional update) |
@@ -218,6 +252,13 @@ acknowledged, fixed, and credited here.
 
 Dated, newest first. When security work lands, add a line.
 
+- **2026-09-21** — Before the key goes public: registration can be
+  closed and is rate limited, an instance-wide daily cap on server-key
+  runs, bans that hold across the addresses an account used, user API
+  keys hashed at rest with a startup migration, Mongo/Redis/Ollama/
+  Prometheus on loopback in compose. Also: the test fixture was not
+  patching the auth module's database handle, so key lookups in tests
+  reached the real Mongo; fixed.
 - **2026-09-19** — Custom endpoints with SSRF defence: URL rules,
   IP-pinned connections, no redirects, response cap, no DNS oracle in
   refusals (`2a68b86`).

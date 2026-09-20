@@ -5,7 +5,8 @@ from fastapi.security import APIKeyHeader, HTTPBearer
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from evalbench.api.auth import decode_token
+from evalbench.api.auth import decode_token, hash_api_key
+from evalbench.config import settings
 from evalbench.db.mongo import db
 
 # ── Rate limiter (in-memory; swap to Redis for multi-instance) ──
@@ -37,7 +38,9 @@ async def get_current_user(
 
     # 1. Try API key first (stateless, perfect for CI)
     if api_key:
-        user = _accept(await db.users.find_one({"api_key": api_key}))
+        user = _accept(
+            await db.users.find_one({"api_key_hash": hash_api_key(api_key)})
+        )
         if user:
             return user
 
@@ -58,6 +61,21 @@ async def get_current_user(
         detail="Invalid or missing authentication",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def client_ip(request) -> str:
+    """The address a request came from, as far as it can be trusted.
+
+    The socket address, unless the operator has said a proxy sits in
+    front — then the first hop of X-Forwarded-For, which is what the
+    proxy saw. Never the header on its own say-so.
+    """
+    if settings.trust_proxy:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first
+    return request.client.host if request.client else "unknown"
 
 
 async def get_current_admin(user=Depends(get_current_user)):

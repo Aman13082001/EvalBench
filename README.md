@@ -112,9 +112,10 @@ Created once, on the first API startup, from these settings (see `.env.example`)
 Locked out? `evalbench reset-password -u admin` writes straight to
 MongoDB, so it needs database access rather than a password — there is
 deliberately no reset endpoint on the API. Run it against the stack's
-database with `docker compose exec api evalbench reset-password -u admin`;
-if a MongoDB is also installed natively on your machine it can occupy the
-same port Docker publishes, and the host CLI will edit the wrong one. The
+database with `docker compose exec api evalbench reset-password -u admin`.
+From the host, the stack's Mongo is on `localhost:27018` (loopback only);
+`27017` is left to a MongoDB installed natively, so the host CLI cannot
+edit the wrong one by default. The
 command prints which database it is using and, on a miss, names the
 accounts that database holds.
 
@@ -410,9 +411,11 @@ npm run dev                          # http://localhost:3005
 endpoints the CLI already used, plus a few small additions: an optional
 model/provider override on a run (so one benchmark can be run against two
 models without duplicating it), an optional caller-supplied key that never
-touches the database, a per-user daily cap on runs that spend the server's
-key (`DAILY_RUN_CAP`, shown as "N left today" before the click), and a
-curated list of bundled benchmarks a user can adopt exactly once. The UI
+touches the database, two daily caps on runs that spend the server's
+key — per user (`DAILY_RUN_CAP`) and for everyone together
+(`DAILY_RUN_CAP_TOTAL`), the tighter one shown as "N left today" before
+the click — and a curated list of bundled benchmarks a user can adopt
+exactly once. The UI
 says *benchmark*; the API, YAML and CLI say *suite* — same thing.
 
 Three ways to answer, side by side in the form:
@@ -463,7 +466,8 @@ collects nothing but the regression gauges.
 ## Authentication
 
 - **JWT** for interactive use (`evalbench login` → `Authorization: Bearer …`).
-- **API key** for CI (`X-API-Key` header, or `evalbench run --api-key`).
+- **API key** for CI (`X-API-Key` header, or `evalbench run --api-key`). Stored as a SHA-256 hash; shown once, at creation or rotation.
+- **Registration** is open by default and rate limited (5/hour per address). `ALLOW_REGISTRATION=false` closes it for a public deployment; the admin makes the accounts.
 - **Every data endpoint requires a user.** Only `/health`, `/live`, `/ready` (and the Prometheus `/metrics` scrape target) are public. `tests/test_auth_coverage.py` asserts this for every route.
 - Mutating endpoints are additionally rate-limited (SlowAPI).
 
@@ -474,9 +478,11 @@ their own; an admin sees everything. A request for someone else's resource
 returns **404, not 403** — the API never confirms the existence of an id it
 will not serve.
 
-`/admin/*` (users, activate/deactivate, instance stats) requires
-`role: admin`. Deactivated users are rejected at authentication with 403,
-and an admin cannot deactivate their own account.
+`/admin/*` (users, ban/unban, instance stats) requires `role: admin`. A
+banned account gets no token at login, is rejected on every request with
+403, and no new account can register from an address it signed in from
+(the socket address, or `X-Forwarded-For` when `TRUST_PROXY=true` says a
+proxy is in front). An admin cannot ban their own account.
 
 Secrets are read from environment / `.env` via `evalbench/config.py` — `SECRET_KEY`, `TOKEN_EXPIRE_MINUTES`, `OLLAMA_BASE_URL`, `MONGODB_URL`, timeouts, CORS origins, admin bootstrap. Copy `.env.example` to `.env` and fill it in.
 

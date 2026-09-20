@@ -46,6 +46,20 @@ class Settings(BaseSettings):
     # Runs made with a user-supplied key are not counted. 0 disables the
     # server key for non-admins entirely.
     daily_run_cap: int = 20
+    # Server-key runs per day across every user. The per-user cap guards
+    # the key against one greedy account; this guards it against many —
+    # registration is free, and five hundred accounts at 20 each is the
+    # whole free tier gone before lunch. 0 = no instance-wide cap.
+    daily_run_cap_total: int = 200
+    # Open by default so a fresh install has a way in. Closed on a public
+    # deployment: the admin makes the accounts, and the server's key is
+    # not on offer to whoever finds the URL.
+    allow_registration: bool = True
+    # Behind a reverse proxy (a PaaS, nginx) the client's address is in
+    # X-Forwarded-For. Read only when told to: a client can set that
+    # header itself, and a ban keyed on a header the banned can choose
+    # is no ban.
+    trust_proxy: bool = False
 
     # Authentication
     secret_key: str = "change-this-to-a-random-32-char-string"

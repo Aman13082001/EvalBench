@@ -533,12 +533,20 @@ export function KeyPicker({
     );
   }
 
+  /* When the shared cap is the tighter one, say so: "0 left" with 19 of
+     your own 20 unused reads as a bug otherwise. */
+  const shared =
+    quota?.instance != null &&
+    quota.cap != null &&
+    quota.instance.remaining < quota.cap - quota.used;
   const left =
     quota == null
       ? "…"
       : quota.cap == null
         ? "unlimited"
-        : `${quota.remaining} of ${quota.cap} left today`;
+        : shared
+          ? `${quota.remaining} left today · shared by everyone on this instance`
+          : `${quota.remaining} of ${quota.cap} left today`;
   const exhausted = quota?.remaining === 0;
 
   return (

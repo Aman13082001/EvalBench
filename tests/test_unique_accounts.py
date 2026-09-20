@@ -45,7 +45,7 @@ class TestTheConstraintExists:
             c[0][0]: c[1] for c in mock_db.users.create_index.call_args_list
         }
         assert created["username"].get("unique") is True
-        assert created["api_key"].get("unique") is True
+        assert created["api_key_hash"].get("unique") is True
 
 
 class TestTheRace:

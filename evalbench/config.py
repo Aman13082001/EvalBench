@@ -2,6 +2,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    def __repr__(self) -> str:
+        # A crash log on a hosted platform prints whatever the traceback
+        # touched. If that is the settings object, this is what it sees.
+        parts = []
+        for name, value in self.model_dump().items():
+            if value and any(s in name for s in ("key", "token", "password", "secret")):
+                value = "***"
+            parts.append(f"{name}={value!r}")
+        return f"Settings({', '.join(parts)})"
+
+    __str__ = __repr__
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -42,15 +54,20 @@ class Settings(BaseSettings):
     # into whatever network it sits on. See evalbench/core/endpoint.py.
     allow_private_endpoints: bool = False
     worker_metrics_port: int = 9100
-    # Runs per user per day that may use the server's own provider key.
-    # Runs made with a user-supplied key are not counted. 0 disables the
-    # server key for non-admins entirely.
-    daily_run_cap: int = 20
-    # Server-key runs per day across every user. The per-user cap guards
-    # the key against one greedy account; this guards it against many —
-    # registration is free, and five hundred accounts at 20 each is the
-    # whole free tier gone before lunch. 0 = no instance-wide cap.
-    daily_run_cap_total: int = 200
+    # The server's key is spent in calls — one per generation, one per
+    # judged check — and the free tier meters calls (Groq: 1,000 a day
+    # per model). So the budget is in calls, not runs: a run is anywhere
+    # from 7 to 228 of them. See evalbench/budget.py. Runs made with a
+    # caller's own key spend none of this. 0 switches a ceiling off.
+    #
+    # Per user per day: one person can take at most ~15% of the key's day.
+    daily_call_cap: int = 150
+    # Per instance per day, everyone together: under Groq's 1,000, with
+    # headroom for the admin, who is not counted.
+    daily_call_cap_total: int = 800
+    # Per run: anything bigger wants the caller's own key — which is the
+    # right answer for a research-sized run anyway.
+    max_calls_per_run: int = 100
     # Open by default so a fresh install has a way in. Closed on a public
     # deployment: the admin makes the accounts, and the server's key is
     # not on offer to whoever finds the URL.

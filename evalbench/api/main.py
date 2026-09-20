@@ -96,7 +96,7 @@ async def _ensure_indexes() -> None:
     # owner in the index it scans every suite of every user, every load.
     await db.suites.create_index([("created_by", 1), ("created_at", -1)])
     await db.test_runs.create_index([("suite_id", 1), ("created_at", -1)])
-    # Serves the recent-runs list and `runs_used_today()`, which counts
+    # Serves the recent-runs list and `calls_used_today()`, which sums
     # a user's server-key runs before *every* submission — the quota
     # check sat on the hot path with nothing to use.
     await db.test_runs.create_index([("created_by", 1), ("created_at", -1)])

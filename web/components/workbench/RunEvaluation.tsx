@@ -11,6 +11,7 @@ import {
   isHosted,
   modelReady,
   needsUrl,
+  serverKeyBlocked,
   toRunOptions,
   KeyMode,
   KeyPicker,
@@ -78,7 +79,9 @@ export default function RunEvaluation({
     if (source === "answers") {
       if (!answers) return `${tests} tests · nothing is generated`;
       if (!needsJudge) return `${answers.rows.length} answers · no model is called at all`;
-      return `${answers.rows.length} answers · only the grader is called`;
+      return `${answers.rows.length} answers · only the grader is called${
+        bench.judgeCalls != null ? ` · ${bench.judgeCalls} calls` : ""
+      }`;
     }
     const prior = recent.find(
       (r) =>
@@ -87,7 +90,7 @@ export default function RunEvaluation({
         (bench.kind === "mine" ? r.suite_id === bench.id : true) &&
         r.total_tests === tests
     );
-    const base = `${tests} tests`;
+    const base = bench.calls != null ? `${tests} tests · ${bench.calls} calls` : `${tests} tests`;
     if (needsUrl(model.provider)) return `${base} · your endpoint, nothing of ours is spent`;
     if (!isHosted(model.provider)) return `${base} · local model, nothing spent`;
     if (prior && prior.total_cost_usd > 0)
@@ -95,11 +98,15 @@ export default function RunEvaluation({
     return `${base} · cost known after the first run on this model`;
   }, [bench, model, recent, source, answers, needsJudge]);
 
+  /* What this run will cost the key: everything, or only the grading
+     when the answers are supplied. */
+  const cost = source === "answers" ? bench?.judgeCalls : bench?.calls;
+
   const graderOk =
     !needsJudge ||
     (modelReady(judge) &&
       (!isHosted(judge.provider) || !judgeKey.own || judgeKey.key.length > 0) &&
-      !(isHosted(judge.provider) && !judgeKey.own && quota?.remaining === 0));
+      !(isHosted(judge.provider) && !judgeKey.own && serverKeyBlocked(cost, quota)));
 
   const canRun =
     !!bench &&
@@ -107,7 +114,7 @@ export default function RunEvaluation({
       ? !!answers && answers.rows.length > 0 && graderOk
       : modelReady(model) &&
         (!isHosted(model.provider) || !keyMode.own || keyMode.key.length > 0) &&
-        !(isHosted(model.provider) && !keyMode.own && quota?.remaining === 0)) &&
+        !(isHosted(model.provider) && !keyMode.own && serverKeyBlocked(cost, quota))) &&
     state.phase !== "starting" &&
     state.phase !== "running";
 
@@ -197,6 +204,7 @@ export default function RunEvaluation({
                 onChange={setKeyMode}
                 quota={quota}
                 provider={model.provider}
+                cost={cost}
               />
             </>
           ) : (
@@ -223,6 +231,7 @@ export default function RunEvaluation({
                     onChange={setJudgeKey}
                     quota={quota}
                     provider={judge.provider}
+                    cost={cost}
                     name="judge-keymode"
                   />
                 </div>

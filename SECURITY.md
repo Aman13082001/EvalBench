@@ -167,12 +167,22 @@ gone from Redis afterwards.
   (`evalbench/core/providers/openai_compat.py`, `tests/test_rate_limits.py`).
 - A reaper for runs whose worker died mid-run, so a stuck job cannot
   hold a "running" state forever (`evalbench/reaper.py`).
-- **Two caps on the server's key**, not one. `DAILY_RUN_CAP` (20) is per
-  user; `DAILY_RUN_CAP_TOTAL` (200) is for everyone together. The first
-  guards against one greedy account; the second against many — the key
-  has one free tier, and registration is free. The quota endpoint
-  reports the tighter of the two, and the workbench says when it is the
-  shared one (`tests/test_public_deploy.py::TestTheInstanceCap`).
+- **The server's key has a budget in calls, not runs.** A free tier
+  meters calls — Groq's headers: 1,000 a day per model, 8,000 tokens a
+  minute — and a run is anywhere from 7 calls to 228, so a cap counted
+  in runs let one person spend the key's whole day before lunch. Every
+  run declares its cost, `samples × (tests + judged tests)`, before it
+  is accepted (`evalbench/budget.py`), and three ceilings apply:
+  `MAX_CALLS_PER_RUN` (100; bigger runs want the caller's own key),
+  `DAILY_CALL_CAP` (150 per user — at most ~15% of the key's day) and
+  `DAILY_CALL_CAP_TOTAL` (800, everyone together, under Groq's 1,000).
+  The workbench shows the cost and the tighter limit before the click
+  (`tests/test_public_deploy.py::TestTheCallBudget`, `tests/test_budget.py`).
+- **The settings object never prints a key.** Its `repr` redacts every
+  field with key, token, password or secret in the name, so a traceback
+  in a hosted platform's log viewer shows `groq_api_key='***'`. Found
+  when a test's AttributeError printed all of them
+  (`tests/test_public_deploy.py::TestSettingsNeverPrintAKey`).
 - **Registration is a switch.** `ALLOW_REGISTRATION=false` closes it
   (403, "ask the admin"); open, it is rate limited to 5 an hour per
   address. A public deployment runs it closed and the admin makes the
@@ -252,9 +262,12 @@ acknowledged, fixed, and credited here.
 
 Dated, newest first. When security work lands, add a line.
 
+- **2026-09-21** — The budget moves from runs to calls, with a per-run
+  ceiling, after measuring what the key actually gets (1,000 requests a
+  day per model). The settings repr redacts secrets.
 - **2026-09-21** — Before the key goes public: registration can be
-  closed and is rate limited, an instance-wide daily cap on server-key
-  runs, bans that hold across the addresses an account used, user API
+  closed and is rate limited, an instance-wide daily cap on the server's
+  key, bans that hold across the addresses an account used, user API
   keys hashed at rest with a startup migration, Mongo/Redis/Ollama/
   Prometheus on loopback in compose. Also: the test fixture was not
   patching the auth module's database handle, so key lookups in tests

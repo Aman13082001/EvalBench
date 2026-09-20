@@ -48,11 +48,13 @@ EXEMPT = {
     # Startup migration: gives pre-job-model runs (results, no status)
     # the status they earned, across every account, once.
     ("main.py", "_backfill_run_status"),
-    # The instance-wide daily cap: how many runs everyone together made
-    # on the server's key today. A count, across every account by
-    # design — the key has one quota, and it is shared. Returns a number,
-    # never a document.
-    ("routes.py", "runs_used_today_total"),
+    # The call budget: what everyone together has spent of the server's
+    # key today. A sum across every account by design — the key has one
+    # quota, and it is shared. `_calls_spent` is the aggregate both the
+    # per-user and the instance-wide sums go through; the per-user one
+    # passes an owner filter in. Returns a number, never a document.
+    ("routes.py", "_calls_spent"),
+    ("routes.py", "calls_used_today_total"),
 }
 
 
@@ -71,11 +73,13 @@ def _touches_owned_data(node) -> bool:
         if not isinstance(sub, ast.Attribute):
             continue
         # matches db.<collection>.find / .find_one / .update_one / ...
+        # and .aggregate — a pipeline reads the collection like a find
+        # does, and one without an owner in its $match reads everyone's.
         inner = sub.value
         if (
             isinstance(inner, ast.Attribute)
             and inner.attr in OWNED_COLLECTIONS
-            and sub.attr.startswith(("find", "update", "delete", "count"))
+            and sub.attr.startswith(("find", "update", "delete", "count", "aggregate"))
         ):
             return True
     return False

@@ -134,6 +134,8 @@ export interface SuiteDoc {
   resolution?: Resolution;
   needs_judge?: boolean;
   judged_tests?: number;
+  /* What one run costs the key: samples × (tests + judged tests). */
+  calls?: number;
   judge_floor?: JudgeFloor | null;
   tests?: unknown[];
 }
@@ -264,14 +266,20 @@ export interface RecentRun {
 export const listRecentRuns = (limit = 20) =>
   authed<RecentRun[]>(`/runs?limit=${limit}`);
 
+/* The budget on EvalBench's own key, in calls — one per generation, one
+   per judged check — because that is the unit a free tier meters. */
 export interface Quota {
+  unit: "calls";
   cap: number | null;
   used: number;
   /* The smaller of the caller's allowance and the instance's — the one
      that will actually stop the next run. */
   remaining: number | null;
-  /* The instance-wide cap on server-key runs, shared by everyone; null
-     when there is none, or for an admin. */
+  /* The most one run may cost on the server's key; bigger runs want the
+     caller's own key. null = no ceiling, or an admin. */
+  per_run: number | null;
+  /* The instance-wide cap, shared by everyone; null when there is none,
+     or for an admin. */
   instance: { cap: number; used: number; remaining: number } | null;
 }
 
@@ -286,6 +294,9 @@ export interface Benchmark {
   needs_judge?: boolean;
   judged_tests?: number;
   judge_floor?: JudgeFloor | null;
+  /* What one run costs the key: samples × (tests + judged tests). */
+  calls?: number;
+  samples?: number;
   name: string;
   test_count: number;
   provider: string;

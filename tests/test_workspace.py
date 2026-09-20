@@ -131,12 +131,33 @@ class TestOwnKey:
         assert inserted["used_server_key"] is False
 
 
+class _Spent:
+    """An aggregate cursor answering `expected_calls` sums. One number for
+    everyone: these tests care that the budget applies, not to whom."""
+
+    def __init__(self, calls):
+        self.calls = calls
+
+    def __call__(self, *a, **k):
+        return self
+
+    def __aiter__(self):
+        async def gen():
+            yield {"_id": None, "calls": self.calls}
+        return gen()
+
+
 class TestDailyCap:
+    """The budget is in calls (`evalbench/budget.py`); the fuller set of
+    cases is in test_public_deploy.py. These keep the workspace's own
+    contract: the server's key is capped, a caller's key is not, local
+    providers cost nothing, and the quota is visible before the click."""
+
     def test_server_key_runs_are_capped(self, as_alice, mock_db):
         from evalbench.api import routes
 
         mock_db.suites.find_one.return_value = dict(SUITE_DOC)
-        mock_db.test_runs.count_documents.return_value = routes.settings.daily_run_cap
+        mock_db.test_runs.aggregate.side_effect = _Spent(routes.settings.daily_call_cap)
         r = as_alice.post(f"/suites/{SUITE_ID}/run")
         assert r.status_code == 429
         assert "own provider key" in r.json()["detail"]
@@ -146,7 +167,7 @@ class TestDailyCap:
         from evalbench.api import routes
 
         mock_db.suites.find_one.return_value = dict(SUITE_DOC)
-        mock_db.test_runs.count_documents.return_value = routes.settings.daily_run_cap
+        mock_db.test_runs.aggregate.side_effect = _Spent(routes.settings.daily_call_cap)
         mock_db.test_runs.insert_one.return_value.inserted_id = ObjectId(RUN_ID)
         with patch("evalbench.api.routes.submit_run"):
             r = as_alice.post(
@@ -159,7 +180,7 @@ class TestDailyCap:
         from evalbench.api import routes
 
         mock_db.suites.find_one.return_value = {**SUITE_DOC, "provider": "ollama"}
-        mock_db.test_runs.count_documents.return_value = routes.settings.daily_run_cap
+        mock_db.test_runs.aggregate.side_effect = _Spent(routes.settings.daily_call_cap)
         mock_db.test_runs.insert_one.return_value.inserted_id = ObjectId(RUN_ID)
         with patch("evalbench.api.routes.submit_run"):
             r = as_alice.post(f"/suites/{SUITE_ID}/run")
@@ -169,14 +190,15 @@ class TestDailyCap:
     def test_quota_endpoint_reports_remaining(self, as_alice, mock_db):
         from evalbench.api import routes
 
-        mock_db.test_runs.count_documents.return_value = 3
+        mock_db.test_runs.aggregate.side_effect = _Spent(3)
         body = as_alice.get("/suites/quota").json()
-        assert body["cap"] == routes.settings.daily_run_cap
+        assert body["unit"] == "calls"
+        assert body["cap"] == routes.settings.daily_call_cap
         assert body["used"] == 3
-        assert body["remaining"] == routes.settings.daily_run_cap - 3
+        assert body["remaining"] == routes.settings.daily_call_cap - 3
 
     def test_admin_is_uncapped(self, client, mock_db):
-        mock_db.test_runs.count_documents.return_value = 10_000
+        mock_db.test_runs.aggregate.side_effect = _Spent(10_000)
         body = client.get("/suites/quota").json()
         assert body["cap"] is None and body["remaining"] is None
 

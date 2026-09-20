@@ -7,6 +7,7 @@ import {
   BenchmarkPicker,
   isHosted,
   modelReady,
+  serverKeyBlocked,
   toRunOptions,
   KeyMode,
   KeyPicker,
@@ -48,8 +49,17 @@ export default function CompareModels({
     ["starting", "running"].includes(runB.state.phase);
 
   const hosted = isHosted(a.provider) || isHosted(b.provider);
-  // two runs on the server key means two against the cap
-  const capBlocks = hosted && !keyMode.own && (quota?.remaining ?? 99) < 2;
+  // A comparison is two runs: twice the calls against the day, and each
+  // run on its own against the per-run ceiling.
+  const cost = bench?.calls;
+  const blockedBy =
+    hosted && !keyMode.own
+      ? (serverKeyBlocked(cost, quota) ??
+        (cost != null && quota?.remaining != null && cost * 2 > quota.remaining
+          ? `two runs need ${cost * 2} calls · ${quota.remaining} left today on EvalBench's key`
+          : null))
+      : null;
+  const capBlocks = blockedBy !== null;
 
   const canRun =
     !!bench &&
@@ -132,12 +142,13 @@ export default function CompareModels({
           quota={quota}
           provider={isHosted(a.provider) ? a.provider : b.provider}
           name="cmp-keymode"
+          cost={cost}
         />
       )}
       {capBlocks && (
         <p className="text-xs text-warning">
-          A comparison is two runs. Add your own key, or wait for tomorrow&rsquo;s
-          allowance.
+          A comparison is two runs: {blockedBy}. Add your own key, or wait for
+          tomorrow&rsquo;s allowance.
         </p>
       )}
       {a.model && a.model === b.model && a.provider === b.provider && (

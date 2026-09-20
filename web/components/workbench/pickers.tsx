@@ -26,10 +26,27 @@ import {
 /* needsJudge: whether scoring supplied answers still needs a grader.
    Undefined means unknown (an uploaded YAML, or a suite stored before the
    flag existed) — the form then shows the grader rather than guess. */
+/* calls: what one run costs the key, samples × (tests + judged tests),
+   from the API. judgeCalls: the part that is grading, which is all a run
+   on supplied answers spends. Unknown for an uploaded YAML — the server
+   still decides — so the form says nothing rather than guess. */
 export type BenchmarkChoice =
-  | { kind: "bundled"; slug: string; label: string; tests: number; provider: string; model: string; needsJudge?: boolean }
-  | { kind: "mine"; id: string; label: string; tests: number; provider: string; model: string; needsJudge?: boolean }
-  | { kind: "upload"; suite: Record<string, unknown>; label: string; tests: number; provider: string; model: string; needsJudge?: boolean };
+  | { kind: "bundled"; slug: string; label: string; tests: number; provider: string; model: string; needsJudge?: boolean; calls?: number; judgeCalls?: number }
+  | { kind: "mine"; id: string; label: string; tests: number; provider: string; model: string; needsJudge?: boolean; calls?: number; judgeCalls?: number }
+  | { kind: "upload"; suite: Record<string, unknown>; label: string; tests: number; provider: string; model: string; needsJudge?: boolean; calls?: number; judgeCalls?: number };
+
+/* Why the server's key cannot pay for a run of `cost` calls, or null.
+   The same rule the API applies, said before the click instead of as a
+   400 after it. */
+export function serverKeyBlocked(cost: number | undefined, quota: Quota | null): string | null {
+  if (!quota || quota.cap == null) return null;
+  if (cost == null) return quota.remaining === 0 ? "nothing left today on EvalBench's key" : null;
+  if (quota.per_run != null && cost > quota.per_run)
+    return `this run needs ${cost} calls · EvalBench's key covers up to ${quota.per_run} per run`;
+  if (quota.remaining != null && cost > quota.remaining)
+    return `this run needs ${cost} calls · ${quota.remaining} left today on EvalBench's key`;
+  return null;
+}
 
 export async function resolveBenchmark(
   c: BenchmarkChoice
@@ -116,6 +133,8 @@ export function BenchmarkPicker({
           provider: b.provider,
           model: b.model,
           needsJudge: b.needs_judge,
+          calls: b.calls,
+          judgeCalls: b.calls != null ? b.calls - (b.samples ?? 1) * b.test_count : undefined,
         });
     } else if (k.startsWith("m:")) {
       const s = mine.find((x) => x._id === k.slice(2));
@@ -128,6 +147,11 @@ export function BenchmarkPicker({
           provider: s.provider ?? "ollama",
           model: s.model,
           needsJudge: s.needs_judge,
+          calls: s.calls,
+          judgeCalls:
+            s.calls != null
+              ? s.calls - (s.samples ?? 1) * (s.test_count ?? s.tests?.length ?? 0)
+              : undefined,
         });
     } else {
       onChange(null);
@@ -476,6 +500,7 @@ export function KeyPicker({
   quota,
   provider,
   name = "keymode",
+  cost,
 }: {
   value: KeyMode;
   onChange: (k: KeyMode) => void;
@@ -484,6 +509,8 @@ export function KeyPicker({
   /** Radio group name — must differ per instance on a page, or two
    *  pickers become one group and uncheck each other. */
   name?: string;
+  /** What the run this picker pays for will cost, in calls, if known. */
+  cost?: number;
 }) {
   const providers = useProviders();
 
@@ -533,8 +560,8 @@ export function KeyPicker({
     );
   }
 
-  /* When the shared cap is the tighter one, say so: "0 left" with 19 of
-     your own 20 unused reads as a bug otherwise. */
+  /* When the shared cap is the tighter one, say so: "0 left" with 140
+     of your own 150 unused reads as a bug otherwise. */
   const shared =
     quota?.instance != null &&
     quota.cap != null &&
@@ -545,9 +572,10 @@ export function KeyPicker({
       : quota.cap == null
         ? "unlimited"
         : shared
-          ? `${quota.remaining} left today · shared by everyone on this instance`
-          : `${quota.remaining} of ${quota.cap} left today`;
-  const exhausted = quota?.remaining === 0;
+          ? `${quota.remaining} calls left today · shared by everyone on this instance`
+          : `${quota.remaining} of ${quota.cap} calls left today`;
+  const blocked = serverKeyBlocked(cost, quota);
+  const exhausted = blocked !== null;
 
   return (
     <div className="space-y-2 text-sm">
@@ -562,7 +590,7 @@ export function KeyPicker({
         <span>
           Use EvalBench&rsquo;s key{" "}
           <span className={`font-mono text-[11px] tnum ${exhausted ? "text-error" : "text-muted"}`}>
-            · {left}
+            · {blocked ?? left}
           </span>
         </span>
       </label>

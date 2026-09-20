@@ -33,6 +33,7 @@ from evalbench.api.deps import (
 )
 from evalbench.api.summary import RUN_ROW_FIELDS, run_row
 from evalbench.benchmarks import describe_benchmarks, load_benchmark
+from evalbench.budget import expected_calls
 from evalbench.config import settings
 from evalbench.core.endpoint import EndpointError, validate_endpoint
 from evalbench.core.providers import (
@@ -139,6 +140,12 @@ async def list_suites(user=Depends(get_current_user)):
             judged = bundled[s["bundled_slug"]]["judged_tests"]
         f = judge_floor(judged, s.get("test_count"))
         s["judge_floor"] = asdict(f) if f else None
+        # What one run costs, for the form to say before the click. The
+        # tests were projected out; the count and the judged count are
+        # enough, and unknown judged reads as zero rather than a reparse.
+        s["calls"] = max(1, int(s.get("samples") or 1)) * (
+            (s.get("test_count") or 0) + (judged or 0)
+        )
         # Stored when a run finishes; benchmarks that predate that, or
         # have never been run, fall back to saying so. Computing it here
         # meant reading run history on every page load, and a window
@@ -249,9 +256,21 @@ def _day_start() -> datetime:
     return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-async def runs_used_today(user: dict) -> int:
-    """Runs this user started today on the server's key."""
-    return await db.test_runs.count_documents(
+async def _calls_spent(match: dict) -> int:
+    """Sum of `expected_calls` over the runs matching ``match``. A run
+    from before the field existed adds nothing."""
+    pipeline = [
+        {"$match": match},
+        {"$group": {"_id": None, "calls": {"$sum": "$expected_calls"}}},
+    ]
+    async for doc in db.test_runs.aggregate(pipeline):
+        return int(doc.get("calls") or 0)
+    return 0
+
+
+async def calls_used_today(user: dict) -> int:
+    """Calls this user's runs on the server's key have claimed today."""
+    return await _calls_spent(
         {
             **owner_filter(user),
             "created_at": {"$gte": _day_start()},
@@ -260,34 +279,40 @@ async def runs_used_today(user: dict) -> int:
     )
 
 
-async def runs_used_today_total() -> int:
-    """Runs everyone started today on the server's key."""
-    return await db.test_runs.count_documents(
+async def calls_used_today_total() -> int:
+    """Calls everyone's runs on the server's key have claimed today."""
+    return await _calls_spent(
         {"created_at": {"$gte": _day_start()}, "used_server_key": True}
     )
 
 
 async def quota_for(user: dict) -> dict:
-    """What the caller may still spend of the server's key today: their
-    own allowance and the instance's, and the smaller of the two, which
-    is the one that will actually stop them."""
+    """What the caller may still spend of the server's key today, in
+    calls: their own allowance, the instance's, and the smaller of the
+    two — the one that will actually stop them — plus the per-run
+    ceiling, so the form can say before the click."""
     if user.get("role") == "admin":
-        return {"cap": None, "used": 0, "remaining": None, "instance": None}
-    used = await runs_used_today(user)
-    remaining = max(settings.daily_run_cap - used, 0)
+        return {
+            "unit": "calls", "cap": None, "used": 0, "remaining": None,
+            "per_run": None, "instance": None,
+        }
+    used = await calls_used_today(user)
+    remaining = max(settings.daily_call_cap - used, 0)
     instance = None
-    if settings.daily_run_cap_total:
-        total = await runs_used_today_total()
+    if settings.daily_call_cap_total:
+        total = await calls_used_today_total()
         instance = {
-            "cap": settings.daily_run_cap_total,
+            "cap": settings.daily_call_cap_total,
             "used": total,
-            "remaining": max(settings.daily_run_cap_total - total, 0),
+            "remaining": max(settings.daily_call_cap_total - total, 0),
         }
         remaining = min(remaining, instance["remaining"])
     return {
-        "cap": settings.daily_run_cap,
+        "unit": "calls",
+        "cap": settings.daily_call_cap,
         "used": used,
         "remaining": remaining,
+        "per_run": settings.max_calls_per_run or None,
         "instance": instance,
     }
 
@@ -432,6 +457,7 @@ async def get_suite(suite_id: str, user=Depends(get_current_user)):
     # shows the same line, so it gets the same number.
     f = judge_floor(doc.get("judged_tests"), len(doc.get("tests") or []))
     doc["judge_floor"] = asdict(f) if f else None
+    doc["calls"] = expected_calls(doc)
     return doc
 
 
@@ -661,29 +687,44 @@ async def run_suite(
         )
     else:
         uses_server_key = provider not in free and not body.provider_key
+    # What this run will cost, in the unit the key is spent in. Declared
+    # on every run; only runs on the server's key are held to a budget.
+    cost = expected_calls(suite, answers_supplied=answers is not None)
     if uses_server_key and user.get("role") != "admin":
-        used = await runs_used_today(user)
-        if used >= settings.daily_run_cap:
+        if settings.max_calls_per_run and cost > settings.max_calls_per_run:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"This run would make {cost} calls; EvalBench's key "
+                    f"covers up to {settings.max_calls_per_run} per run. Add "
+                    "your own provider key for a run this size, or lower "
+                    "`samples`."
+                ),
+            )
+        used = await calls_used_today(user)
+        if used + cost > settings.daily_call_cap:
             raise HTTPException(
                 status_code=429,
                 detail=(
-                    f"Daily limit of {settings.daily_run_cap} runs on "
-                    "EvalBench's key reached. Add your own provider key to "
-                    "keep going, or try again tomorrow."
+                    f"This run needs {cost} calls; you have "
+                    f"{max(settings.daily_call_cap - used, 0)} of "
+                    f"{settings.daily_call_cap} left today on EvalBench's key. "
+                    "Add your own provider key to keep going, or try again "
+                    "tomorrow."
                 ),
             )
         # The key has one quota, shared by everyone here. When it is
         # spent for the day nobody's personal allowance can un-spend it.
-        if settings.daily_run_cap_total:
-            total = await runs_used_today_total()
-            if total >= settings.daily_run_cap_total:
+        if settings.daily_call_cap_total:
+            total = await calls_used_today_total()
+            if total + cost > settings.daily_call_cap_total:
                 raise HTTPException(
                     status_code=429,
                     detail=(
-                        f"EvalBench's key has done its "
-                        f"{settings.daily_run_cap_total} runs for today, "
-                        "across everyone. Add your own provider key to keep "
-                        "going, or try again tomorrow."
+                        f"This run needs {cost} calls; EvalBench's key has "
+                        f"{max(settings.daily_call_cap_total - total, 0)} "
+                        "left today across everyone. Add your own provider "
+                        "key to keep going, or try again tomorrow."
                     ),
                 )
 
@@ -704,6 +745,7 @@ async def run_suite(
     run_doc["created_by"] = owner_of(user)
     run_doc["provider"] = provider
     run_doc["used_server_key"] = uses_server_key
+    run_doc["expected_calls"] = cost
     # How many samples were *asked* for. Without it, a run that lost
     # samples to rate limits cannot say so — it only knows how many
     # came back.

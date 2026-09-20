@@ -39,11 +39,22 @@ ceiling, 48% of what variance remains is the judge. `suites/research-judge.yaml`
 None of the server's keys can produce a bill — card-less free tiers —
 so what needed protecting was the quota and the database.
 
-- **An instance-wide daily cap** (`DAILY_RUN_CAP_TOTAL`, 200) beside the
-  per-user one. The per-user cap stopped one greedy account; five
-  hundred free registrations at 20 each was the whole free tier gone.
-  The quota endpoint reports the tighter of the two and the workbench
-  says when it is the shared one.
+- **The budget on the server's key is in calls, not runs.** Groq's
+  headers say what a key gets: 1,000 requests a day per model. A run is
+  7 calls (the demo) or 228 (the starter suite at three samples), so
+  twenty runs of the safety suite by one person was 1,520 calls — the
+  key's whole day, everyone else waiting until tomorrow. Every run now
+  declares its cost, `samples × (tests + judged tests)`
+  (`evalbench/budget.py`), and is held to three ceilings: per run
+  (`MAX_CALLS_PER_RUN`, 100 — the 228-call benchmark needs your own key,
+  which is right for a research-sized run), per user per day
+  (`DAILY_CALL_CAP`, 150) and per instance per day
+  (`DAILY_CALL_CAP_TOTAL`, 800). Benchmarks and suites report `calls`;
+  the workbench says "76 calls · 142 of 150 left today" before the
+  click, and why the server's key cannot pay when it cannot.
+- **The settings object redacts its secrets in `repr`.** A test's
+  traceback printed every provider key in full; a hosted platform's
+  crash log would too.
 - **Registration is a switch** (`ALLOW_REGISTRATION`), rate limited to
   five an hour per address when open. Closed, the admin makes accounts.
 - **Bans hold.** A banned account gets no token at login, every request

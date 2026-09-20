@@ -2,7 +2,7 @@
 
 Three hot paths were doing collection scans. `GET /suites` matches on
 `created_by` and sorts by `created_at`; the recent-runs list does the
-same on runs; and `runs_used_today()` counts a user's server-key runs on
+same on runs; and `calls_used_today()` sums a user's server-key calls on
 *every single run submission* — the quota check, on the hot path, with
 no index to use.
 

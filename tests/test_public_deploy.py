@@ -13,6 +13,7 @@ admin bans cannot come back from the addresses it used; user API keys are
 stored as hashes. Plus the compose file: Mongo and Redis on loopback.
 """
 
+import contextlib
 import hashlib
 from unittest.mock import MagicMock, patch
 
@@ -152,84 +153,180 @@ class TestABannedAccountStaysGone:
         assert projection.get("ips", 1) == 1
 
 
-# ── the instance-wide cap ─────────────────────────────────────────────
+# ── the call budget ───────────────────────────────────────────────────
 
 SUITE_ID = "507f1f77bcf86cd799439011"
+# 4 tests, 2 judged, 2 samples: 2 × (4 + 2) = 12 calls a run.
 SUITE = {
     "_id": SUITE_ID, "name": "S", "provider": "groq", "model": "openai/gpt-oss-20b",
-    "evaluator": "exact", "created_by": "alice", "samples": 1,
-    "tests": [{"name": "t", "prompt": "p", "expected": "e"}],
+    "evaluator": "exact", "created_by": "alice", "samples": 2, "judged_tests": 2,
+    "tests": [
+        {"name": "a", "prompt": "p", "expected": "e"},
+        {"name": "b", "prompt": "p", "expected": "e"},
+        {"name": "c", "prompt": "p", "assert": [{"type": "llm-rubric", "value": "ok"}]},
+        {"name": "d", "prompt": "p", "assert": [{"type": "llm-rubric", "value": "ok"}]},
+    ],
 }
 
 
-def _counts(per_user: int, total: int):
-    """count_documents answers differently for 'this user' and 'everyone'."""
+class _Cursor:
+    def __init__(self, docs):
+        self._docs = docs
 
-    async def count(query, *a, **k):
-        if query.get("used_server_key"):
-            return per_user if "created_by" in query else total
-        return 0
+    def __aiter__(self):
+        async def gen():
+            for d in self._docs:
+                yield d
+        return gen()
 
-    return count
+
+def _spent(per_user: int, total: int):
+    """The aggregate answers differently for 'this user' and 'everyone'."""
+
+    def aggregate(pipeline, *a, **k):
+        match = pipeline[0]["$match"]
+        n = per_user if "created_by" in match else total
+        return _Cursor([{"_id": None, "calls": n}])
+
+    return aggregate
 
 
-class TestTheInstanceCap:
-    def test_everyone_together_cannot_exceed_it(self, mock_db):
-        """Alice has used 1 of her 20; the instance has used its 200.
-        Her run is refused, and the reason is the shared limit, not hers."""
+@contextlib.contextmanager
+def _caps(per_user=150, total=800, per_run=100):
+    with (
+        patch.object(routes.settings, "daily_call_cap", per_user),
+        patch.object(routes.settings, "daily_call_cap_total", total),
+        patch.object(routes.settings, "max_calls_per_run", per_run),
+    ):
+        yield
+
+
+class TestTheCallBudget:
+    def test_a_run_declares_its_cost_and_it_is_stored(self, mock_db):
         mock_db.suites.find_one.return_value = dict(SUITE)
-        mock_db.test_runs.count_documents.side_effect = _counts(1, 200)
-        with patch.object(routes.settings, "daily_run_cap_total", 200), _as(ALICE, mock_db) as c:
+        mock_db.test_runs.aggregate.side_effect = _spent(0, 0)
+        mock_db.test_runs.insert_one.return_value.inserted_id = "6ab0000000000000000000aa"
+        with _caps(), patch.object(routes, "submit_run"), _as(ALICE, mock_db) as c:
             r = c.post(f"/suites/{SUITE_ID}/run", json={})
-        assert r.status_code == 429
-        assert "everyone" in r.json()["detail"].lower()
+        assert r.status_code == 202
+        assert mock_db.test_runs.insert_one.call_args[0][0]["expected_calls"] == 12
+
+    def test_one_run_too_big_for_the_shared_key_is_refused_before_anything_spends(self, mock_db):
+        """228 calls is the starter suite at three samples. Not "try
+        tomorrow": a run that size wants the caller's own key."""
+        mock_db.suites.find_one.return_value = dict(SUITE)
+        mock_db.test_runs.aggregate.side_effect = _spent(0, 0)
+        with _caps(per_run=10), _as(ALICE, mock_db) as c:
+            r = c.post(f"/suites/{SUITE_ID}/run", json={})
+        assert r.status_code == 400
+        d = r.json()["detail"]
+        assert "12 calls" in d and "10" in d and "own provider key" in d
         mock_db.test_runs.insert_one.assert_not_called()
 
-    def test_a_caller_with_their_own_key_is_not_counted(self, mock_db):
+    def test_the_day_is_a_budget_not_a_count(self, mock_db):
+        """Alice has 145 of 150 spent; the run needs 12. Refused — with
+        the arithmetic, so she can pick a smaller one."""
         mock_db.suites.find_one.return_value = dict(SUITE)
-        mock_db.test_runs.count_documents.side_effect = _counts(1, 200)
+        mock_db.test_runs.aggregate.side_effect = _spent(145, 145)
+        with _caps(), _as(ALICE, mock_db) as c:
+            r = c.post(f"/suites/{SUITE_ID}/run", json={})
+        assert r.status_code == 429
+        d = r.json()["detail"]
+        assert "12 calls" in d and "5 of 150" in d
+        mock_db.test_runs.insert_one.assert_not_called()
+
+    def test_everyone_together_cannot_exceed_the_keys_day(self, mock_db):
+        """Alice has spent 1; the instance has spent 795 of 800. Her 12
+        do not fit, and the reason names the shared limit, not hers."""
+        mock_db.suites.find_one.return_value = dict(SUITE)
+        mock_db.test_runs.aggregate.side_effect = _spent(1, 795)
+        with _caps(), _as(ALICE, mock_db) as c:
+            r = c.post(f"/suites/{SUITE_ID}/run", json={})
+        assert r.status_code == 429
+        d = r.json()["detail"]
+        assert "everyone" in d and "5 left" in d
+        mock_db.test_runs.insert_one.assert_not_called()
+
+    def test_supplied_answers_cost_only_the_grading(self, mock_db):
+        """With answers, nothing is generated: 2 samples × 2 judged = 4."""
+        mock_db.suites.find_one.return_value = dict(SUITE)
+        mock_db.test_runs.aggregate.side_effect = _spent(0, 0)
         mock_db.test_runs.insert_one.return_value.inserted_id = "6ab0000000000000000000aa"
-        with (
-            patch.object(routes.settings, "daily_run_cap_total", 200),
-            patch.object(routes, "submit_run"),
-            _as(ALICE, mock_db) as c,
-        ):
+        answers = [{"test_name": n, "response": "x"} for n in "abcd"]
+        with _caps(), patch.object(routes, "submit_run"), _as(ALICE, mock_db) as c:
+            r = c.post(
+                f"/suites/{SUITE_ID}/run",
+                json={"answers": answers, "judge_provider": "groq", "judge_model": "m"},
+            )
+        assert r.status_code == 202, r.text
+        assert mock_db.test_runs.insert_one.call_args[0][0]["expected_calls"] == 4
+
+    def test_a_caller_with_their_own_key_spends_none_of_it(self, mock_db):
+        mock_db.suites.find_one.return_value = dict(SUITE)
+        mock_db.test_runs.aggregate.side_effect = _spent(150, 800)
+        mock_db.test_runs.insert_one.return_value.inserted_id = "6ab0000000000000000000aa"
+        with _caps(), patch.object(routes, "submit_run"), _as(ALICE, mock_db) as c:
             r = c.post(f"/suites/{SUITE_ID}/run", json={"provider_key": "gsk_theirs"})
         assert r.status_code == 202
+        doc = mock_db.test_runs.insert_one.call_args[0][0]
+        assert doc["used_server_key"] is False
+        assert doc["expected_calls"] == 12  # recorded either way; only server-key runs are summed
 
-    def test_zero_means_no_instance_cap(self, mock_db):
+    def test_zero_switches_a_ceiling_off(self, mock_db):
         mock_db.suites.find_one.return_value = dict(SUITE)
-        mock_db.test_runs.count_documents.side_effect = _counts(1, 10_000)
+        mock_db.test_runs.aggregate.side_effect = _spent(1, 10_000)
         mock_db.test_runs.insert_one.return_value.inserted_id = "6ab0000000000000000000aa"
-        with (
-            patch.object(routes.settings, "daily_run_cap_total", 0),
-            patch.object(routes, "submit_run"),
-            _as(ALICE, mock_db) as c,
-        ):
+        with _caps(total=0, per_run=0), patch.object(routes, "submit_run"), _as(ALICE, mock_db) as c:
             r = c.post(f"/suites/{SUITE_ID}/run", json={})
         assert r.status_code == 202
 
-    def test_the_quota_reports_the_tighter_of_the_two(self, mock_db):
-        """Alice has 19 of 20 left; the instance has 3 of 200. She sees 3,
-        and is told why."""
-        mock_db.test_runs.count_documents.side_effect = _counts(1, 197)
-        with patch.object(routes.settings, "daily_run_cap_total", 200), _as(ALICE, mock_db) as c:
+    def test_the_quota_is_in_calls_and_reports_the_tighter_limit(self, mock_db):
+        """Alice has 140 of 150 left; the instance has 3 of 800. She sees
+        3, and the per-run ceiling, so the form can say before the click."""
+        mock_db.test_runs.aggregate.side_effect = _spent(10, 797)
+        with _caps(), _as(ALICE, mock_db) as c:
             body = c.get("/suites/quota").json()
+        assert body["unit"] == "calls"
+        assert body["cap"] == 150 and body["used"] == 10
         assert body["remaining"] == 3
-        assert body["cap"] == routes.settings.daily_run_cap
-        assert body["instance"] == {"cap": 200, "used": 197, "remaining": 3}
+        assert body["per_run"] == 100
+        assert body["instance"] == {"cap": 800, "used": 797, "remaining": 3}
 
     def test_admins_are_not_counted_against_it(self, mock_db):
         mock_db.suites.find_one.return_value = {**SUITE, "created_by": "admin"}
-        mock_db.test_runs.count_documents.side_effect = _counts(0, 200)
+        mock_db.test_runs.aggregate.side_effect = _spent(0, 800)
         mock_db.test_runs.insert_one.return_value.inserted_id = "6ab0000000000000000000aa"
-        with (
-            patch.object(routes.settings, "daily_run_cap_total", 200),
-            patch.object(routes, "submit_run"),
-            _as(ADMIN, mock_db) as c,
-        ):
+        with _caps(), patch.object(routes, "submit_run"), _as(ADMIN, mock_db) as c:
             r = c.post(f"/suites/{SUITE_ID}/run", json={})
         assert r.status_code == 202
+        with _as(ADMIN, mock_db) as c:
+            assert c.get("/suites/quota").json()["remaining"] is None
+
+    @pytest.mark.asyncio
+    async def test_the_per_user_sum_is_scoped_to_the_caller(self, mock_db):
+        """The ownership scan sees `_calls_spent` touch the collection
+        and the exemption explains why; what it cannot see is that the
+        per-user path hands it an owner filter. This can."""
+        seen = []
+
+        def aggregate(pipeline, *a, **k):
+            seen.append(pipeline[0]["$match"])
+            return _Cursor([])
+
+        mock_db.test_runs.aggregate.side_effect = aggregate
+        with patch.object(routes, "db", mock_db):
+            await routes.calls_used_today(ALICE)
+            await routes.calls_used_today_total()
+        assert seen[0]["created_by"] == "alice" and seen[0]["used_server_key"] is True
+        assert "created_by" not in seen[1] and seen[1]["used_server_key"] is True
+
+    def test_runs_from_before_the_budget_count_as_nothing(self, mock_db):
+        """The sum is over `expected_calls`; a run without the field adds
+        zero rather than breaking the aggregate."""
+        mock_db.test_runs.aggregate.side_effect = lambda *a, **k: _Cursor([])
+        with _caps(), _as(ALICE, mock_db) as c:
+            body = c.get("/suites/quota").json()
+        assert body["used"] == 0 and body["remaining"] == 150
 
 
 # ── hashed API keys ───────────────────────────────────────────────────
@@ -335,3 +432,32 @@ class TestComposeBindsStateToLoopback:
         for svc in ("api", "web", "grafana"):
             ports = compose["services"][svc]["ports"]
             assert ports and not str(ports[0]).startswith("127.0.0.1:")
+
+
+# ── the settings object keeps its secrets ─────────────────────────────
+
+
+class TestSettingsNeverPrintAKey:
+    def test_repr_and_str_redact_every_secret(self):
+        """Found the hard way: a test's AttributeError printed the whole
+        Settings object, every provider key in full. A crash log on a
+        hosted platform would do the same. The repr says *** instead."""
+        from evalbench.config import Settings
+
+        s = Settings(
+            groq_api_key="gsk_live_secret", gemini_api_key="AQ.secret",
+            openrouter_api_key="sk-or-secret", openai_api_key="sk-proj-secret",
+            github_token="ghp_secret", secret_key="jwt-secret",
+            admin_password="pw-secret", admin_api_key="eb_secret",
+        )
+        for text in (repr(s), str(s)):
+            for leak in ("gsk_live", "AQ.secret", "sk-or-", "sk-proj", "ghp_", "jwt-secret", "pw-secret", "eb_secret"):
+                assert leak not in text, f"{leak!r} in the settings repr"
+        assert "groq_api_key='***'" in repr(s)
+        assert "daily_call_cap=150" in repr(s)  # the rest still prints
+
+    def test_an_empty_secret_shows_as_empty_not_starred(self):
+        """So "is the key set?" can still be answered from a log line."""
+        from evalbench.config import Settings
+
+        assert "github_token=''" in repr(Settings(github_token=""))

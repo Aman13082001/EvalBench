@@ -19,6 +19,7 @@ from typing import TypedDict
 import yaml
 
 from evalbench.answers import judged_tests, suite_needs_judge
+from evalbench.budget import expected_calls
 from evalbench.db.schemas import TestSuite
 from evalbench.resolution import judge_floor
 
@@ -119,6 +120,9 @@ def describe_benchmarks() -> list[dict]:
                 "judge_floor": _floor(
                     judged_tests(TestSuite(**data)), len(data.get("tests", []))
                 ),
+                # what one run costs the key, for the form to say first
+                "calls": expected_calls(TestSuite(**data)),
+                "samples": data.get("samples", 1),
                 "name": data.get("name", b["title"]),
                 "test_count": len(data.get("tests", [])),
                 "provider": data.get("provider", "ollama"),

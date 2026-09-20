@@ -301,7 +301,7 @@ Two backends, chosen by `JOB_BACKEND`:
 | `inline` *(default)* | FastAPI `BackgroundTasks` in the API process | local dev, CI, the GitHub Action — no Redis or worker needed |
 | `rq` | enqueued to Redis, run by `python -m evalbench.worker` | the Docker stack — jobs survive an API restart, add workers to scale, transient failures retry (`Retry(max=2)`) |
 
-`docker compose up` runs one `worker` service on `rq`; scale it with `docker compose up -d --scale worker=3`.
+`docker compose up` runs one `worker` service on `rq`; scale it with `docker compose up -d --scale worker=3`. A worker runs one job at a time, so with one worker a second user's run waits for the first to finish entirely; two workers interleave them. The provider's per-minute limit is shared either way — that is the free tier, not the queue.
 
 ### Regression detection & baselines
 
@@ -411,11 +411,12 @@ npm run dev                          # http://localhost:3005
 endpoints the CLI already used, plus a few small additions: an optional
 model/provider override on a run (so one benchmark can be run against two
 models without duplicating it), an optional caller-supplied key that never
-touches the database, two daily caps on runs that spend the server's
-key — per user (`DAILY_RUN_CAP`) and for everyone together
-(`DAILY_RUN_CAP_TOTAL`), the tighter one shown as "N left today" before
-the click — and a curated list of bundled benchmarks a user can adopt
-exactly once. The UI
+touches the database, a budget on the server's key counted in **calls**
+— what a free tier actually meters — per user per day (`DAILY_CALL_CAP`),
+for everyone together (`DAILY_CALL_CAP_TOTAL`) and per run
+(`MAX_CALLS_PER_RUN`), with every benchmark's cost and the tighter limit
+shown before the click — and a curated list of bundled benchmarks a user
+can adopt exactly once. The UI
 says *benchmark*; the API, YAML and CLI say *suite* — same thing.
 
 Three ways to answer, side by side in the form:

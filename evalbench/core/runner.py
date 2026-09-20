@@ -176,11 +176,17 @@ class TestRunner:
     async def validate_model(self, model: str):
         if not await self.provider.has_model(model):
             available = await self.provider.list_models()
+            # OpenRouter lists 443 models; pasting them all into a 400
+            # buries the one line that matters. Name a few, count the rest.
+            shown = ", ".join(available[:10])
+            rest = len(available) - 10
+            if rest > 0:
+                shown += f", … and {rest} more"
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"Model '{model}' not available for provider "
-                    f"'{self.provider.name}'. Available: {available}"
+                    f"'{self.provider.name}'. Available: {shown}"
                 ),
             )
 

@@ -34,6 +34,28 @@ changed; and judges matter most where answers are best — near the
 ceiling, 48% of what variance remains is the judge. `suites/research-judge.yaml`,
 `scripts/run_study_judge.py generate | score | analyze`.
 
+### Fixed — found by putting four providers' keys in one workbench
+
+- **Gemini was unusable from the workbench.** Google's `/models` answers
+  with resource names (`models/gemini-2.5-flash`); its chat endpoint
+  404s on that form and wants the bare id. The dropdown offered a name
+  that failed, and the name that worked was refused by `has_model`
+  because it was not in the list. `list_models` now lists what the chat
+  endpoint accepts.
+- **A provider's reason is now the result's error.** httpx's "Client
+  error '404 Not Found' for url …" dropped the body, and Google's body
+  said which model replaced the retired one. `ProviderError` carries the
+  provider's own sentence; OpenRouter's `metadata.raw` (which upstream
+  pool is throttled) is read too, and named after the retries are spent.
+- **No credits is not a rate limit.** OpenAI answers a $0 account with
+  429 `insufficient_quota`; the retry loop spent five retries and 36 s on
+  it and then reported "rate limited". It now fails on the first reply,
+  in 0.7 s, saying "no credits remaining" — as an error, not a lost
+  sample.
+- A model-not-found refusal named every model the provider lists.
+  OpenRouter lists 443; the 400 was 9 KB. It names ten and counts the
+  rest.
+
 ### Fixed — a judge that gave no verdict was a pass
 
 Found by the study: gpt-oss-20b returned an empty reply on 9 of 300

@@ -1,7 +1,8 @@
 """Provider abstraction: registry, presets, and adapters."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from evalbench.core.providers import (
@@ -137,6 +138,29 @@ class TestOpenAICompatibleProvider:
             assert await p.list_models() == []
 
     @pytest.mark.asyncio
+    async def test_list_models_strips_googles_resource_prefix(self):
+        """Gemini's OpenAI-compat /models answers with resource names —
+        ``models/gemini-2.5-flash`` — but its /chat/completions 404s on
+        that form and wants the bare id. Found live: the dropdown offered
+        a name that failed, and the name that worked was refused by
+        has_model because it was not in the list. Both fixed by listing
+        the id the chat endpoint accepts."""
+        p = OpenAICompatibleProvider(
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+            api_key="k",
+            name="gemini",
+        )
+        resp = MagicMock()
+        resp.raise_for_status = lambda: None
+        resp.json = lambda: {"data": [
+            {"id": "models/gemini-2.5-flash"},
+            {"id": "models/gemini-2.5-pro"},
+        ]}
+        with patch.object(p._client, "get", new_callable=AsyncMock, return_value=resp):
+            assert await p.list_models() == ["gemini-2.5-flash", "gemini-2.5-pro"]
+            assert await p.has_model("gemini-2.5-flash") is True
+
+    @pytest.mark.asyncio
     async def test_retries_429_then_succeeds(self):
         p = OpenAICompatibleProvider(
             base_url="https://api.groq.com/openai/v1", api_key="k", name="groq"
@@ -183,6 +207,94 @@ class TestOpenAICompatibleProvider:
                   new_callable=AsyncMock),
         ):
             with pytest.raises(RateLimitError, match="rate limited"):
+                await p.generate("m", "q")
+
+    @pytest.mark.asyncio
+    async def test_no_credits_429_fails_fast_and_says_so(self):
+        """OpenAI answers a $0 account with 429 ``insufficient_quota``.
+        That is not backpressure: retrying it five times burns 36 s and
+        then reports "rate limited", which sends the user looking for a
+        limit that does not exist. Fail on the first reply, in the
+        provider's words, and not as a RateLimitError — the run should
+        count it as an error, not a lost sample."""
+        from evalbench.core.providers.base import ProviderError, RateLimitError
+
+        p = OpenAICompatibleProvider(
+            base_url="https://api.openai.com/v1", api_key="k", name="openai"
+        )
+        resp = httpx.Response(
+            429,
+            json={"error": {
+                "message": "You have no credits remaining. Add credits to continue.",
+                "type": "insufficient_quota",
+                "code": "credit_balance_exhausted",
+            }},
+            request=httpx.Request("POST", "https://api.openai.com/v1/chat/completions"),
+        )
+        with (
+            patch.object(p._client, "post", new_callable=AsyncMock, return_value=resp) as post,
+            patch("evalbench.core.providers.openai_compat.asyncio.sleep", new_callable=AsyncMock) as sleep,
+        ):
+            with pytest.raises(ProviderError, match="no credits remaining") as exc:
+                await p.generate("m", "q")
+        assert not isinstance(exc.value, RateLimitError)
+        assert post.await_count == 1
+        sleep.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_http_error_carries_the_providers_own_words(self):
+        """Gemini 404s a retired model with a body that names the
+        replacement. httpx's "Client error '404 Not Found' for url …"
+        drops it, and the result shows a status code where a sentence
+        was available. Google wraps its error in a list; the others do
+        not; both are read."""
+        from evalbench.core.providers.base import ProviderError
+
+        p = OpenAICompatibleProvider(
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+            api_key="k",
+            name="gemini",
+        )
+        resp = httpx.Response(
+            404,
+            json=[{"error": {
+                "code": 404,
+                "message": "This model models/gemini-2.5-flash is no longer available "
+                           "to new users. Please update your code to use models/gemini-3.6-flash.",
+                "status": "NOT_FOUND",
+            }}],
+            request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"),
+        )
+        with patch.object(p._client, "post", new_callable=AsyncMock, return_value=resp):
+            with pytest.raises(ProviderError) as exc:
+                await p.generate("m", "q")
+        assert "gemini: 404" in str(exc.value)
+        assert "no longer available to new users" in str(exc.value)
+        assert "for url" not in str(exc.value)
+
+    @pytest.mark.asyncio
+    async def test_persistent_429_reports_the_upstream_reason(self):
+        """OpenRouter's 429 for a free model says which upstream pool is
+        throttled, in ``error.metadata.raw``. After the retries are spent
+        that sentence is the useful part."""
+        from evalbench.core.providers.base import RateLimitError
+
+        p = OpenAICompatibleProvider(
+            base_url="https://openrouter.ai/api/v1", api_key="k", name="openrouter"
+        )
+        resp = httpx.Response(
+            429,
+            json={"error": {"message": "Provider returned error", "code": 429, "metadata": {
+                "raw": "google/gemma-4-31b-it:free is temporarily rate-limited upstream.",
+                "provider_name": "Google AI Studio",
+            }}},
+            request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"),
+        )
+        with (
+            patch.object(p._client, "post", new_callable=AsyncMock, return_value=resp),
+            patch("evalbench.core.providers.openai_compat.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            with pytest.raises(RateLimitError, match="rate-limited upstream"):
                 await p.generate("m", "q")
 
 

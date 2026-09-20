@@ -13,7 +13,12 @@ import time
 import httpx
 
 from evalbench.config import settings
-from evalbench.core.providers.base import LLMResponse, Provider, RateLimitError
+from evalbench.core.providers.base import (
+    LLMResponse,
+    Provider,
+    ProviderError,
+    RateLimitError,
+)
 
 # 429 retry policy: back off 1s, 2s, 4s… (capped), honouring Retry-After.
 #
@@ -26,6 +31,42 @@ from evalbench.core.providers.base import LLMResponse, Provider, RateLimitError
 _MAX_RETRIES = 5
 _BACKOFF_BASE = 1.0
 _BACKOFF_CAP = 20.0
+
+
+def _error_body(resp) -> dict:
+    """The ``error`` object of a failed reply, or ``{}``.
+
+    OpenAI, Groq and OpenRouter answer ``{"error": {...}}``; Google wraps
+    the same object in a list. A reply with no JSON at all is fine too.
+    """
+    try:
+        body = resp.json()
+    except Exception:  # noqa: BLE001 - an HTML error page, or a bare fake
+        return {}
+    if isinstance(body, list) and body:
+        body = body[0]
+    err = body.get("error") if isinstance(body, dict) else None
+    if isinstance(err, str):
+        return {"message": err}
+    return err if isinstance(err, dict) else {}
+
+
+def _error_message(err: dict) -> str:
+    """The provider's sentence about what went wrong. OpenRouter relays
+    the upstream's words in ``metadata.raw``, which say more than its own
+    "Provider returned error"."""
+    meta = err.get("metadata")
+    raw = meta.get("raw") if isinstance(meta, dict) else None
+    return str(raw or err.get("message") or "").strip()
+
+
+def _quota_exhausted(err: dict) -> bool:
+    """A 429 that no amount of waiting will clear: the account has no
+    credit. OpenAI marks it ``insufficient_quota``."""
+    return err.get("type") == "insufficient_quota" or err.get("code") in (
+        "insufficient_quota",
+        "credit_balance_exhausted",
+    )
 
 
 class OpenAICompatibleProvider(Provider):
@@ -115,13 +156,32 @@ class OpenAICompatibleProvider(Provider):
                 f"{self.base_url}/chat/completions", json=payload
             )
             if resp.status_code != 429:
-                resp.raise_for_status()
+                try:
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError as e:
+                    # "404 Not Found for url …" says nothing; Google's
+                    # body names the model that replaced the retired one.
+                    why = _error_message(_error_body(resp))
+                    if not why:
+                        raise
+                    raise ProviderError(
+                        f"{self.name}: {resp.status_code} {why}"
+                    ) from e
                 return resp
 
+            err = _error_body(resp)
+            if _quota_exhausted(err):
+                # Not backpressure. Five retries would burn half a minute
+                # and then call it a rate limit, which it is not.
+                raise ProviderError(
+                    f"{self.name}: {_error_message(err) or 'no credits remaining'}"
+                )
+
             if attempt == _MAX_RETRIES:
+                why = _error_message(err)
                 raise RateLimitError(
                     f"{self.name}: rate limited (429) after "
-                    f"{_MAX_RETRIES} retries"
+                    f"{_MAX_RETRIES} retries" + (f" — {why}" if why else "")
                 )
 
             retry_after = (resp.headers or {}).get("retry-after")
@@ -140,9 +200,15 @@ class OpenAICompatibleProvider(Provider):
         try:
             resp = await self._client.get(f"{self.base_url}/models")
             resp.raise_for_status()
-            return [m["id"] for m in resp.json().get("data", [])]
+            ids = [m["id"] for m in resp.json().get("data", [])]
         except Exception:
             return []
+        # Google's /models answers with resource names (``models/gemini-
+        # 2.5-flash``) while its /chat/completions wants the bare id and
+        # 404s on the resource name. List what the chat endpoint accepts,
+        # or the dropdown offers a name that fails and refuses the one
+        # that works.
+        return [i.removeprefix("models/") for i in ids]
 
     async def close(self) -> None:
         await self._client.aclose()

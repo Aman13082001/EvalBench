@@ -154,6 +154,34 @@ async def test_run_suite_model_not_found(
         )
 
     assert "not available" in exc.value.detail.lower()
+    assert "mistral" in exc.value.detail
+
+    await runner.close()
+
+
+@pytest.mark.asyncio
+async def test_model_not_found_names_a_few_and_counts_the_rest(
+    mock_ollama,
+    sample_suite,
+):
+    """OpenRouter lists 443 models. A refusal that pastes all of them
+    into a 400 is unreadable; it should name a handful and say how many
+    more there are. Seen live: a stale model name produced a 9 KB error."""
+    mock_ollama.has_model = AsyncMock(return_value=False)
+    mock_ollama.list_models = AsyncMock(
+        return_value=[f"org/model-{i}" for i in range(443)]
+    )
+    runner = Runner()
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await runner.run_suite(sample_suite, "suite_123")
+
+    detail = exc.value.detail
+    assert "org/model-0" in detail
+    assert "org/model-442" not in detail
+    assert "433 more" in detail
+    assert len(detail) < 600
 
     await runner.close()
 

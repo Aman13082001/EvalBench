@@ -20,6 +20,15 @@ class RateLimitError(Exception):
     """
 
 
+class ProviderError(Exception):
+    """The provider refused the request and said why.
+
+    Carries the provider's own sentence — "no credits remaining", "this
+    model is no longer available, use X" — because that sentence is what
+    the person reading the result needs, and a bare status code is not.
+    """
+
+
 
 @dataclass
 class LLMResponse:

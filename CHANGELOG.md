@@ -34,6 +34,19 @@ changed; and judges matter most where answers are best — near the
 ceiling, 48% of what variance remains is the judge. `suites/research-judge.yaml`,
 `scripts/run_study_judge.py generate | score | analyze`.
 
+### Added — the question sheet
+
+"Bring your own answers" took a file of `{test_name, response}` rows but
+never handed out the questions, so evaluating a model EvalBench cannot
+call meant copying names off the benchmark page and hoping the prompt
+you ran was the one the runner sends. `evalbench answer-sheet SUITE`,
+`GET /suites/{id}/answer-sheet` and `/suites/bundled/{slug}/answer-sheet`
+(CSV or JSON Lines), and a download line in the workbench's "answers I
+have" form give the same thing: one row per test, the prompt
+byte-for-byte, an empty `response`, and no expected answers. The filled
+sheet is the upload; a test proves the round trip through the same
+parser, including a prompt with newlines, quotes and a comma.
+
 ### Fixed — found by putting four providers' keys in one workbench
 
 - **Gemini was unusable from the workbench.** Google's `/models` answers

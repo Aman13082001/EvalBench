@@ -113,6 +113,38 @@ def parse_answers(text: str, filename: str = "") -> list[dict]:
     return out
 
 
+SHEET_FORMATS = ("csv", "jsonl")
+
+
+def answer_sheet(suite: TestSuite | dict, fmt: str = "jsonl") -> str:
+    """The questions, in the shape the answers come back in.
+
+    One row per test: ``test_name``, the ``prompt`` byte-for-byte as the
+    runner sends it, and an empty ``response``. Filled in, the same file
+    is the upload — `parse_answers` reads it and `match_answers` pairs
+    every row by name. Nothing else is on it: the expected answers stay
+    here, because the sheet goes to the model under test.
+    """
+    if fmt not in SHEET_FORMATS:
+        raise ValueError(f"format must be csv or jsonl, not {fmt!r}")
+    tests = suite.tests if isinstance(suite, TestSuite) else suite.get("tests", [])
+    rows = [
+        {
+            "test_name": t.name if hasattr(t, "name") else t["name"],
+            "prompt": t.prompt if hasattr(t, "prompt") else t["prompt"],
+            "response": "",
+        }
+        for t in tests
+    ]
+    if fmt == "jsonl":
+        return "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
+    out = io.StringIO()
+    w = csv.DictWriter(out, fieldnames=["test_name", "prompt", "response"], lineterminator="\n")
+    w.writeheader()
+    w.writerows(rows)
+    return out.getvalue()
+
+
 def match_answers(
     suite: TestSuite | dict, answers: list[dict], label: str = "your answers"
 ) -> tuple[dict[str, dict], list[str]]:

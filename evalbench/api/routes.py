@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import asdict
 from datetime import datetime, timezone
 
@@ -15,6 +16,8 @@ from fastapi import (
 from pydantic import BaseModel, Field
 
 from evalbench.answers import (
+    SHEET_FORMATS,
+    answer_sheet,
     judged_tests,
     match_answers,
     parse_answers,
@@ -348,6 +351,37 @@ async def adopt_bundled(
     return {"id": str(result.inserted_id), "name": suite.name, "created": True}
 
 
+def _sheet_response(suite: dict, fmt: str) -> Response:
+    """The question sheet as a download, named after the benchmark."""
+    if fmt not in SHEET_FORMATS:
+        raise HTTPException(
+            status_code=400, detail="format must be csv or jsonl"
+        )
+    # "Alice's suite" -> alices-suite: apostrophes vanish, the rest hyphenate.
+    name = re.sub(r"['’]", "", suite["name"].lower())
+    stem = re.sub(r"[^a-z0-9]+", "-", name).strip("-") or "benchmark"
+    return Response(
+        content=answer_sheet(suite, fmt),
+        media_type="text/csv" if fmt == "csv" else "application/x-ndjson",
+        headers={
+            "Content-Disposition": f'attachment; filename="{stem}-answers.{fmt}"'
+        },
+    )
+
+
+@router.get("/bundled/{slug}/answer-sheet")
+async def bundled_answer_sheet(
+    slug: str, format: str = "jsonl", user=Depends(get_current_user)
+):
+    """The questions of a bundled benchmark, to run through a model
+    EvalBench cannot call. Read from the file: nothing is adopted or
+    stored by asking for the questions."""
+    data = load_benchmark(slug)
+    if data is None:
+        raise HTTPException(status_code=404, detail="No such benchmark")
+    return _sheet_response(data, format)
+
+
 @router.get("/{suite_id}")
 async def get_suite(suite_id: str, user=Depends(get_current_user)):
     if not ObjectId.is_valid(suite_id):
@@ -413,6 +447,23 @@ async def export_suite(suite_id: str, user=Depends(get_current_user)):
         "suite_id": suite_id,
         "yaml": yaml_content
     }
+
+
+@router.get("/{suite_id}/answer-sheet")
+async def suite_answer_sheet(
+    suite_id: str, format: str = "jsonl", user=Depends(get_current_user)
+):
+    """The questions of one of your benchmarks: ``test_name``, the
+    ``prompt`` exactly as the runner sends it, and an empty ``response``.
+    Filled in, the same file is what the run form and ``--answers``
+    take."""
+    if not ObjectId.is_valid(suite_id):
+        raise HTTPException(status_code=400, detail="Invalid suite ID format")
+    doc = await db.suites.find_one({"_id": ObjectId(suite_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Suite not found")
+    require_owner(doc, user, "Suite")
+    return _sheet_response(doc, format)
 
 
 @router.post("/import", status_code=201)

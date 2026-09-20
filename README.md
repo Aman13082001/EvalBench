@@ -341,7 +341,7 @@ evalbench merge-suites [--apply] [--claim U] # fold duplicate suites into one pe
 
 Two ways to run without a provider key at all:
 
-- **`--answers out.jsonl`** scores answers you already have — a JSON array, JSON Lines or CSV of `{test_name | prompt, response}` rows. Nothing is generated; only checks that ask an LLM to grade need a model (`--judge-provider` / `--judge-model`), and only those count against anything. A row matching no test is refused by name before any request.
+- **`--answers out.jsonl`** scores answers you already have — a JSON array, JSON Lines or CSV of `{test_name | prompt, response}` rows. Nothing is generated; only checks that ask an LLM to grade need a model (`--judge-provider` / `--judge-model`), and only those count against anything. A row matching no test is refused by name before any request. To get the questions in that exact shape, **`evalbench answer-sheet suites/demo.yaml -o sheet.csv`** writes one row per test — `test_name`, the prompt byte-for-byte as a run would send it, and an empty `response` — with no expected answers on it. Run the prompts through whatever you are evaluating, fill the column, and hand the same file to `--answers`.
 - **`--base-url https://my-gateway.example.com/v1`** runs against your own OpenAI-compatible server. The key (`--endpoint-key`) is optional; the server's keys are never sent there. See [Providers](#providers) for how the URL is checked.
 
 ### GitHub Action — PR gate + comment
@@ -420,10 +420,13 @@ Three ways to answer, side by side in the form:
 - **a model** — a listed provider, on the server's key or your own;
 - **my own endpoint** — any OpenAI-compatible URL, key optional, also
   available as Model A or B in a comparison;
-- **answers I have** — upload or paste a file; nothing is generated, the
-  checks run on what you gave them, and a rubric benchmark asks you who
-  should grade. Latency is reported as *not measured* and a missing row
-  reads as "no answer in the file you supplied", not as a provider failure.
+- **answers I have** — download the benchmark's question sheet (CSV or
+  JSON Lines: every prompt as a run would send it, with an empty
+  `response`), fill it in with the model you cannot point EvalBench at,
+  and upload the same file back. Nothing is generated, the checks run on
+  what you gave them, and a rubric benchmark asks you who should grade.
+  Latency is reported as *not measured* and a missing row reads as "no
+  answer in the file you supplied", not as a provider failure.
 
 The design system lives in `web/app/globals.css` and `web/components/ui`.
 

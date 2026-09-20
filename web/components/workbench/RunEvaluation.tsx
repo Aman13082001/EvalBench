@@ -205,6 +205,7 @@ export default function RunEvaluation({
                 value={answers}
                 onChange={setAnswers}
                 expectedTests={bench?.tests}
+                bench={bench}
               />
               {needsJudge && (
                 <div className="space-y-2 border-t border-line pt-3">

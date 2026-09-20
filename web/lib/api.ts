@@ -1,4 +1,4 @@
-import { authed } from "./auth";
+import { authed, getToken } from "./auth";
 
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -176,6 +176,44 @@ export const importSuite = (suite: unknown) =>
     method: "POST",
     body: JSON.stringify(suite),
   });
+
+export type SheetFormat = "csv" | "jsonl";
+
+/* The question sheet: every prompt exactly as a run would send it, one
+   row per test, with an empty `response` to fill in. Filled, the same
+   file is the upload. The API sets a filename, but CORS does not expose
+   the header, so the file is named here by the same rule. */
+export async function downloadAnswerSheet(
+  path: string,
+  label: string,
+  format: SheetFormat
+): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}${path}?format=${format}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      detail = (await res.json()).detail || detail;
+    } catch {
+      /* keep statusText */
+    }
+    throw new Error(detail);
+  }
+  const stem =
+    label
+      .toLowerCase()
+      .replace(/['\u2019]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "benchmark";
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${stem}-answers.${format}`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 /** Optional overrides for a run. Omit everything for the suite's own
  *  defaults. `provider_key` is the caller's key — sent to the job, never

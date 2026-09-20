@@ -902,6 +902,46 @@ def models(
         console.print(f"[dim]{len(hidden)} hidden (not chat models): {', '.join(hidden[:6])}{' …' if len(hidden) > 6 else ''}[/dim]")
 
 
+@app.command(name="answer-sheet")
+def answer_sheet_cmd(
+    suite_path: str = typer.Argument(..., help="Suite YAML to take the questions from"),
+    format: str = typer.Option(
+        "csv", "--format", "-f", help="csv (opens in a spreadsheet) or jsonl"
+    ),
+    output: str | None = typer.Option(
+        None, "--output", "-o", help="Write here instead of printing"
+    ),
+):
+    """The questions, to run through a model EvalBench cannot call.
+
+    One row per test: test_name, the prompt exactly as a run would send
+    it, and an empty response. Fill in the responses, then score them
+    with `evalbench run SUITE --answers SHEET`. Expected answers are not
+    on the sheet.
+    """
+    from evalbench.answers import SHEET_FORMATS
+    from evalbench.answers import answer_sheet as _sheet
+
+    if format not in SHEET_FORMATS:
+        console.print("[red]Format must be 'csv' or 'jsonl'[/red]")
+        raise typer.Exit(code=1)
+    with open(suite_path, encoding="utf-8") as f:
+        suite = yaml.safe_load(f)
+    text = _sheet(suite, format)
+    if output is None:
+        # Bytes, not console.print: rich would wrap long prompts and the
+        # file is meant to be redirected.
+        sys.stdout.write(text)
+        return
+    Path(output).write_text(text, encoding="utf-8")
+    n = len(suite.get("tests") or [])
+    console.print(
+        f"[green]✓[/green] {n} test{'s' if n != 1 else ''} → {output}\n"
+        f"Fill in the [bold]response[/bold] column, then:\n"
+        f"  evalbench run {suite_path} --answers {output}"
+    )
+
+
 @app.command()
 def init(
     path: str = typer.Option(

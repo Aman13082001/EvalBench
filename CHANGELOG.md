@@ -48,6 +48,15 @@ points at the Workbench — and the Grafana operations view second, for
 the admin only, and only where a Grafana exists
 (`NEXT_PUBLIC_GRAFANA_URL` unset means none: the hosted deployment).
 
+### Fixed — a resumed run is named, and does not lock the form
+
+Opening on the newest run put its "running · 9/19" beside the form's
+own cost line and turned the Run button into "Running…" — so a 51-test
+benchmark the budget had just refused looked like it was running. A
+run the form did not start is now shown under §2 as "Your newest run —
+Safety Evaluation Suite on openai/gpt-oss-20b — is still going", with
+its progress, and the form stays free to start another.
+
 ### Fixed — run times were UTC; the admin's list was anonymous
 
 - **Run history showed UTC.** The API writes timestamps without a zone

@@ -76,6 +76,10 @@ function forget(slot: string | undefined) {
 export function useRun(slot?: string, opts: { latest?: boolean } = {}) {
   const [state, setState] = useState<RunState>({ phase: "idle" });
   const [meta, setMeta] = useState<RunMeta>({});
+  /* Whether the run being shown was picked up rather than started by
+     this form: the page then says what it is, and the form stays free
+     to start another. */
+  const [resumed, setResumed] = useState(false);
   const alive = useRef(true);
   /* Only the newest poll may speak. A resumed poll still in flight when
      the person starts a fresh run would otherwise keep writing the old
@@ -144,6 +148,7 @@ export function useRun(slot?: string, opts: { latest?: boolean } = {}) {
     async (suiteId: string, opts: RunOptions, m: RunMeta = {}): Promise<RunSummary | null> => {
       alive.current = true;
       setMeta(m);
+      setResumed(false);
       setState({ phase: "starting" });
       let runId: string;
       try {
@@ -169,6 +174,7 @@ export function useRun(slot?: string, opts: { latest?: boolean } = {}) {
     const resume = (runId: string, m: RunMeta) => {
       alive.current = true;
       setMeta(m);
+      setResumed(true);
       setState({
         phase: "running",
         runId,
@@ -224,9 +230,10 @@ export function useRun(slot?: string, opts: { latest?: boolean } = {}) {
     forget(slot);
     setState({ phase: "idle" });
     setMeta({});
+    setResumed(false);
   }, [slot]);
 
-  return { state, run, reset, meta };
+  return { state, run, reset, meta, resumed };
 }
 
 /** One line of progress for a run in flight. */

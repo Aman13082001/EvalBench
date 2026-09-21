@@ -56,7 +56,13 @@ export default function RunEvaluation({
   const [suiteName, setSuiteName] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
 
-  const { state, run, reset, meta } = useRun("eval", { latest: true });
+  const { state, run, reset, meta, resumed } = useRun("eval", { latest: true });
+  /* A run this form started is "the run"; one picked up from the server
+     is "your newest run" — shown, named, and not in the way of the form. */
+  const inFlightHere =
+    (state.phase === "starting" || state.phase === "running") && !resumed;
+  const inFlightElsewhere = state.phase === "running" && resumed;
+  const shownName = [meta.suiteName, meta.model].filter(Boolean).join(" on ");
 
   /* Follow the benchmark's own model until the user picks one. */
   useEffect(() => {
@@ -115,8 +121,7 @@ export default function RunEvaluation({
       : modelReady(model) &&
         (!isHosted(model.provider) || !keyMode.own || keyMode.key.length > 0) &&
         !(isHosted(model.provider) && !keyMode.own && serverKeyBlocked(cost, quota))) &&
-    state.phase !== "starting" &&
-    state.phase !== "running";
+    !inFlightHere;
 
   async function go() {
     if (!bench) return;
@@ -251,11 +256,9 @@ export default function RunEvaluation({
 
       <div className="flex flex-wrap items-center gap-4">
         <button className="btn btn-primary" onClick={go} disabled={!canRun}>
-          {state.phase === "starting" || state.phase === "running"
-            ? "Running…"
-            : "Run evaluation"}
+          {inFlightHere ? "Running…" : "Run evaluation"}
         </button>
-        <RunProgress state={state} />
+        {inFlightHere && <RunProgress state={state} />}
         {costLine && (
           <span className="font-mono text-[11px] text-muted tnum">{costLine}</span>
         )}
@@ -300,8 +303,15 @@ export default function RunEvaluation({
                   : "Pick a benchmark and a model above. The result appears here — the verdict first, then every number behind it, then each test."
                 : state.phase === "failed"
                   ? "The run did not complete. The error is above."
-                  : "Running — the result will appear here when every test has been scored."}
+                  : inFlightElsewhere
+                    ? `Your newest run${shownName ? ` — ${shownName} —` : ""} is still going; its result appears here when every test has been scored. The form above is free to start another.`
+                    : "Running — the result will appear here when every test has been scored."}
             </p>
+            {inFlightElsewhere && (
+              <p className="mt-2">
+                <RunProgress state={state} />
+              </p>
+            )}
           </Panel>
         </div>
       )}

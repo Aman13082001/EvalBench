@@ -38,7 +38,7 @@ def anon(mock_db):
 class TestPasswordFloor:
     def test_seven_characters_is_refused_with_the_rule(self, anon, mock_db):
         mock_db.users.find_one.return_value = None
-        r = anon.post("/auth/register", json={"username": "new", "password": "1234567"})
+        r = anon.post("/auth/register", json={"username": "new@example.com", "password": "1234567"})
         assert r.status_code == 422
         assert "8" in r.text
         mock_db.users.insert_one.assert_not_called()
@@ -46,7 +46,7 @@ class TestPasswordFloor:
     def test_eight_is_enough(self, anon, mock_db):
         """A floor, not a policy: the rest is the user's business."""
         mock_db.users.find_one.return_value = None
-        r = anon.post("/auth/register", json={"username": "new", "password": "12345678"})
+        r = anon.post("/auth/register", json={"username": "new@example.com", "password": "12345678"})
         assert r.status_code == 201
 
 
@@ -250,3 +250,51 @@ class TestACrashIsStillAnAnswer:
         assert resp.headers.get("access-control-allow-origin") == "http://localhost:3005"
         assert "API log" in resp.json()["detail"]
         assert "kaboom" not in resp.text  # the traceback stays in the log
+
+
+class TestAUsernameIsAnEmail:
+    """Sign-ups were any string: `amanku0801`, `x`, `admin2`. An account
+    is now an email address — any real domain, not an allowlist, since
+    the people worth signing up have company addresses — normalised so
+    `Aman@Gmail.COM` and `aman@gmail.com` are one account. A format
+    check, not proof: nothing is verified by mail yet."""
+
+    def test_a_bare_handle_is_refused_with_an_example(self, anon, mock_db):
+        mock_db.users.find_one.return_value = None
+        r = anon.post("/auth/register", json={"username": "amanku0801", "password": "secret123"})
+        assert r.status_code == 422
+        assert "email" in r.text.lower() and "you@" in r.text
+        mock_db.users.insert_one.assert_not_called()
+
+    @pytest.mark.parametrize("bad", ["x@y", "a b@gmail.com", "@gmail.com", "aman@", "aman@gmail..com"])
+    def test_malformed_addresses_are_refused(self, anon, mock_db, bad):
+        mock_db.users.find_one.return_value = None
+        r = anon.post("/auth/register", json={"username": bad, "password": "secret123"})
+        assert r.status_code == 422, bad
+
+    @pytest.mark.parametrize("ok", ["aman@gmail.com", "a.b+tag@outlook.com", "recruiter@anthropic.com", "me@my-startup.io"])
+    def test_any_real_domain_is_welcome(self, anon, mock_db, ok):
+        mock_db.users.find_one.return_value = None
+        r = anon.post("/auth/register", json={"username": ok, "password": "secret123"})
+        assert r.status_code == 201, (ok, r.text)
+
+    def test_the_address_is_stored_lowercased_and_trimmed(self, anon, mock_db):
+        mock_db.users.find_one.return_value = None
+        r = anon.post("/auth/register", json={"username": "  Aman@Gmail.COM ", "password": "secret123"})
+        assert r.status_code == 201
+        assert mock_db.users.insert_one.call_args[0][0]["username"] == "aman@gmail.com"
+        assert r.json()["username"] == "aman@gmail.com"
+        # the duplicate check saw the normalised form too
+        assert mock_db.users.find_one.call_args_list[0][0][0] == {"username": "aman@gmail.com"}
+
+    def test_login_normalises_the_same_way(self, anon, mock_db):
+        mock_db.users.find_one.return_value = _user(username="aman@gmail.com")
+        r = anon.post("/auth/login", data={"username": "Aman@Gmail.COM", "password": "password-1"})
+        assert r.status_code == 200
+        assert mock_db.users.find_one.call_args_list[0][0][0] == {"username": "aman@gmail.com"}
+
+    def test_existing_non_email_accounts_still_sign_in(self, anon, mock_db):
+        """`admin` predates the rule and is looked up as typed."""
+        mock_db.users.find_one.return_value = _user(username="admin")
+        r = anon.post("/auth/login", data={"username": "admin", "password": "password-1"})
+        assert r.status_code == 200

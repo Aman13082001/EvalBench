@@ -59,7 +59,7 @@ class TestTheRace:
         )
 
         r = client.post(
-            "/auth/register", json={"username": "alice", "password": "pw12345678"}
+            "/auth/register", json={"username": "alice@example.com", "password": "pw12345678"}
         )
         assert r.status_code == 400
         assert "already registered" in r.json()["detail"].lower()
@@ -69,7 +69,7 @@ class TestTheRace:
         need a failed insert to be reported."""
         mock_db.users.find_one.return_value = {"username": "alice"}
         r = client.post(
-            "/auth/register", json={"username": "alice", "password": "pw12345678"}
+            "/auth/register", json={"username": "alice@example.com", "password": "pw12345678"}
         )
         assert r.status_code == 400
         mock_db.users.insert_one.assert_not_called()
@@ -78,7 +78,7 @@ class TestTheRace:
         mock_db.users.find_one.return_value = None
         mock_db.users.insert_one = AsyncMock()
         r = client.post(
-            "/auth/register", json={"username": "bob", "password": "pw12345678"}
+            "/auth/register", json={"username": "bob@example.com", "password": "pw12345678"}
         )
         assert r.status_code in (200, 201), r.text
         assert "api_key" in r.json()

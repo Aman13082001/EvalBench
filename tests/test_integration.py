@@ -71,7 +71,7 @@ def test_full_flow_register_run_baseline_regression(live_client):
     c = live_client
 
     # 1. register -> get an API key
-    r = c.post("/auth/register", json={"username": "it", "password": "pw123456"})
+    r = c.post("/auth/register", json={"username": "it@example.com", "password": "pw123456"})
     assert r.status_code in (200, 201), r.text
     key = r.json()["api_key"]
     h = {"X-API-Key": key}
@@ -136,10 +136,10 @@ def test_users_cannot_see_each_others_suites(live_client):
     c = live_client
 
     a = c.post(
-        "/auth/register", json={"username": "owner_a", "password": "pw123456"}
+        "/auth/register", json={"username": "owner_a@example.com", "password": "pw123456"}
     ).json()["api_key"]
     b = c.post(
-        "/auth/register", json={"username": "owner_b", "password": "pw123456"}
+        "/auth/register", json={"username": "owner_b@example.com", "password": "pw123456"}
     ).json()["api_key"]
     ha, hb = {"X-API-Key": a}, {"X-API-Key": b}
 
@@ -163,7 +163,7 @@ def test_users_cannot_see_each_others_suites(live_client):
 def test_run_persists_and_lists(live_client):
     c = live_client
     key = c.post(
-        "/auth/register", json={"username": "it2", "password": "pw123456"}
+        "/auth/register", json={"username": "it2@example.com", "password": "pw123456"}
     ).json()["api_key"]
     h = {"X-API-Key": key}
 

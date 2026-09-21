@@ -1,10 +1,11 @@
 """Authentication endpoints."""
 
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pymongo.errors import DuplicateKeyError
 
 from evalbench.api.auth import (
@@ -24,11 +25,37 @@ router = APIRouter(
 )
 
 
+# An account is an email address. Any real domain — the people worth
+# signing up have company addresses, so no allowlist of webmail hosts.
+# Local part, one @, a domain with a dot and a TLD of letters; no
+# whitespace, no empty labels. Nothing is verified by mail: this is the
+# shape of an address, not proof of one.
+_EMAIL = re.compile(
+    r"^[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$"
+)
+
+
+def normalise_username(raw: str) -> str:
+    """The form an address is stored and looked up in: trimmed, lower
+    case. `Aman@Gmail.COM` and `aman@gmail.com` are one account."""
+    return raw.strip().lower()
+
+
 class UserCreate(BaseModel):
     username: str
     # A floor, not a policy: "a" was accepted. Eight is what every
     # current guideline agrees on; the rest is the user's business.
     password: str = Field(min_length=8)
+
+    @field_validator("username")
+    @classmethod
+    def _an_email_address(cls, v: str) -> str:
+        v = normalise_username(v)
+        if not _EMAIL.match(v):
+            raise ValueError(
+                "Username must be an email address, e.g. you@gmail.com"
+            )
+        return v
 
 
 class Token(BaseModel):
@@ -119,9 +146,11 @@ async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
 ):
-    user = await db.users.find_one(
-        {"username": form_data.username}
-    )
+    # Looked up as typed for accounts from before addresses were the
+    # rule (`admin`); an address is normalised the way it was stored.
+    typed = form_data.username
+    lookup = normalise_username(typed) if "@" in typed else typed
+    user = await db.users.find_one({"username": lookup})
 
     if not user or not verify_password(
         form_data.password,

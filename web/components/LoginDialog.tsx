@@ -133,13 +133,15 @@ export default function LoginDialog({
               <form onSubmit={submit} className="space-y-3">
                 <div className="space-y-1">
                   <label className="label-xs block" htmlFor="dlg-user">
-                    Username
+                    {mode === "signup" ? "Email" : "Email or username"}
                   </label>
                   <input
                     id="dlg-user"
                     ref={firstFieldRef}
+                    type={mode === "signup" ? "email" : "text"}
                     className="field font-mono text-sm"
-                    autoComplete="username"
+                    autoComplete={mode === "signup" ? "email" : "username"}
+                    placeholder={mode === "signup" ? "you@example.com" : undefined}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required

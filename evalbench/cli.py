@@ -308,7 +308,7 @@ def whoami():
 
 @app.command()
 def register(
-    username: str = typer.Option(..., "--username", "-u"),
+    username: str = typer.Option(..., "--username", "-u", help="Your email address"),
     password: str = typer.Option(
         ...,
         "--password",

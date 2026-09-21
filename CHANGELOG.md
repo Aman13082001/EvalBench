@@ -48,6 +48,17 @@ points at the Workbench — and the Grafana operations view second, for
 the admin only, and only where a Grafana exists
 (`NEXT_PUBLIC_GRAFANA_URL` unset means none: the hosted deployment).
 
+### Changed — an account is an email address
+
+Sign-ups took any string. A username is now an email address — any
+real domain, deliberately not an allowlist of webmail hosts, since the
+people worth signing up have company addresses — trimmed and
+lower-cased so `Aman@Gmail.COM` and `aman@gmail.com` are one account.
+The forms say "Email" and let the browser check the shape first; the
+API says "Username must be an email address, e.g. you@gmail.com" when
+it does not. Accounts from before (`admin`) sign in as they always
+did. A format check, not proof: nothing is verified by mail yet.
+
 ### Fixed — a resumed run is named, and does not lock the form
 
 Opening on the newest run put its "running · 9/19" beside the form's

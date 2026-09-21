@@ -54,13 +54,18 @@ export default function LoginPage() {
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1">
             <label className="label-xs block" htmlFor="u">
-              Username
+              {mode === "signup" ? "Email" : "Email or username"}
             </label>
+            {/* An account is an email address; the browser checks the shape
+                before the API does. Sign-in also takes the admin's plain
+                username, from before the rule. */}
             <input
               id="u"
+              type={mode === "signup" ? "email" : "text"}
               className="field font-mono text-sm"
               value={username}
-              autoComplete="username"
+              autoComplete={mode === "signup" ? "email" : "username"}
+              placeholder={mode === "signup" ? "you@example.com" : undefined}
               onChange={(e) => setUsername(e.target.value)}
               required
             />

@@ -476,7 +476,7 @@ collects nothing but the regression gauges.
 
 - **JWT** for interactive use (`evalbench login` → `Authorization: Bearer …`).
 - **API key** for CI (`X-API-Key` header, or `evalbench run --api-key`). Stored as a SHA-256 hash; shown once, at creation or rotation.
-- **Registration** is open by default and rate limited (5/hour per address). `ALLOW_REGISTRATION=false` closes it for a public deployment; the admin makes the accounts.
+- **An account is an email address** — any real domain, normalised to lower case; the shape is checked, nothing is verified by mail yet. **Registration** is open by default and rate limited (5/hour per address). `ALLOW_REGISTRATION=false` closes it for a public deployment; the admin makes the accounts.
 - **Every data endpoint requires a user.** Only `/health`, `/live`, `/ready` (and the Prometheus `/metrics` scrape target) are public. `tests/test_auth_coverage.py` asserts this for every route.
 - Mutating endpoints are additionally rate-limited (SlowAPI).
 

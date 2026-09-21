@@ -11,7 +11,7 @@ class TestAuthEndpoints:
         mock_db.users.insert_one.return_value = AsyncMock()
 
         payload = {
-            "username": "newuser",
+            "username": "newuser@example.com",
             "password": "secret123",
         }
 
@@ -24,17 +24,17 @@ class TestAuthEndpoints:
 
         data = response.json()
 
-        assert data["username"] == "newuser"
+        assert data["username"] == "newuser@example.com"
         assert data["api_key"].startswith("eb_")
 
 
     def test_register_duplicate(self, client, mock_db):
         mock_db.users.find_one.return_value = {
-            "username": "existing"
+            "username": "existing@example.com"
         }
 
         payload = {
-            "username": "existing",
+            "username": "existing@example.com",
             "password": "secret123",
         }
 

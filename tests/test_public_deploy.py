@@ -54,13 +54,13 @@ def _as(user, mock_db, addr=("203.0.113.9", 4242)):
 class TestRegistrationCanBeClosed:
     def test_open_by_default_so_a_fresh_install_has_a_way_in(self, anon, mock_db):
         mock_db.users.find_one.return_value = None
-        r = anon.post("/auth/register", json={"username": "new", "password": "secret123"})
+        r = anon.post("/auth/register", json={"username": "new@example.com", "password": "secret123"})
         assert r.status_code == 201
 
     def test_closed_means_403_with_a_way_forward(self, anon, mock_db):
         mock_db.users.find_one.return_value = None
         with patch.object(auth_routes.settings, "allow_registration", False):
-            r = anon.post("/auth/register", json={"username": "new", "password": "secret123"})
+            r = anon.post("/auth/register", json={"username": "new@example.com", "password": "secret123"})
         assert r.status_code == 403
         assert "closed" in r.json()["detail"].lower()
         assert "admin" in r.json()["detail"].lower()
@@ -81,7 +81,7 @@ class TestRegistrationCanBeClosed:
 class TestABannedAccountStaysGone:
     def test_registering_stores_the_address(self, anon, mock_db):
         mock_db.users.find_one.return_value = None
-        anon.post("/auth/register", json={"username": "new", "password": "secret123"})
+        anon.post("/auth/register", json={"username": "new@example.com", "password": "secret123"})
         doc = mock_db.users.insert_one.call_args[0][0]
         assert doc["ips"] == ["203.0.113.9"]
 
@@ -119,14 +119,14 @@ class TestABannedAccountStaysGone:
             return None
 
         mock_db.users.find_one.side_effect = find_one
-        r = anon.post("/auth/register", json={"username": "bob2", "password": "secret123"})
+        r = anon.post("/auth/register", json={"username": "bob2@example.com", "password": "secret123"})
         assert r.status_code == 403
         assert "address" in r.json()["detail"].lower()
         mock_db.users.insert_one.assert_not_called()
 
     def test_the_lookup_is_by_this_address_only(self, anon, mock_db):
         mock_db.users.find_one.return_value = None
-        anon.post("/auth/register", json={"username": "new", "password": "secret123"})
+        anon.post("/auth/register", json={"username": "new@example.com", "password": "secret123"})
         queries = [c[0][0] for c in mock_db.users.find_one.call_args_list]
         assert {"active": False, "ips": "203.0.113.9"} in queries
 
@@ -335,7 +335,7 @@ class TestTheCallBudget:
 class TestApiKeysAreStoredHashed:
     def test_registration_stores_the_hash_and_returns_the_key_once(self, anon, mock_db):
         mock_db.users.find_one.return_value = None
-        r = anon.post("/auth/register", json={"username": "new", "password": "secret123"})
+        r = anon.post("/auth/register", json={"username": "new@example.com", "password": "secret123"})
         key = r.json()["api_key"]
         doc = mock_db.users.insert_one.call_args[0][0]
         assert "api_key" not in doc

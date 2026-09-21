@@ -1012,3 +1012,99 @@ class TestExport:
 
         assert result.exit_code == 1
         assert "Authentication required" in result.stdout
+
+
+class TestTheCliTripFound:
+    """Two things a person met on the first walk through the CLI."""
+
+    @patch("evalbench.cli.httpx.get")
+    def test_export_writes_utf8_whatever_the_console_is(self, mock_get, tmp_path):
+        """A model answer with an em dash crashed `export -f csv` on
+        Windows: the file was opened with the console's code page
+        (cp1252), which has no "—". Written as UTF-8 always. On a UTF-8
+        machine this passes before and after; on Windows it failed."""
+        out = tmp_path / "run.csv"
+        mock_get.return_value = mock_response(
+            200, {"format": "csv", "filename": "r.csv", "content": "test,actual\ncapital,Tokyo — the capital\n"}
+        )
+        r = runner.invoke(app, ["export", "123", "-f", "csv", "-o", str(out)])
+        assert r.exit_code == 0, r.output
+        assert "Tokyo — the capital" in out.read_text(encoding="utf-8")
+
+    @patch("evalbench.cli.httpx.post")
+    @patch("evalbench.cli.httpx.get")
+    def test_baseline_accepts_the_suite_yaml_like_run_does(self, mock_get, mock_post, tmp_path):
+        """`run` takes suites/demo.yaml; `baseline` wanted the suite's id,
+        which `run` never prints. It now takes the same file: the suite
+        is looked up by name, the way `run` imports it (create-or-update
+        by name), so the two commands name the same thing."""
+        suite = tmp_path / "demo.yaml"
+        suite.write_text("name: EvalBench Demo\nmodel: m\ntests:\n  - name: t\n    prompt: p\n    expected: e\n", encoding="utf-8")
+        mock_get.return_value = mock_response(200, [
+            {"_id": "6ab000000000000000000001", "name": "Something else"},
+            {"_id": "6ab000000000000000000002", "name": "EvalBench Demo"},
+        ])
+        mock_post.return_value = mock_response(200, {"suite_id": "6ab000000000000000000002", "baseline_run_id": "run9"})
+        r = runner.invoke(app, ["baseline", str(suite), "run9"])
+        assert r.exit_code == 0, r.output
+        assert mock_post.call_args[0][0].endswith("/suites/6ab000000000000000000002/baseline")
+        assert "EvalBench Demo" in r.output
+
+    @patch("evalbench.cli.httpx.get")
+    def test_baseline_says_when_the_file_has_no_suite_yet(self, mock_get, tmp_path):
+        suite = tmp_path / "new.yaml"
+        suite.write_text("name: Never run\nmodel: m\ntests: []\n", encoding="utf-8")
+        mock_get.return_value = mock_response(200, [])
+        r = runner.invoke(app, ["baseline", str(suite), "run9"])
+        assert r.exit_code == 1
+        assert "Never run" in r.output and "evalbench run" in r.output
+
+    @patch("evalbench.cli.httpx.post")
+    def test_baseline_still_takes_a_suite_id(self, mock_post):
+        mock_post.return_value = mock_response(200, {"suite_id": "6ab000000000000000000002", "baseline_run_id": "run9"})
+        r = runner.invoke(app, ["baseline", "6ab000000000000000000002", "run9"])
+        assert r.exit_code == 0, r.output
+        assert mock_post.call_args[0][0].endswith("/suites/6ab000000000000000000002/baseline")
+
+    @patch("evalbench.cli.httpx.get")
+    @patch("evalbench.cli.httpx.post")
+    def test_compare_to_baseline_uses_the_baseline_the_server_holds(self, mock_post, mock_get, tmp_path, monkeypatch):
+        """`evalbench baseline` stores the baseline on the suite, server
+        side. `run --compare-to-baseline` read only the YAML, so a
+        baseline set the documented way was never compared against: the
+        report said `regression: null` and the gate never ran. Found on
+        the first walk through the CLI. The YAML still wins when it names
+        one; otherwise the server is asked."""
+        import evalbench.cli as cli
+
+        auth = tmp_path / "auth.json"
+        auth.write_text(json.dumps({"token": "t"}))
+        monkeypatch.setattr(cli, "AUTH_FILE", auth)
+        suite = tmp_path / "s.yaml"
+        suite.write_text("name: S\nmodel: m\nevaluator: exact\ntests:\n  - name: t\n    prompt: p\n    expected: e\n", encoding="utf-8")
+
+        comparison = {"baseline_mean": 0.9, "current_mean": 0.9, "mean_diff": 0.0, "p_value": 1.0, "regression_detected": False, "per_test": []}
+        mock_post.side_effect = [
+            mock_response(201, {"id": "suite123"}),      # import
+            mock_response(201, {"run_id": "run2"}),      # run
+            mock_response(200, comparison),              # /regression
+        ]
+
+        def get(url, *a, **k):
+            if url.endswith("/runs/run2/status"):
+                return mock_response(200, {"status": "completed", "completed_tests": 1, "total_tests": 1})
+            if url.endswith("/runs/run2/summary"):
+                return mock_response(200, {"model": "m", "evaluator": "exact", "total_tests": 1, "passed": 1, "failed": 0,
+                                           "pass_rate": 1.0, "avg_score": 1.0, "avg_latency_ms": 1.0, "total_tokens": 1})
+            if url.endswith("/suites/suite123/baseline"):
+                return mock_response(200, {"suite_id": "suite123", "baseline_run_id": "run1"})
+            raise AssertionError(url)
+
+        mock_get.side_effect = get
+        report = tmp_path / "report.json"
+        r = runner.invoke(app, ["run", str(suite), "--compare-to-baseline", "--report", str(report)])
+        assert r.exit_code == 0, r.output
+        regression_call = mock_post.call_args_list[2]
+        assert regression_call[1]["json"] == {"baseline_run_id": "run1", "current_run_id": "run2"}
+        assert json.loads(report.read_text())["regression"]["regression_detected"] is False
+        assert "No baseline set" not in r.output

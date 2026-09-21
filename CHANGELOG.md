@@ -48,6 +48,22 @@ points at the Workbench — and the Grafana operations view second, for
 the admin only, and only where a Grafana exists
 (`NEXT_PUBLIC_GRAFANA_URL` unset means none: the hosted deployment).
 
+### Fixed — found on one full walk through, as a new user
+
+- **`run --compare-to-baseline` ignored the baseline `evalbench
+  baseline` had set.** The baseline lives on the suite, server side;
+  the run read only the YAML, so the documented pair — promote a run,
+  then gate on it — compared against nothing and the report said
+  `regression: null`. The run now asks the server when the file names
+  none. The flag, then the file, then the suite.
+- **`evalbench baseline` takes the suite's YAML**, the file `run` takes,
+  and finds the suite by name — `run` never printed the id it wanted.
+  An id still works.
+- **`export` writes UTF-8.** Opened with the console's code page, a
+  "—" in a model's answer crashed it on Windows.
+- The benchmark builder's name field and its model picker shared the
+  id `bb-name`; the "Model" label pointed at the wrong one.
+
 ### Fixed — the Grafana section painted the wrong panels
 
 Twenty-five frames, one per panel, each booting the whole Grafana

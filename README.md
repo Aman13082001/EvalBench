@@ -429,8 +429,9 @@ Three ways to answer, side by side in the form:
   `response`), fill it in with the model you cannot point EvalBench at,
   and upload the same file back. Nothing is generated, the checks run on
   what you gave them, and a rubric benchmark asks you who should grade.
-  Latency is reported as *not measured* and a missing row reads as "no
-  answer in the file you supplied", not as a provider failure.
+  Latency shows as "—" with *Answers were supplied, not generated*, and
+  a missing row reads as "no answer in the file you supplied", not as a
+  provider failure.
 
 The design system lives in `web/app/globals.css` and `web/components/ui`.
 

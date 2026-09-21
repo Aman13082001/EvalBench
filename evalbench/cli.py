@@ -656,11 +656,21 @@ def run(
 
     comp = None
     if compare_to_baseline or baseline_run:
+        # The flag, then the YAML, then the suite itself: `evalbench
+        # baseline` stores it on the server, and a run that read only
+        # the file compared against nothing and called that a pass.
         baseline_id = baseline_run or suite.get("baseline_run_id")
         if not baseline_id:
+            b = httpx.get(
+                f"{API_URL}/suites/{suite_id}/baseline", headers=headers, timeout=10.0
+            )
+            if b.status_code == 200:
+                baseline_id = b.json().get("baseline_run_id")
+        if not baseline_id:
             console.print(
-                "[yellow]No baseline set. Add `baseline_run_id` to the "
-                "suite YAML or pass --baseline-run.[/yellow]"
+                "[yellow]No baseline set. `evalbench baseline "
+                f"{suite_path} <run_id>` promotes one, or pass "
+                "--baseline-run.[/yellow]"
             )
         else:
             comp = _check_regression(baseline_id, run_id, headers)
@@ -758,14 +768,48 @@ def pr_comment(
     console.print(f"[bold green]✓[/bold green] Comment {action}: {url}")
 
 
+def _resolve_suite(suite: str, headers: dict) -> str:
+    """A suite id from an id, or from the YAML file that names it."""
+    path = Path(suite)
+    if not path.exists():
+        return suite
+    with open(path, encoding="utf-8") as f:
+        name = (yaml.safe_load(f) or {}).get("name")
+    if not name:
+        console.print(f"[red]{path} has no `name`, so there is no suite to find.[/red]")
+        raise typer.Exit(code=1)
+    r = httpx.get(f"{API_URL}/suites", headers=headers, timeout=10.0)
+    if r.status_code == 401:
+        console.print("[red]Authentication required.[/red]")
+        raise typer.Exit(code=1)
+    r.raise_for_status()
+    match = next((s for s in r.json() if s.get("name") == name), None)
+    if not match:
+        console.print(
+            f"[bold red]✗[/bold red] No suite named [cyan]{name}[/cyan] in your "
+            f"account yet. `evalbench run {path}` creates it."
+        )
+        raise typer.Exit(code=1)
+    console.print(f"[dim]{name} → {match['_id']}[/dim]")
+    return match["_id"]
+
+
 @app.command()
 def baseline(
-    suite_id: str = typer.Argument(..., help="Suite ID"),
+    suite: str = typer.Argument(
+        ..., help="The suite's YAML file (as given to `run`), or its id"
+    ),
     run_id: str = typer.Argument(..., help="Run ID to promote as baseline"),
     api_key: str | None = typer.Option(None, "--api-key"),
 ):
-    """Promote a completed run as a suite's regression baseline."""
+    """Promote a completed run as a suite's regression baseline.
+
+    Takes the same YAML file `run` takes: `run` imports it as
+    create-or-update by name, so the suite it names is the one that ran.
+    An id works too, for scripts that already have one.
+    """
     headers = _get_headers(api_key)
+    suite_id = _resolve_suite(suite, headers)
     r = httpx.post(
         f"{API_URL}/suites/{suite_id}/baseline",
         json={"run_id": run_id},
@@ -1190,7 +1234,9 @@ def export(
         content = data["content"]
 
     if output:
-        with open(output, "w") as f:
+        # UTF-8 always: opened with the console's code page, a "—" in a
+        # model's answer crashed the export on Windows.
+        with open(output, "w", encoding="utf-8") as f:
             f.write(content)
 
         console.print(

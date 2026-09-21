@@ -201,7 +201,10 @@ export default function BuildBenchmark({
         </div>
         <div className="space-y-1">
           <span className="label-xs block">Default model</span>
-          <ModelPicker value={model} onChange={setModel} idPrefix="bb" />
+          {/* "bb-model": the picker makes `${prefix}-name`, and "bb-name" is the
+              benchmark name field above — two elements with one id, and the
+              model label pointed at the wrong one. */}
+          <ModelPicker value={model} onChange={setModel} idPrefix="bb-model" />
         </div>
       </div>
       <div className="space-y-1">

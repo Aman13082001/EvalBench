@@ -18,6 +18,7 @@ from evalbench.answers import judged_tests, suite_needs_judge
 from evalbench.api.admin import router as admin_router
 from evalbench.api.auth import get_password_hash, hash_api_key
 from evalbench.api.auth_routes import router as auth_router
+from evalbench.api.dashboard import router as dashboard_router
 from evalbench.api.deps import (
     get_current_user,
     limiter,
@@ -437,6 +438,7 @@ init_metrics(app)
 app.include_router(auth_router)
 app.include_router(suites_router)
 app.include_router(admin_router)
+app.include_router(dashboard_router)
 
 
 # ─────────────────────────────────────────────

@@ -438,6 +438,13 @@ The design system lives in `web/app/globals.css` and `web/components/ui`.
 
 ## Monitoring
 
+Two dashboards, for two questions. **Your runs** (`/dashboard`, from
+`GET /dashboard`) is drawn by the app for the person signed in: totals,
+runs and pass rate per day, per model, per category — counted exactly
+the way a run report counts them. **The machine** is the Grafana view
+below it, for the admin, where a Grafana exists; the metrics carry a
+model and a suite, never a user, so it is the instance's picture.
+
 Every run updates Prometheus metrics exposed at `GET /metrics`:
 
 | Metric | What it tells you |

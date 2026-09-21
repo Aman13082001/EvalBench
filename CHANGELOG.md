@@ -34,6 +34,20 @@ changed; and judges matter most where answers are best — near the
 ceiling, 48% of what variance remains is the judge. `suites/research-judge.yaml`,
 `scripts/run_study_judge.py generate | score | analyze`.
 
+### Added — your dashboard, drawn by the app
+
+Grafana reads Prometheus, whose metrics carry a model and a suite and
+never a user, so it can only show the instance — everyone's runs, one
+picture. The app knows who is signed in. `GET /dashboard?days=N`
+answers with the caller's own runs, counted the way each run report
+counts them (`evalbench/api/dashboard.py`, `tests/test_dashboard.py`):
+totals, runs and pass rate per day, a row per model, a row per
+category. `/dashboard` now shows that first — stat tiles, two
+one-axis charts, horizontal bars, hover tooltips, an empty state that
+points at the Workbench — and the Grafana operations view second, for
+the admin only, and only where a Grafana exists
+(`NEXT_PUBLIC_GRAFANA_URL` unset means none: the hosted deployment).
+
 ### Security — the next pass
 
 - **A dependency audit in CI**, and what its first run found, fixed.

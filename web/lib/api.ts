@@ -286,6 +286,39 @@ export interface Quota {
 /** Runs left today on EvalBench's own key. null cap = uncapped (admin). */
 export const getQuota = () => authed<Quota>("/suites/quota");
 
+/* Your runs over a window, counted the way a run report counts them.
+   An admin gets the whole instance. See evalbench/api/dashboard.py. */
+export interface DashboardData {
+  days: number;
+  since: string;
+  totals: {
+    runs: number;
+    completed: number;
+    failed: number;
+    scored: number;
+    passed: number;
+    errors: number;
+    cost_usd: number;
+    pass_rate: number | null;
+    avg_latency_ms: number | null;
+  };
+  by_day: { day: string; runs: number; scored: number; passed: number; pass_rate: number | null }[];
+  by_model: {
+    model: string;
+    provider: string;
+    runs: number;
+    scored: number;
+    passed: number;
+    pass_rate: number | null;
+    avg_score: number | null;
+    avg_latency_ms: number | null;
+    cost_usd: number;
+  }[];
+  by_category: { category: string; scored: number; passed: number; pass_rate: number | null }[];
+}
+
+export const myDashboard = (days = 30) => authed<DashboardData>(`/dashboard?days=${days}`);
+
 export interface Benchmark {
   slug: string;
   title: string;

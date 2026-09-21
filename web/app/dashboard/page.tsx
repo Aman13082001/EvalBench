@@ -1,16 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RequireAuth } from "@/components/AuthProvider";
-import GrafanaPanel, { GRAFANA_URL } from "@/components/GrafanaPanel";
+import { RequireAuth, useAuth } from "@/components/AuthProvider";
+import GrafanaPanel, { GRAFANA_URL, HAS_GRAFANA } from "@/components/GrafanaPanel";
+import MyRuns from "@/components/MyRuns";
 import Reveal from "@/components/Reveal";
 import { Rule } from "@/components/ui";
 
-/* The operations view.
+/* Two dashboards, for two questions.
 
-   Everything here is the provisioned Grafana dashboard, embedded panel
-   by panel rather than reimplemented — the same panels the alert rules
-   fire on, so there is one source of truth about what the system did.
+   "What have my runs done?" — §1, drawn by the app from the API, for
+   the person signed in. Grafana cannot answer it: its metrics carry a
+   model and a suite, never a user, so it can only show the instance.
+
+   "Is the machine healthy?" — §2, the provisioned Grafana dashboard,
+   embedded panel by panel rather than reimplemented, the same panels
+   the alert rules fire on. It is the instance's picture, so it is the
+   admin's, and it exists only where Grafana does (the compose stack;
+   the hosted deployment runs one API container and no Prometheus).
 
    Laid out full-bleed because these are instruments: a 224px-tall
    timeseries squeezed into a text column is unreadable, and there is a
@@ -121,6 +128,34 @@ const SECTIONS: {
 ];
 
 function Dashboard() {
+  const { user } = useAuth();
+  const admin = user?.role === "admin";
+
+  return (
+    /* Break out of the page column — instruments need the width. */
+    <div className="-mx-5 px-5 lg:-mx-[calc((100vw-72rem)/2)] lg:px-[calc((100vw-72rem)/2)]">
+      <header className="space-y-1">
+        <p className="label-xs">§ Dashboard</p>
+        <h1 className="font-display text-3xl">
+          {admin ? "Every run, and the machine under them" : "Your runs"}
+        </h1>
+        <p className="max-w-3xl text-sm text-muted">
+          {admin
+            ? "Every run on this instance, counted the way each run report counts it; then the operations view from Grafana, the same panels the alert rules fire on."
+            : "Every run you have made, counted the way each run report counts it — pass rates, what it cost, and how your models compared. Nobody else's runs are here, and yours are on nobody else's page."}
+        </p>
+      </header>
+
+      <div className="mt-8">
+        <MyRuns admin={!!admin} />
+      </div>
+
+      {admin && HAS_GRAFANA && <Ops />}
+    </div>
+  );
+}
+
+function Ops() {
   // 7d by default: evaluation runs are occasional, and an hour of
   // an idle instance is an empty chart that reads as broken.
   const [range, setRange] = useState<string>("7d");
@@ -142,18 +177,15 @@ function Dashboard() {
   const total = SECTIONS.reduce((n, s) => n + s.panels.length, 0);
 
   return (
-    /* Break out of the page column — instruments need the width. */
-    <div className="-mx-5 px-5 lg:-mx-[calc((100vw-72rem)/2)] lg:px-[calc((100vw-72rem)/2)]">
-      <header className="space-y-1">
-        <p className="label-xs">§ Dashboard</p>
-        <h1 className="font-display text-3xl">Operational metrics</h1>
-        <p className="max-w-3xl text-sm text-muted">
-          {total} panels from the provisioned Grafana instance, embedded
-          rather than reimplemented — the same ones the alert rules fire on,
-          so the page and the alerts cannot disagree. Panels load as you
-          reach them.
-        </p>
-      </header>
+    <div className="mt-12">
+      <Rule label="§2 · The machine — operations view" />
+      <p className="mt-3 max-w-3xl text-sm text-muted">
+        {total} panels from the provisioned Grafana instance, embedded
+        rather than reimplemented — the same ones the alert rules fire on,
+        so the page and the alerts cannot disagree. The whole instance,
+        every user; the metrics carry a model and a suite, never a person.
+        Panels load as you reach them.
+      </p>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1">
@@ -228,9 +260,9 @@ function Dashboard() {
       ))}
 
       <p className="mt-10 pb-4 text-xs text-muted">
-        Panels are rendered by Grafana from Prometheus. Nothing on this page
-        is computed by the web app, so what you see here is what alerting
-        sees.
+        Panels are rendered by Grafana from Prometheus. Nothing in this
+        section is computed by the web app, so what you see here is what
+        alerting sees.
       </p>
     </div>
   );

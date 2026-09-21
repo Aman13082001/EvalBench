@@ -3,8 +3,12 @@
 import { useEffect, useState } from "react";
 import Reveal from "@/components/Reveal";
 
-export const GRAFANA_URL =
-  process.env.NEXT_PUBLIC_GRAFANA_URL || "http://localhost:3000";
+/* Unset means there is no Grafana here — the hosted deployment runs one
+   API container and no Prometheus — and the operations section stays
+   off the page. The compose file sets it; `npm run dev` reads it from
+   .env.local. */
+export const GRAFANA_URL = process.env.NEXT_PUBLIC_GRAFANA_URL ?? "";
+export const HAS_GRAFANA = GRAFANA_URL !== "";
 
 // Height of Grafana 10's in-frame panel header, clipped away.
 const GRAFANA_HEADER = 34;

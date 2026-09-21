@@ -61,6 +61,15 @@ the admin only, and only where a Grafana exists
   An id still works.
 - **`export` writes UTF-8.** Opened with the console's code page, a
   "—" in a model's answer crashed it on Windows.
+- **Sign-up could lose the session.** The API key and "Continue to the
+  Workbench" appeared the moment the account existed, a round trip
+  before the automatic sign-in landed; leaving inside that window
+  reached the workbench signed out. On a cold-started free tier the
+  window is seconds. Continue now waits for the session, saying
+  "Signing you in…" until it does.
+- **A rate-limited sign-up said "Registration failed."** slowapi
+  answers `{"error": …}` and the page read only `{"detail": …}`; the
+  reason — five an hour per address — never reached the person.
 - **Rate limits key on the real client.** slowapi's default reads the
   socket address; behind a PaaS proxy every visitor arrives from the
   proxy's, and "5 logins a minute per address" would have been five a

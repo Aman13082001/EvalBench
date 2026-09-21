@@ -17,7 +17,7 @@ export default function LoginDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const { refresh } = useAuth();
+  const { refresh, user } = useAuth();
   const panelRef = useRef<HTMLDivElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
 
@@ -115,14 +115,17 @@ export default function LoginDialog({
               <code className="block break-all border border-line bg-surface-sunk p-2 font-mono text-xs">
                 {apiKey}
               </code>
+              {/* Enabled once the sign-in behind the key has landed; before
+                  that, continuing would reach the workbench signed out. */}
               <button
                 className="btn btn-primary w-full"
+                disabled={!user}
                 onClick={() => {
                   onClose();
                   router.push("/workbench");
                 }}
               >
-                Continue
+                {user ? "Continue" : "Signing you in…"}
               </button>
             </div>
           ) : (

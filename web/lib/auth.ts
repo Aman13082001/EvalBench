@@ -46,7 +46,7 @@ export async function authed<T>(
   if (!res.ok) {
     let detail = res.statusText;
     try {
-      detail = (await res.json()).detail || detail;
+      detail = errorOf(await res.json()) || detail;
     } catch {
       /* keep statusText */
     }
@@ -86,13 +86,25 @@ export async function register(
   if (!res.ok) {
     let detail: unknown = "Registration failed.";
     try {
-      detail = (await res.json()).detail || detail;
+      detail = errorOf(await res.json()) || detail;
     } catch {
       /* keep default */
     }
-    throw new Error(readableDetail(detail, "Registration failed."));
+    throw new Error(typeof detail === "string" && detail ? detail : "Registration failed.");
   }
   return res.json();
+}
+
+/* The API's sentence about what went wrong, wherever it put it: FastAPI
+   answers {"detail": …}, slowapi's 429 answers {"error": …}. Without the
+   second, a rate-limited sign-up read as a bare "Registration failed." */
+export function errorOf(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const b = body as { detail?: unknown; error?: unknown };
+  const d = b.detail ?? b.error;
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) return readableDetail(d, "");
+  return undefined;
 }
 
 /* A validation error arrives as a list of {loc, msg}; the person wants

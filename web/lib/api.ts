@@ -1,4 +1,4 @@
-import { authed, getToken } from "./auth";
+import { authed, errorOf, getToken } from "./auth";
 
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -79,7 +79,7 @@ async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText;
     try {
-      detail = (await res.json()).detail || detail;
+      detail = errorOf(await res.json()) || detail;
     } catch {
       /* keep statusText */
     }
@@ -197,7 +197,7 @@ export async function downloadAnswerSheet(
   if (!res.ok) {
     let detail = res.statusText;
     try {
-      detail = (await res.json()).detail || detail;
+      detail = errorOf(await res.json()) || detail;
     } catch {
       /* keep statusText */
     }

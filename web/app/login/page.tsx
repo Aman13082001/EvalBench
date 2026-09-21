@@ -8,7 +8,7 @@ import { Panel, Rule } from "@/components/ui";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { refresh } = useAuth();
+  const { refresh, user } = useAuth();
 
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [username, setUsername] = useState("");
@@ -106,9 +106,19 @@ export default function LoginPage() {
           <pre className="mt-2 overflow-x-auto border border-line bg-surface-sunk p-2 font-mono text-xs">
             {apiKey}
           </pre>
-          <a href="/workbench" className="btn btn-primary mt-3 inline-block">
-            Continue to the Workbench
-          </a>
+          {/* The key shows the moment the account exists; the sign-in that
+              follows takes a round trip more. Leaving before it lands
+              loses the session and the workbench asks to sign in again —
+              on a cold-started free tier that window is seconds. */}
+          {user ? (
+            <a href="/workbench" className="btn btn-primary mt-3 inline-block">
+              Continue to the Workbench
+            </a>
+          ) : (
+            <span className="btn btn-primary mt-3 inline-block cursor-wait opacity-60" aria-disabled="true">
+              Signing you in…
+            </span>
+          )}
         </Panel>
       )}
 

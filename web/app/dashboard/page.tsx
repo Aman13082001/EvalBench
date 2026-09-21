@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { RequireAuth, useAuth } from "@/components/AuthProvider";
-import GrafanaPanel, { GRAFANA_URL, HAS_GRAFANA } from "@/components/GrafanaPanel";
+import GrafanaDashboard, { GRAFANA_URL, HAS_GRAFANA, SLUG, UID } from "@/components/GrafanaPanel";
 import MyRuns from "@/components/MyRuns";
-import Reveal from "@/components/Reveal";
 import { Rule } from "@/components/ui";
 
 /* Two dashboards, for two questions.
@@ -30,102 +29,6 @@ const RANGES = [
   { id: "7d", label: "7d" },
   { id: "30d", label: "30d" },
 ] as const;
-
-type Panel = {
-  id: number;
-  title: string;
-  note?: string;
-  height?: number;
-  wide?: boolean;
-};
-
-const SECTIONS: {
-  label: string;
-  blurb: string;
-  cols?: string;
-  panels: Panel[];
-}[] = [
-  {
-    label: "Now",
-    cols: "sm:grid-cols-2 xl:grid-cols-4",
-    blurb:
-      "The state of the last run, live from the same gauges the alert rules read.",
-    panels: [
-      // Taller than a stat needs: these panels carry one series per
-      // suite or model, and at 190px a third gauge wrapped and blew out
-      // of its box.
-      { id: 1, title: "Pass rate", note: "Most recent value per suite, over scored tests.", height: 250 },
-      { id: 3, title: "Total runs", note: "Since the API started.", height: 250 },
-      { id: 20, title: "Avg latency", note: "Mean time to an answer, per model.", height: 250 },
-      { id: 40, title: "Est. cost — last run", note: "USD at list price.", height: 250 },
-    ],
-  },
-  {
-    label: "Where the tests landed",
-    blurb:
-      "Every test this instance has run, by capability and outcome. "
-      + "Infrastructure errors are counted apart from model failures — "
-      + "a provider timing out is not the model getting an answer wrong.",
-    panels: [
-      { id: 32, title: "Tests by category and status", note: "Passed, failed and errored per capability.", height: 300, wide: true },
-      { id: 33, title: "Infra errors — last run", note: "Requests that never produced an answer.", height: 220 },
-      { id: 19, title: "Error rate by model", note: "Infrastructure failures over time, not model failures.", height: 220 },
-    ],
-  },
-  {
-    label: "Performance and latency",
-    blurb:
-      "Averages hide the tail. The percentile split and the heatmap are where a slow model actually shows up.",
-    panels: [
-      { id: 5, title: "Latency percentiles", note: "p50 / p95 / p99.", height: 340 },
-      { id: 10, title: "Latency heatmap by model", note: "Distribution, not a mean.", height: 340 },
-      { id: 6, title: "Test execution rate", note: "Passed vs failed vs error.", height: 320 },
-      { id: 11, title: "Suite duration p95", note: "How long a whole run takes.", height: 320 },
-    ],
-  },
-  {
-    label: "Quality and regression",
-    blurb:
-      "The trends a deploy gate reads: score over time, capability by category, and how much of the movement is noise.",
-    panels: [
-      { id: 14, title: "Average score trend", note: "Mean score across runs.", height: 320 },
-      { id: 31, title: "Category pass rate trend", note: "Where a model gained or lost.", height: 320 },
-      { id: 30, title: "Category pass rate — latest", note: "Per capability, last run.", height: 320 },
-      { id: 34, title: "Sample variance / flakiness", note: "Spread between samples of the same test.", height: 320 },
-      { id: 16, title: "Regression p-value", note: "Below 0.05 is a real difference, not noise. Populates once a run is compared to a baseline.", height: 300 },
-      { id: 17, title: "Regression mean difference", note: "Size of the move, in score points. Populates once a run is compared to a baseline.", height: 300 },
-    ],
-  },
-  {
-    label: "Cost and tokens",
-    blurb:
-      "Evaluation is not free. This is what the measurement itself spent.",
-    panels: [
-      { id: 41, title: "Cumulative cost", note: "All runs, since the API started.", height: 300 },
-      { id: 42, title: "Cost per run", note: "Trend by model and suite.", height: 300 },
-      { id: 43, title: "Token throughput", note: "Tokens per second.", height: 300 },
-      { id: 44, title: "Run outcomes", note: "Completed vs failed over time.", height: 300 },
-    ],
-  },
-  {
-    label: "Assertion quality",
-    blurb:
-      "How each kind of check scores — the RAG assertions especially, which are the strictest ones EvalBench ships.",
-    panels: [
-      { id: 45, title: "Mean assertion score by type", note: "Including faithfulness and context recall.", height: 320 },
-      { id: 18, title: "Score distribution", note: "Where scores actually fall, not just their mean.", height: 320 },
-    ],
-  },
-  {
-    label: "Instrumentation",
-    blurb:
-      "The scrape itself: what the API and the worker are reporting.",
-    panels: [
-      { id: 109, title: "Provider request rate", note: "By provider and status, including rate limits.", height: 300 },
-      { id: 112, title: "Samples per test", note: "Requested versus actually scored.", height: 300 },
-    ],
-  },
-];
 
 function Dashboard() {
   const { user } = useAuth();
@@ -174,17 +77,14 @@ function Ops() {
     };
   }, []);
 
-  const total = SECTIONS.reduce((n, s) => n + s.panels.length, 0);
-
   return (
     <div className="mt-12">
       <Rule label="§2 · The machine — operations view" />
       <p className="mt-3 max-w-3xl text-sm text-muted">
-        {total} panels from the provisioned Grafana instance, embedded
-        rather than reimplemented — the same ones the alert rules fire on,
-        so the page and the alerts cannot disagree. The whole instance,
-        every user; the metrics carry a model and a suite, never a person.
-        Panels load as you reach them.
+        The provisioned Grafana dashboard, embedded rather than
+        reimplemented — the same panels the alert rules fire on, so the
+        page and the alerts cannot disagree. The whole instance, every
+        user; the metrics carry a model and a suite, never a person.
       </p>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -203,7 +103,7 @@ function Ops() {
           ))}
         </div>
         <a
-          href={`${GRAFANA_URL}/d/evalbench-production/evalbench-e28094-production-overview?orgId=1&from=now-${range}&to=now`}
+          href={`${GRAFANA_URL}/d/${UID}/${SLUG}?orgId=1&from=now-${range}&to=now`}
           target="_blank"
           rel="noreferrer"
           className="font-mono text-xs text-accent hover:underline"
@@ -231,33 +131,9 @@ function Ops() {
         </div>
       )}
 
-      {SECTIONS.map((section) => (
-        <section key={section.label} className="mt-10 space-y-4">
-          <Rule label={section.label} />
-          <Reveal>
-            {() => (
-              <p className="max-w-3xl text-sm leading-relaxed text-muted">
-                {section.blurb}
-              </p>
-            )}
-          </Reveal>
-
-          <div className={`grid gap-4 ${section.cols ?? "lg:grid-cols-2"}`}>
-            {section.panels.map((p, i) => (
-              <div key={p.id} className={p.wide ? "lg:col-span-2" : ""}>
-                <GrafanaPanel
-                  id={p.id}
-                  title={p.title}
-                  note={p.note}
-                  height={p.height}
-                  range={range}
-                  delay={Math.min(i, 3) * 60}
-                />
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
+      <div className="mt-6">
+        <GrafanaDashboard range={range} />
+      </div>
 
       <p className="mt-10 pb-4 text-xs text-muted">
         Panels are rendered by Grafana from Prometheus. Nothing in this

@@ -48,6 +48,17 @@ points at the Workbench — and the Grafana operations view second, for
 the admin only, and only where a Grafana exists
 (`NEXT_PUBLIC_GRAFANA_URL` unset means none: the hosted deployment).
 
+### Fixed — the Grafana section painted the wrong panels
+
+Twenty-five frames, one per panel, each booting the whole Grafana
+front end in the same tab. Same-origin frames share Grafana's browser
+storage, and under that many simultaneous boots its frontend confused
+itself: "Total runs" painting Grafana's welcome page, a pass-rate
+gauge painting another panel's number. The earlier throttle (three at
+a time) narrowed the window; it did not close it. The dashboard is
+now embedded once, in kiosk mode, sized to its 121 grid rows — one
+boot, nothing to race, the range selector still driving it.
+
 ### Fixed — a run outlives the page
 
 - **Leaving the workbench mid-run lost the run.** It kept going behind

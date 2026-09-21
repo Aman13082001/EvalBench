@@ -21,7 +21,7 @@ jobs:
 
       - name: Install EvalBench
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools
           pip install -e ".[dev]" pip-audit
 
       - name: Lint
@@ -29,8 +29,9 @@ jobs:
 
       - name: Audit Python dependencies
         # Fails on a known vulnerability in anything installed. The
-        # package itself is skipped (it is not on PyPI); pip was upgraded
-        # above so its own advisories do not fail the build.
+        # package itself is skipped (it is not on PyPI); pip and
+        # setuptools were upgraded above because the runner's own copies
+        # carry advisories that are not ours to fix.
         run: pip-audit --progress-spinner off
 
       - name: Check pricing table freshness

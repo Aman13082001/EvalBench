@@ -18,6 +18,9 @@ COPY pyproject.toml ./
 RUN mkdir evalbench \
     && printf '' > evalbench/__init__.py \
     && printf '' > README.md \
+    # The base image ships a pip and setuptools with known advisories;
+    # the audit that runs in CI would flag the image as shipped.
+    && pip install --no-cache-dir --upgrade pip setuptools \
     && pip install --no-cache-dir -e . \
     && rm -rf evalbench
 

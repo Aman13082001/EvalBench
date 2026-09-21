@@ -15,7 +15,8 @@ import {
   startRun,
   SuiteDoc,
 } from "@/lib/api";
-import { RequireAuth } from "@/components/AuthProvider";
+import { RequireAuth, useAuth } from "@/components/AuthProvider";
+import { whenLocal } from "@/lib/time";
 import ComparisonReport, {
   Comparison,
 } from "@/components/ComparisonReport";
@@ -31,6 +32,7 @@ function stateOf(s: string) {
 }
 
 function SuiteDetail({ id }: { id: string }) {
+  const { user } = useAuth();
   const [suite, setSuite] = useState<SuiteDoc | null>(null);
   const [runs, setRuns] = useState<RunDoc[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -162,6 +164,13 @@ function SuiteDetail({ id }: { id: string }) {
             / {suite.name}
           </p>
           <h1 className="font-display text-3xl">{suite.name}</h1>
+          {/* An admin sees every account's benchmarks; without this a
+              second "Capability Showcase" is a mystery, not a person's. */}
+          {user?.role === "admin" && suite.created_by && suite.created_by !== user.username && (
+            <p className="font-mono text-xs text-muted">
+              {suite.created_by}&rsquo;s copy
+            </p>
+          )}
           {suite.description && (
             <p className="max-w-2xl text-sm leading-relaxed text-muted">
               {suite.description}
@@ -268,9 +277,7 @@ function SuiteDetail({ id }: { id: string }) {
                   {r.status === "queued" || r.status === "running"
                     ? `${r.completed_tests ?? 0}/${r.total_tests} answered`
                     : `${r.scored_tests ?? r.completed_tests}/${r.total_tests} scored`}
-                  {r.created_at
-                    ? ` · ${r.created_at.slice(0, 16).replace("T", " ")}`
-                    : ""}
+                  {r.created_at ? ` · ${whenLocal(r.created_at)}` : ""}
                 </span>
                 {!!r.rate_limited_samples && (
                   <span

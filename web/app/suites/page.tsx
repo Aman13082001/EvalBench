@@ -5,11 +5,12 @@ import Link from "next/link";
 import yaml from "js-yaml";
 import { importSuite, listSuites, SuiteDoc } from "@/lib/api";
 import { EXAMPLE_SUITE } from "@/lib/example";
-import { RequireAuth } from "@/components/AuthProvider";
+import { RequireAuth, useAuth } from "@/components/AuthProvider";
 import { Panel, Rule } from "@/components/ui";
 import { JudgeFloorLine, ResolutionLine } from "@/components/BenchmarkLines";
 
 function Suites() {
+  const { user } = useAuth();
   const [suites, setSuites] = useState<SuiteDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -116,7 +117,13 @@ function Suites() {
                 the detail page; here they were noise. */}
             <div className="panel p-4 transition-colors hover:border-primary">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="font-display text-lg">{s.name}</span>
+                <span className="font-display text-lg">
+                  {s.name}
+                  {/* An admin's list is everyone's; say whose. */}
+                  {user?.role === "admin" && s.created_by && s.created_by !== user.username && (
+                    <span className="ml-2 font-mono text-xs text-muted">· {s.created_by}</span>
+                  )}
+                </span>
                 <span className="font-mono text-xs text-muted tnum">
                   {s.test_count ?? s.tests?.length ?? 0} tests
                 </span>

@@ -48,6 +48,16 @@ points at the Workbench — and the Grafana operations view second, for
 the admin only, and only where a Grafana exists
 (`NEXT_PUBLIC_GRAFANA_URL` unset means none: the hosted deployment).
 
+### Fixed — run times were UTC; the admin's list was anonymous
+
+- **Run history showed UTC.** The API writes timestamps without a zone
+  suffix and a browser reads a zone-less ISO string as local time, so a
+  run made at 00:44 IST read "18:00". `whenLocal()` treats them as UTC
+  and shows the viewer's own clock.
+- **An admin sees every account's benchmarks**, and the list never said
+  whose — a second "Capability Showcase" was a mystery. The list and
+  the detail page now name the owner when it is not the admin.
+
 ### Fixed — the workbench opens on your newest run
 
 The workbench remembered the last run started *in that tab*, so a run

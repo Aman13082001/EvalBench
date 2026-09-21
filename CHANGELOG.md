@@ -34,6 +34,28 @@ changed; and judges matter most where answers are best — near the
 ceiling, 48% of what variance remains is the judge. `suites/research-judge.yaml`,
 `scripts/run_study_judge.py generate | score | analyze`.
 
+### Security — the next pass
+
+- **A dependency audit in CI**, and what its first run found, fixed.
+  `python-jose` pulled in a vulnerable `ecdsa`; replaced with `PyJWT`.
+  `js-yaml` — the parser for a YAML a visitor uploads — and `postcss`
+  patched. **Next.js 14.2.15 → 15.5** (React 19): the 14 line carried
+  thirty-two advisories, including two unauthenticated remote-code-
+  execution bugs in the image optimizer that were never backported to
+  it. Every page re-verified by screenshot after the upgrade. CI now
+  also type-checks and builds the web app.
+- **Sign out signs you out.** Every account carries a session version;
+  every token records the version it was minted under; `POST
+  /auth/logout` and `evalbench reset-password` bump it, and every older
+  token is refused on its next request. Nobody is signed out by the
+  deploy: tokens and accounts from before read as version 0.
+- **A request body has a ceiling** (`MAX_BODY_BYTES`, 2 MB): refused on
+  a declared length before a byte is read, or cut off as a chunked body
+  streams past the line.
+- **A password has a floor** of eight characters. The form says so
+  before the request; the API says so after.
+- Grafana's admin password comes from `.env` (`GRAFANA_ADMIN_PASSWORD`).
+
 ### Added — before the key goes public
 
 None of the server's keys can produce a bill — card-less free tiers —

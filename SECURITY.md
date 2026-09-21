@@ -209,7 +209,24 @@ gone from Redis afterwards.
   no response, no log line, no run document and no client bundle
   (`tests/test_configured_providers.py`, `tests/test_admin.py`).
 
-### 9. Input handling
+### 9. Sessions end when you end them
+
+- **Sign out signs you out.** A JWT cannot be recalled, so the account
+  carries a session version (`users.token_version`) and every token
+  records the version it was minted under (`tv`). `POST /auth/logout`
+  bumps the version; every older token is refused on its next request
+  with "This session was signed out". All devices at once, on purpose:
+  the reason to sign out of a strange machine is that the token on it
+  may not be yours any more. The CLI's `reset-password` bumps it too —
+  a reset means the old password, and the sessions it opened, may be in
+  the wrong hands. Tokens and accounts from before read as version 0,
+  so nobody is signed out by the deploy
+  (`tests/test_hardening.py::TestSignOutMeansSignedOut`).
+- API keys are not sessions; a key is revoked by rotating it.
+- Expiry (seven days) is still the backstop for a token nobody signed
+  out.
+
+### 10. Input handling
 
 - Every id is validated as an ObjectId before it reaches a query.
 - Suite YAML is read with `yaml.safe_load`, never `yaml.load`.
@@ -217,8 +234,26 @@ gone from Redis afterwards.
   regardless of what the client checked (`evalbench/answers.py`); a row
   that matches nothing is refused by name.
 - Model output is rendered as text by React, never as HTML.
+- **A request body has a ceiling** (`MAX_BODY_BYTES`, 2 MB). A declared
+  `Content-Length` over it is refused before a byte is read; a chunked
+  body is counted as it streams and cut off at the line. The largest
+  honest upload — the starter suite's answers — is well under a
+  megabyte (`tests/test_hardening.py::TestBodyCeiling`).
+- **A password has a floor**: eight characters at registration. A
+  floor, not a policy.
 
-### 10. Containers
+### 11. Dependencies
+
+- `pip-audit` and `npm audit --audit-level=high` run in CI on every
+  push, and the web app is type-checked and built there too.
+- What the first audit found, and what was done: `python-jose` (pulling
+  a vulnerable `ecdsa`) replaced with `PyJWT`; `js-yaml` — which parses
+  YAML a visitor uploads — and `postcss` patched; **Next.js 14.2.15 →
+  15.5**, because the 14 line carried thirty-two advisories including
+  two unauthenticated remote-code-execution bugs that were never
+  backported to it. Every page re-verified after the upgrade.
+
+### 12. Containers
 
 Both images run as an unprivileged user (`evalbench` uid 1000 in the
 API/worker image, `nextjs` uid 1001 in the web image). Every service
@@ -239,13 +274,9 @@ Listed so nobody has to discover them. Each has its fix.
 | Mongo and Redis have no authentication of their own | on loopback that is the host's business; anyone with a shell on the host has the database | `MONGO_INITDB_ROOT_*` and `requirepass`, with the URLs in `.env` carrying them |
 | the JWT lives in `localStorage` | readable by any script that runs on the page (XSS) | an `httpOnly` cookie. Mitigated today by rendering no user-supplied HTML |
 | the rate limiter is in-process | with N API replicas the limit is N× the number written | slowapi's Redis storage backend |
-| the daily cap is check-then-insert | two simultaneous submissions at 19/20 both pass | count inside the insert (a conditional update) |
-| no request body size cap | a very large `answers` payload costs memory before validation rejects it | a body-size limit in the ASGI server or a length check on the field |
-| Grafana runs with anonymous viewer access and its shipped admin password | needed for the embedded dashboard panels; the password is not | change `GF_SECURITY_ADMIN_PASSWORD` on any deployment; keep anonymous at Viewer |
-| logout is client-side only | a stolen token works until it expires (seven days) | a short-lived token with a refresh, or a revocation list |
-| no password policy at registration | `password: "a"` is accepted | a minimum length; the rest is the user's business |
-| no dependency audit in CI | a known-vulnerable package would not be flagged | `pip-audit` and `npm audit` as a CI step |
-| `EVALBENCH_ALLOW_INSECURE=1` is set in `docker-compose.yml` | it is a development file; a deployment copied from it would boot on placeholder secrets | never carry that line into a production compose file |
+| the daily budget is check-then-insert | two submissions at once, both just under the line, both pass; the overspend is bounded by one run's cost (≤ `MAX_CALLS_PER_RUN`) | a counter document and a conditional `$inc` |
+| Grafana's anonymous viewer access | needed for the embedded dashboard panels; read-only, and the dashboards show no secrets | keep anonymous at Viewer; the admin password now comes from `.env` |
+| `EVALBENCH_ALLOW_INSECURE=1` is set in `docker-compose.yml` | it is a development file; a deployment copied from it would boot on placeholder secrets | never carry that line into a production compose file — the deployment guide's compose will not have it |
 
 ---
 
@@ -262,6 +293,11 @@ acknowledged, fixed, and credited here.
 
 Dated, newest first. When security work lands, add a line.
 
+- **2026-09-21** — The next pass: a dependency audit in CI, and the
+  three things it found fixed (PyJWT for python-jose, js-yaml and
+  postcss patched, Next.js 15 for the 14 line's two RCEs); sign-out
+  that revokes; a request-body ceiling; a password floor; Grafana's
+  password from `.env`.
 - **2026-09-21** — The budget moves from runs to calls, with a per-run
   ceiling, after measuring what the key actually gets (1,000 requests a
   day per model). The settings repr redacts secrets.

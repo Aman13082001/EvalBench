@@ -53,6 +53,15 @@ async def get_current_user(
                 user = _accept(
                     await db.users.find_one({"username": username})
                 )
+                # Signed out since this token was minted? A token from
+                # before versions existed and an account from before
+                # both read as 0, so nobody is signed out by the deploy.
+                if user and payload.get("tv", 0) != user.get("token_version", 0):
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="This session was signed out. Sign in again.",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
                 if user:
                     return user
 

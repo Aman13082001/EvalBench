@@ -370,7 +370,7 @@ jobs:
 
 ## The web app
 
-`web/` is a Next.js 14 app (App Router, TypeScript, Tailwind). It is the
+`web/` is a Next.js 15 app (App Router, TypeScript, Tailwind). It is the
 front door for people who will never install the CLI, and the day-to-day
 console for people who have.
 

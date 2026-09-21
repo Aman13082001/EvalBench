@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
 from evalbench.api.auth import (
@@ -26,7 +26,9 @@ router = APIRouter(
 
 class UserCreate(BaseModel):
     username: str
-    password: str
+    # A floor, not a policy: "a" was accepted. Eight is what every
+    # current guideline agrees on; the rest is the user's business.
+    password: str = Field(min_length=8)
 
 
 class Token(BaseModel):
@@ -152,14 +154,32 @@ async def login(
         },
     )
 
+    # The token records the account's session version. Sign-out bumps
+    # the version; every token minted before it is refused from then on.
     access_token = create_access_token(
-        data={"sub": user["username"]}
+        data={"sub": user["username"], "tv": user.get("token_version", 0)}
     )
 
     return {
         "access_token": access_token,
         "token_type": "bearer",
     }
+
+
+@router.post("/logout", status_code=204)
+async def logout(user=Depends(get_current_user)):
+    """End every session for this account.
+
+    A JWT cannot be recalled, so the account moves on: its session
+    version goes up by one and every token minted under the old number
+    fails its next request. All devices at once, deliberately — the
+    reason to sign out from a strange machine is that the token on it
+    might not be yours any more. API keys are not sessions; rotate one
+    to revoke it.
+    """
+    await db.users.update_one(
+        {"username": user["username"]}, {"$inc": {"token_version": 1}}
+    )
 
 
 @router.post(

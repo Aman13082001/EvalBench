@@ -173,7 +173,9 @@ services:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: evalbench
+      # From .env. The shipped default is for a laptop; a deployment
+      # sets GRAFANA_ADMIN_PASSWORD or hands out its dashboards' admin.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-evalbench}
       GF_USERS_ALLOW_SIGN_UP: "false"
       # Let the web app embed panels at /dashboard. Anonymous viewing is
       # scoped to the Viewer role and is for local dev — put Grafana

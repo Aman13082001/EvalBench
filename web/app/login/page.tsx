@@ -79,7 +79,11 @@ export default function LoginPage() {
               }
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={mode === "signup" ? 8 : undefined}
             />
+            {mode === "signup" && (
+              <p className="font-mono text-[11px] text-muted">at least 8 characters</p>
+            )}
           </div>
 
           {error && <p className="text-sm text-error">{error}</p>}

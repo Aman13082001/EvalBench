@@ -1,6 +1,7 @@
 import asyncio
 import csv
 import io
+import json
 import logging
 import os
 from contextlib import asynccontextmanager, suppress
@@ -334,6 +335,77 @@ app = FastAPI(
 # ─────────────────────────────────────────────
 # Day 1: Configurable CORS
 # ─────────────────────────────────────────────
+
+class BodyLimitMiddleware:
+    """Refuse a request body over ``settings.max_body_bytes``.
+
+    Two checks, because a client chooses which one applies. A declared
+    Content-Length over the limit is refused before a byte is read. A
+    chunked body has no length to declare, so it is counted as it
+    streams and cut off the moment it passes the line — the handler's
+    ``await request.body()`` then raises, and the handler below turns
+    that into a 413. Pure ASGI: no buffering, nothing to add to the hot
+    path for the normal case.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        limit = settings.max_body_bytes
+        declared = next(
+            (v for k, v in scope.get("headers", []) if k == b"content-length"),
+            None,
+        )
+        if declared and declared.isdigit() and int(declared) > limit:
+            return await _too_large(send, limit)
+
+        seen = 0
+
+        async def counted():
+            nonlocal seen
+            message = await receive()
+            if message["type"] == "http.request":
+                seen += len(message.get("body", b""))
+                if seen > limit:
+                    raise BodyTooLarge(limit)
+            return message
+
+        await self.app(scope, counted, send)
+
+
+async def _too_large(send, limit: int):
+    body = _too_large_body(limit)
+    await send({
+        "type": "http.response.start",
+        "status": 413,
+        "headers": [(b"content-type", b"application/json")],
+    })
+    await send({"type": "http.response.body", "body": body})
+
+
+def _too_large_detail(limit: int) -> str:
+    shown = f"{limit // 1024} KB" if limit < 1024 * 1024 else f"{limit // (1024 * 1024)} MB"
+    return f"Request body too large; the limit is {shown}."
+
+
+def _too_large_body(limit: int) -> bytes:
+    return json.dumps({"detail": _too_large_detail(limit)}).encode()
+
+
+class BodyTooLarge(HTTPException):
+    """An HTTPException, not a plain one: FastAPI turns any other error
+    raised while it reads the body into a generic 400 "error parsing
+    the body". An HTTPException it re-raises untouched."""
+
+    def __init__(self, limit: int):
+        super().__init__(status_code=413, detail=_too_large_detail(limit))
+
+
+
+app.add_middleware(BodyLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

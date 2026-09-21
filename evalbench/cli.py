@@ -251,7 +251,20 @@ def login(
 
 @app.command()
 def logout():
-    """Clear stored credentials."""
+    """Sign out: end this account's sessions on the server, then forget
+    the stored credentials. Works offline too — the local copy goes
+    either way, and the server refuses the token the next time it sees
+    it after any later sign-out."""
+    auth = _load_auth()
+    if auth.get("token"):
+        try:
+            httpx.post(
+                f"{API_URL}/auth/logout",
+                headers={"Authorization": f"Bearer {auth['token']}"},
+                timeout=10.0,
+            )
+        except httpx.HTTPError:
+            console.print("[dim]Could not reach the API; cleared locally.[/dim]")
     if AUTH_FILE.exists():
         AUTH_FILE.unlink()
 
@@ -1242,11 +1255,16 @@ def reset_password(
                 return None, others
             await db.users.update_one(
                 {"username": username},
-                {"$set": {
-                    "hashed_password": get_password_hash(password),
-                    # A locked-out account is often also a disabled one.
-                    "active": True,
-                }},
+                {
+                    "$set": {
+                        "hashed_password": get_password_hash(password),
+                        # A locked-out account is often also a disabled one.
+                        "active": True,
+                    },
+                    # A reset means the old password may be in the wrong
+                    # hands, and so may the sessions opened with it.
+                    "$inc": {"token_version": 1},
+                },
             )
             return user.get("role", "user"), []
         finally:

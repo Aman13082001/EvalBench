@@ -156,7 +156,11 @@ export default function LoginDialog({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    minLength={mode === "signup" ? 8 : undefined}
                   />
+                  {mode === "signup" && (
+                    <p className="font-mono text-[11px] text-muted">at least 8 characters</p>
+                  )}
                 </div>
 
                 {error && (

@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     # Per run: anything bigger wants the caller's own key — which is the
     # right answer for a research-sized run anyway.
     max_calls_per_run: int = 100
+    # The most a request body may be. The largest honest upload — the
+    # starter suite's answers at a few KB each — is well under a
+    # megabyte; anything bigger is a mistake or a memory attack, and it
+    # is refused before it is read.
+    max_body_bytes: int = 2 * 1024 * 1024
     # Open by default so a fresh install has a way in. Closed on a public
     # deployment: the admin makes the accounts, and the server's key is
     # not on offer to whoever finds the URL.

@@ -84,21 +84,50 @@ export async function register(
     body: JSON.stringify({ username, password }),
   });
   if (!res.ok) {
-    let detail = "Registration failed.";
+    let detail: unknown = "Registration failed.";
     try {
       detail = (await res.json()).detail || detail;
     } catch {
       /* keep default */
     }
-    throw new Error(detail);
+    throw new Error(readableDetail(detail, "Registration failed."));
   }
   return res.json();
+}
+
+/* A validation error arrives as a list of {loc, msg}; the person wants
+   the sentence, not "Unprocessable Entity". */
+function readableDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => (d && typeof d === "object" && "msg" in d ? String((d as { msg: unknown }).msg) : ""))
+      .filter(Boolean)
+      .map((m) => m.replace(/^Value error, |^String should /, (s) => (s.startsWith("String") ? "Password should " : "")));
+    if (msgs.length) return msgs.join(" · ");
+  }
+  return fallback;
 }
 
 export function me(): Promise<Me> {
   return authed<Me>("/auth/me");
 }
 
-export function logout() {
+/* Sign out means signed out: the server bumps the account's session
+   version, so this token — and any other minted before now — is refused
+   from here on. The local copy goes regardless of whether the server
+   could be reached. */
+export async function logout(): Promise<void> {
+  const token = getToken();
   setToken(null);
+  if (!token) return;
+  try {
+    await fetch(`${API_URL}/auth/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    /* offline: the local token is gone, and the server's version will
+       catch the token the next time it is seen */
+  }
 }

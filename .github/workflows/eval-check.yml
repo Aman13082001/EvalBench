@@ -20,13 +20,49 @@ jobs:
           cache: pip
 
       - name: Install EvalBench
-        run: pip install -e ".[dev]"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" pip-audit
 
       - name: Lint
         run: ruff check .
+
+      - name: Audit Python dependencies
+        # Fails on a known vulnerability in anything installed. The
+        # package itself is skipped (it is not on PyPI); pip was upgraded
+        # above so its own advisories do not fail the build.
+        run: pip-audit --progress-spinner off
 
       - name: Check pricing table freshness
         run: python scripts/check_pricing.py
 
       - name: Run test suite
         run: pytest -q
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+
+      - name: Typecheck
+        run: npx tsc --noEmit -p .
+
+      - name: Build
+        run: npm run build

@@ -4,7 +4,7 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 
 from evalbench.config import settings
@@ -68,7 +68,7 @@ def decode_token(
         )
         return payload
 
-    except JWTError:
+    except jwt.PyJWTError:
         return None
 
 

@@ -161,7 +161,10 @@ gone from Redis afterwards.
 ### 7. Abuse limits
 
 - Per-endpoint rate limits via slowapi (`10/minute` on run submission,
-  `20/minute` on adoption).
+  `20/minute` on adoption, `5/minute` on login, `5/hour` on
+  registration), keyed on `client_ip()` — the socket, or
+  `X-Forwarded-For` when `TRUST_PROXY` says a proxy is in front — so a
+  deployment behind a proxy limits each visitor, not the proxy.
 - Per-provider concurrency ceilings sized to free tiers, and a shared
   backoff on 429 so four workers do not race a shut door
   (`evalbench/core/providers/openai_compat.py`, `tests/test_rate_limits.py`).

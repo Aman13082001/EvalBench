@@ -3,14 +3,27 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyHeader, HTTPBearer
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from evalbench.api.auth import decode_token, hash_api_key
 from evalbench.config import settings
 from evalbench.db.mongo import db
 
 # ── Rate limiter (in-memory; swap to Redis for multi-instance) ──
-limiter = Limiter(key_func=get_remote_address)
+
+
+def _limit_key(request) -> str:
+    """The address a rate limit is counted against.
+
+    slowapi's default reads the socket. Behind a PaaS proxy every
+    visitor arrives from the proxy's address, and "5 logins a minute
+    per address" becomes five a minute for the whole site. client_ip()
+    reads X-Forwarded-For when TRUST_PROXY says there is a proxy — the
+    same rule bans use — and the socket otherwise.
+    """
+    return client_ip(request)
+
+
+limiter = Limiter(key_func=_limit_key)
 
 # ── Auth schemes ──
 security = HTTPBearer(auto_error=False)

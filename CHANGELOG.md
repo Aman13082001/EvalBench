@@ -61,6 +61,11 @@ the admin only, and only where a Grafana exists
   An id still works.
 - **`export` writes UTF-8.** Opened with the console's code page, a
   "—" in a model's answer crashed it on Windows.
+- **Rate limits key on the real client.** slowapi's default reads the
+  socket address; behind a PaaS proxy every visitor arrives from the
+  proxy's, and "5 logins a minute per address" would have been five a
+  minute for the whole site. The limiter now keys on `client_ip()`,
+  which honours `TRUST_PROXY` the same way bans do.
 - The benchmark builder's name field and its model picker shared the
   id `bb-name`; the "Model" label pointed at the wrong one.
 

@@ -461,3 +461,21 @@ class TestSettingsNeverPrintAKey:
         from evalbench.config import Settings
 
         assert "github_token=''" in repr(Settings(github_token=""))
+
+
+class TestRateLimitsKeyOnTheRealClient:
+    def test_the_limiter_uses_the_same_address_rule_as_bans(self):
+        """Behind a PaaS proxy every visitor arrives from the proxy's
+        address. Keyed on the socket, "5 logins a minute per address"
+        becomes five a minute for the whole site. The limiter now keys
+        on client_ip(), which reads X-Forwarded-For only when
+        TRUST_PROXY says there is a proxy — the same rule bans use."""
+        from evalbench.api.deps import limiter
+
+        req = MagicMock()
+        req.client.host = "10.0.0.2"
+        req.headers = {"x-forwarded-for": "198.51.100.7, 10.0.0.1"}
+        with patch.object(routes.settings, "trust_proxy", True):
+            assert limiter._key_func(req) == "198.51.100.7"
+        with patch.object(routes.settings, "trust_proxy", False):
+            assert limiter._key_func(req) == "10.0.0.2"

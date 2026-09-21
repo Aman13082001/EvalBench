@@ -48,6 +48,21 @@ points at the Workbench — and the Grafana operations view second, for
 the admin only, and only where a Grafana exists
 (`NEXT_PUBLIC_GRAFANA_URL` unset means none: the hosted deployment).
 
+### Fixed — a run outlives the page
+
+- **Leaving the workbench mid-run lost the run.** It kept going behind
+  a blank form. The workbench now remembers its run in the tab
+  (sessionStorage) and, on the next visit, picks the polling back up
+  where it left off — through to the finished report. Same for a
+  comparison: both sides are remembered, and the report opens when
+  both land. A run the API no longer serves is forgotten quietly.
+- **A benchmark's run history showed "0/19 scored" for the whole
+  run.** The page only polled a run it had started itself; a run from
+  the workbench or the CLI sat as a stale snapshot. While any run in
+  the list is in flight the list reloads every few seconds, and the
+  row reads "17/19 answered" until it is done and "19/19 scored"
+  after.
+
 ### Fixed — the image and the venv disagreed about what was installed
 
 Swapping `python-jose` for `PyJWT` dropped `cryptography` from the

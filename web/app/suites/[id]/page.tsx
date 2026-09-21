@@ -58,6 +58,17 @@ function SuiteDetail({ id }: { id: string }) {
     load();
   }, [load]);
 
+  /* A run started elsewhere — the workbench, the CLI — is in this list
+     too. While any run here is in flight, reload the list every few
+     seconds so its row moves; "0/19 scored" for the whole run was this
+     page's snapshot, not the run. */
+  const inFlight = runs.some((r) => r.status === "queued" || r.status === "running");
+  useEffect(() => {
+    if (!inFlight) return;
+    const iv = setInterval(load, 3000);
+    return () => clearInterval(iv);
+  }, [inFlight, load]);
+
   /* Poll while a run we started is in flight. */
   useEffect(() => {
     if (!active) return;
@@ -254,7 +265,9 @@ function SuiteDetail({ id }: { id: string }) {
                   )}
                 </span>
                 <span className="font-mono text-[11px] text-muted tnum">
-                  {r.scored_tests ?? r.completed_tests}/{r.total_tests} scored
+                  {r.status === "queued" || r.status === "running"
+                    ? `${r.completed_tests ?? 0}/${r.total_tests} answered`
+                    : `${r.scored_tests ?? r.completed_tests}/${r.total_tests} scored`}
                   {r.created_at
                     ? ` · ${r.created_at.slice(0, 16).replace("T", " ")}`
                     : ""}

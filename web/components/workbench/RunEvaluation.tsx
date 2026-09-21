@@ -56,7 +56,7 @@ export default function RunEvaluation({
   const [suiteName, setSuiteName] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
 
-  const { state, run, reset } = useRun();
+  const { state, run, reset, meta } = useRun("eval");
 
   /* Follow the benchmark's own model until the user picks one. */
   useEffect(() => {
@@ -146,7 +146,8 @@ export default function RunEvaluation({
               base_url: g.base_url,
             };
           })()
-        : toRunOptions(model, keyMode.own ? keyMode.key : undefined)
+        : toRunOptions(model, keyMode.own ? keyMode.key : undefined),
+      { suiteName: resolved.name, model: model.model, provider: model.provider }
     );
     refreshQuota();
     if (bench.kind !== "mine") benchmarks.reload();
@@ -280,7 +281,7 @@ export default function RunEvaluation({
           <Rule label="§2 · Result" />
           <ResultHeader
             model={state.summary.model}
-            suite={suiteName || bench?.label || ""}
+            suite={suiteName || meta.suiteName || bench?.label || ""}
             summary={state.summary}
             runId={state.runId}
           />

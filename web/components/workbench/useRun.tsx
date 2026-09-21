@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getRunStatus,
   getRunSummary,
@@ -13,7 +13,16 @@ import {
 /* Start a run against the existing job endpoint and poll the existing
    status endpoint until it settles. One implementation, used by the
    single-model evaluation and by each side of a model comparison, so
-   the two cannot drift. */
+   the two cannot drift.
+
+   A run outlives the page. Someone starts a nineteen-test benchmark,
+   goes to look at the Benchmarks page, comes back — and the form was
+   blank, the run still going somewhere behind it. So a hook with a
+   `slot` remembers its run in the tab (sessionStorage: this tab, this
+   sign-in, gone when the tab closes) and on the next mount picks the
+   polling back up where it left off, through to the finished report.
+   A run the API no longer serves — another account's, a cleared
+   database — is forgotten quietly rather than shown as an error. */
 
 export type RunState =
   | { phase: "idle" }
@@ -22,34 +31,60 @@ export type RunState =
   | { phase: "done"; runId: string; summary: RunSummary }
   | { phase: "failed"; runId?: string; error: string };
 
-const POLL_MS = 1500;
+/* What the page needs to show a resumed run that its form no longer
+   knows about: the benchmark's name, the model. */
+export type RunMeta = { suiteName?: string; model?: string; provider?: string };
 
-export function useRun() {
+const POLL_MS = 1500;
+const STORE = "eb-run:";
+
+function recall(slot: string): { runId: string; meta: RunMeta } | null {
+  try {
+    const raw = sessionStorage.getItem(STORE + slot);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function remember(slot: string | undefined, runId: string, meta: RunMeta) {
+  if (!slot) return;
+  try {
+    sessionStorage.setItem(STORE + slot, JSON.stringify({ runId, meta }));
+  } catch {
+    /* private mode: the run simply is not resumable */
+  }
+}
+
+function forget(slot: string | undefined) {
+  if (!slot) return;
+  try {
+    sessionStorage.removeItem(STORE + slot);
+  } catch {
+    /* nothing to forget */
+  }
+}
+
+export function useRun(slot?: string) {
   const [state, setState] = useState<RunState>({ phase: "idle" });
+  const [meta, setMeta] = useState<RunMeta>({});
   const alive = useRef(true);
 
-  const run = useCallback(
-    async (suiteId: string, opts: RunOptions): Promise<RunSummary | null> => {
-      alive.current = true;
-      setState({ phase: "starting" });
-      let runId: string;
-      try {
-        const r = await startRun(suiteId, opts);
-        runId = r.run_id;
-      } catch (e) {
-        setState({
-          phase: "failed",
-          error: e instanceof Error ? e.message : String(e),
-        });
-        return null;
-      }
-
-      // poll the existing status endpoint until terminal
+  /* Poll until terminal. `resumed` runs forget a run the API refuses
+     instead of reporting it: the form has nothing to say about a run it
+     did not start in this life. */
+  const poll = useCallback(
+    async (runId: string, resumed = false): Promise<RunSummary | null> => {
       while (alive.current) {
         let s: RunStatus;
         try {
           s = await getRunStatus(runId);
         } catch (e) {
+          if (resumed) {
+            forget(slot);
+            setState({ phase: "idle" });
+            return null;
+          }
           setState({
             phase: "failed",
             runId,
@@ -84,15 +119,64 @@ export function useRun() {
       }
       return null;
     },
+    [slot]
+  );
+
+  const run = useCallback(
+    async (suiteId: string, opts: RunOptions, m: RunMeta = {}): Promise<RunSummary | null> => {
+      alive.current = true;
+      setMeta(m);
+      setState({ phase: "starting" });
+      let runId: string;
+      try {
+        const r = await startRun(suiteId, opts);
+        runId = r.run_id;
+      } catch (e) {
+        setState({
+          phase: "failed",
+          error: e instanceof Error ? e.message : String(e),
+        });
+        return null;
+      }
+      remember(slot, runId, m);
+      return poll(runId);
+    },
+    [slot, poll]
+  );
+
+  /* Pick up a run this tab left in flight, or the report it reached. */
+  useEffect(() => {
+    if (!slot) return;
+    const saved = recall(slot);
+    if (!saved) return;
+    alive.current = true;
+    setMeta(saved.meta || {});
+    setState({
+      phase: "running",
+      runId: saved.runId,
+      status: { run_id: saved.runId, status: "queued", progress: 0, completed_tests: 0, total_tests: 0, error: null },
+    });
+    poll(saved.runId, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slot]);
+
+  /* Leaving the page stops this poll; the stored id lets the next mount
+     start its own. */
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
     []
   );
 
   const reset = useCallback(() => {
     alive.current = false;
+    forget(slot);
     setState({ phase: "idle" });
-  }, []);
+    setMeta({});
+  }, [slot]);
 
-  return { state, run, reset };
+  return { state, run, reset, meta };
 }
 
 /** One line of progress for a run in flight. */

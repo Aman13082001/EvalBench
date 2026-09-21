@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BenchmarkChoice,
@@ -42,8 +42,8 @@ export default function CompareModels({
   const [keyMode, setKeyMode] = useState<KeyMode>({ own: false, key: "" });
   const [err, setErr] = useState<string | null>(null);
 
-  const runA = useRun();
-  const runB = useRun();
+  const runA = useRun("cmp-a");
+  const runB = useRun("cmp-b");
   const busy =
     ["starting", "running"].includes(runA.state.phase) ||
     ["starting", "running"].includes(runB.state.phase);
@@ -82,16 +82,26 @@ export default function CompareModels({
     }
     const key = keyMode.own ? keyMode.key : undefined;
     // both in parallel — the worker queue handles the rest
-    const [sa, sb] = await Promise.all([
-      runA.run(suite.id, toRunOptions(a, key)),
-      runB.run(suite.id, toRunOptions(b, key)),
+    await Promise.all([
+      runA.run(suite.id, toRunOptions(a, key), { suiteName: suite.name, model: a.model, provider: a.provider }),
+      runB.run(suite.id, toRunOptions(b, key), { suiteName: suite.name, model: b.model, provider: b.provider }),
     ]);
     refreshQuota();
     if (bench.kind !== "mine") benchmarks.reload();
-    if (sa && sb) {
-      router.push(`/compare?a=${sa.run_id}&b=${sb.run_id}`);
-    }
   }
+
+  /* Both landed — whether this mount started them or resumed them after
+     a trip to another page — so open the comparison. Forgotten first:
+     coming back to the workbench must not open it again. */
+  useEffect(() => {
+    if (runA.state.phase === "done" && runB.state.phase === "done") {
+      const a = runA.state.runId, b = runB.state.runId;
+      runA.reset();
+      runB.reset();
+      router.push(`/compare?a=${a}&b=${b}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runA.state.phase, runB.state.phase]);
 
   return (
     <div className="panel space-y-4 p-4">

@@ -48,6 +48,16 @@ points at the Workbench — and the Grafana operations view second, for
 the admin only, and only where a Grafana exists
 (`NEXT_PUBLIC_GRAFANA_URL` unset means none: the hosted deployment).
 
+### Fixed — the workbench opens on your newest run
+
+The workbench remembered the last run started *in that tab*, so a run
+started from the benchmark page, the CLI or another tab lost to an
+older one the tab held. It now asks the server for the newest run,
+wherever it was started, and opens on it — live if it is still going,
+its report if it is done. The tab's memory only decides when the
+server cannot say. A resumed poll goes quiet the moment a fresh run
+starts, so two runs never write over each other.
+
 ### Fixed — found on one full walk through, as a new user
 
 - **`run --compare-to-baseline` ignored the baseline `evalbench

@@ -56,7 +56,7 @@ export default function RunEvaluation({
   const [suiteName, setSuiteName] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
 
-  const { state, run, reset, meta } = useRun("eval");
+  const { state, run, reset, meta } = useRun("eval", { latest: true });
 
   /* Follow the benchmark's own model until the user picks one. */
   useEffect(() => {

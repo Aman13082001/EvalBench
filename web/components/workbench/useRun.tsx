@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getRunStatus,
   getRunSummary,
+  getSuite,
+  listRecentRuns,
   RunOptions,
   RunStatus,
   RunSummary,
@@ -22,7 +24,13 @@ import {
    sign-in, gone when the tab closes) and on the next mount picks the
    polling back up where it left off, through to the finished report.
    A run the API no longer serves — another account's, a cleared
-   database — is forgotten quietly rather than shown as an error. */
+   database — is forgotten quietly rather than shown as an error.
+
+   With `latest`, the server is asked first: the person's newest run,
+   wherever it was started — this tab, the benchmark page, the CLI —
+   is what the form opens on, live if it is still going. The tab's
+   memory only decides when the server cannot say. A run started from
+   the benchmark page used to lose to an older one this tab remembered. */
 
 export type RunState =
   | { phase: "idle" }
@@ -65,21 +73,28 @@ function forget(slot: string | undefined) {
   }
 }
 
-export function useRun(slot?: string) {
+export function useRun(slot?: string, opts: { latest?: boolean } = {}) {
   const [state, setState] = useState<RunState>({ phase: "idle" });
   const [meta, setMeta] = useState<RunMeta>({});
   const alive = useRef(true);
+  /* Only the newest poll may speak. A resumed poll still in flight when
+     the person starts a fresh run would otherwise keep writing the old
+     run's progress over the new one's. */
+  const gen = useRef(0);
 
   /* Poll until terminal. `resumed` runs forget a run the API refuses
      instead of reporting it: the form has nothing to say about a run it
      did not start in this life. */
   const poll = useCallback(
     async (runId: string, resumed = false): Promise<RunSummary | null> => {
-      while (alive.current) {
+      const mine = ++gen.current;
+      const current = () => alive.current && gen.current === mine;
+      while (current()) {
         let s: RunStatus;
         try {
           s = await getRunStatus(runId);
         } catch (e) {
+          if (!current()) return null;
           if (resumed) {
             forget(slot);
             setState({ phase: "idle" });
@@ -92,12 +107,15 @@ export function useRun(slot?: string) {
           });
           return null;
         }
+        if (!current()) return null;
         if (s.status === "completed") {
           try {
             const summary = await getRunSummary(runId);
+            if (!current()) return null;
             setState({ phase: "done", runId, summary });
             return summary;
           } catch (e) {
+            if (!current()) return null;
             setState({
               phase: "failed",
               runId,
@@ -144,19 +162,51 @@ export function useRun(slot?: string) {
     [slot, poll]
   );
 
-  /* Pick up a run this tab left in flight, or the report it reached. */
+  /* Pick up the newest run — the server's, or failing that this tab's. */
   useEffect(() => {
     if (!slot) return;
-    const saved = recall(slot);
-    if (!saved) return;
-    alive.current = true;
-    setMeta(saved.meta || {});
-    setState({
-      phase: "running",
-      runId: saved.runId,
-      status: { run_id: saved.runId, status: "queued", progress: 0, completed_tests: 0, total_tests: 0, error: null },
-    });
-    poll(saved.runId, true);
+    let cancelled = false;
+    const resume = (runId: string, m: RunMeta) => {
+      alive.current = true;
+      setMeta(m);
+      setState({
+        phase: "running",
+        runId,
+        status: { run_id: runId, status: "queued", progress: 0, completed_tests: 0, total_tests: 0, error: null },
+      });
+      poll(runId, true);
+    };
+    const fromTab = () => {
+      const saved = recall(slot);
+      if (saved) resume(saved.runId, saved.meta || {});
+    };
+    if (!opts.latest) {
+      fromTab();
+      return;
+    }
+    (async () => {
+      try {
+        const [newest] = await listRecentRuns(1);
+        if (cancelled) return;
+        // An old failure is not something to open on; the tab may still
+        // hold something worth resuming.
+        if (!newest || newest.status === "failed") return fromTab();
+        let suiteName: string | undefined;
+        try {
+          suiteName = (await getSuite(newest.suite_id)).name;
+        } catch {
+          /* the run still shows; the header falls back to the model */
+        }
+        if (cancelled) return;
+        remember(slot, newest._id, { suiteName, model: newest.model, provider: newest.provider });
+        resume(newest._id, { suiteName, model: newest.model, provider: newest.provider });
+      } catch {
+        if (!cancelled) fromTab();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slot]);
 
@@ -170,7 +220,7 @@ export function useRun(slot?: string) {
   );
 
   const reset = useCallback(() => {
-    alive.current = false;
+    gen.current += 1; // any poll in flight goes quiet
     forget(slot);
     setState({ phase: "idle" });
     setMeta({});

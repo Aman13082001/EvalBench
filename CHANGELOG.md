@@ -48,6 +48,20 @@ points at the Workbench — and the Grafana operations view second, for
 the admin only, and only where a Grafana exists
 (`NEXT_PUBLIC_GRAFANA_URL` unset means none: the hosted deployment).
 
+### Fixed — the image and the venv disagreed about what was installed
+
+Swapping `python-jose` for `PyJWT` dropped `cryptography` from the
+Docker image — it had only ever arrived as jose's extra — and
+`runkeys.py` imports it, so every run on the rebuilt stack 500ed while
+the tests, on a venv that still had it, stayed green. Found by
+clicking Run. Every package the code imports directly is now declared
+directly (`cryptography`, `pymongo`, `redis`, `prometheus-client`,
+`anyio`, `httpcore`), and a test walks every import in `evalbench/`
+against `pyproject.toml` so the two cannot drift again. Also: an
+unhandled exception now answers with a sentence and CORS headers, so
+the browser shows "Internal server error — the API log has the
+traceback" instead of "Failed to fetch".
+
 ### Security — the next pass
 
 - **A dependency audit in CI**, and what its first run found, fixed.

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pymongo.errors import DuplicateKeyError, OperationFailure
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -407,6 +408,32 @@ class BodyTooLarge(HTTPException):
 
 
 app.add_middleware(BodyLimitMiddleware)
+
+
+async def _unhandled(request: Request, exc: Exception):
+    """A crash is still an answer.
+
+    Starlette answers an unhandled exception from outside the CORS
+    layer, so the 500 reaches the browser without CORS headers and the
+    page can only say "Failed to fetch" — the person then has nothing to
+    report. This names it, and carries the CORS header for an allowed
+    origin. The traceback stays in the log, where it belongs.
+    """
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    headers = {}
+    origin = request.headers.get("origin")
+    allowed = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    if origin and origin in allowed:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Vary"] = "Origin"
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error — the API log has the traceback."},
+        headers=headers,
+    )
+
+
+app.add_exception_handler(Exception, _unhandled)
 
 app.add_middleware(
     CORSMiddleware,

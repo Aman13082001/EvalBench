@@ -31,11 +31,21 @@ dependencies = [
     "rich>=13.0.0",
     "prometheus-fastapi-instrumentator>=7.0.0",
     "PyJWT>=2.10.0",
+    # runkeys.py: a caller's provider key is Fernet-encrypted while it
+    # waits in Redis. Was a side effect of python-jose[cryptography].
+    "cryptography>=42.0",
     "passlib[bcrypt]>=1.7.4",
     "bcrypt<5.0",
     "slowapi>=0.1.9",
     "python-multipart>=0.0.9",
     "rq>=1.16.0",
+    # Imported directly, so declared directly — not left to arrive as
+    # someone else's dependency. tests/test_hardening.py checks this.
+    "pymongo>=4.7",             # bson, DuplicateKeyError (motor brings it, we use it)
+    "redis>=5.0",               # jobs_rq.py, runkeys.py (rq brings it, we use it)
+    "prometheus-client>=0.20",  # metrics.py (the instrumentator brings it)
+    "anyio>=4.0",               # core/endpoint.py: the pinned network backend
+    "httpcore>=1.0",            # core/endpoint.py: the guarded transport
 ]
 
 [project.optional-dependencies]

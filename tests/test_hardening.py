@@ -177,3 +177,76 @@ class TestSignOutMeansSignedOut:
 
 def test_the_register_model_documents_the_floor():
     assert auth_routes.UserCreate.model_fields["password"].metadata
+
+
+def test_every_direct_import_is_a_declared_dependency():
+    """Found live: swapping python-jose for PyJWT dropped `cryptography`
+    from the image, and runkeys.py imports it — every run 500ed while
+    the tests, on a venv that still had it, stayed green. Each top-level
+    package the code imports must be named in pyproject, so the image
+    and the venv cannot differ on what is installed."""
+    import ast
+    import pathlib
+    import sys
+
+    import tomllib
+
+    pyproject = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+    declared = set()
+    for dep in pyproject["project"]["dependencies"]:
+        name = dep.split("[")[0].split(">")[0].split("=")[0].split("<")[0].strip().lower()
+        declared.add(name.replace("-", "_"))
+    # distributions whose import name differs from their PyPI name
+    aliases = {"yaml": "pyyaml", "jwt": "pyjwt", "dotenv": "python_dotenv",
+               "motor": "motor", "bson": "pymongo", "rq": "rq", "redis": "redis",
+               "sentence_transformers": "sentence_transformers", "sklearn": "scikit_learn",
+               "prometheus_client": "prometheus_client", "slowapi": "slowapi",
+               "typer": "typer", "rich": "rich", "httpx": "httpx", "passlib": "passlib",
+               "pydantic_settings": "pydantic_settings", "pydantic": "pydantic",
+               "fastapi": "fastapi", "uvicorn": "uvicorn", "numpy": "numpy", "scipy": "scipy",
+               "cryptography": "cryptography", "multipart": "python_multipart"}
+    stdlib = set(sys.stdlib_module_names)
+    missing = {}
+    for path in pathlib.Path("evalbench").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            names = []
+            if isinstance(node, ast.Import):
+                names = [a.name.split(".")[0] for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                names = [node.module.split(".")[0]]
+            for n in names:
+                if n in stdlib or n == "evalbench":
+                    continue
+                dist = aliases.get(n, n).lower()
+                if dist not in declared:
+                    missing.setdefault(n, str(path))
+    assert not missing, f"imported but not declared in pyproject: {missing}"
+
+
+class TestACrashIsStillAnAnswer:
+    def test_a_500_carries_cors_headers_and_a_sentence(self, mock_db):
+        """A crash inside a route produced a 500 with no CORS headers, so
+        the browser hid it and the page could only say "Failed to fetch".
+        The person then has nothing to report. The 500 now names itself
+        and is readable from an allowed origin."""
+        from fastapi import APIRouter
+
+        from evalbench.api.main import app
+
+        r = APIRouter()
+
+        @r.get("/_boom")
+        async def boom():
+            raise RuntimeError("kaboom")
+
+        app.include_router(r)
+        try:
+            with TestClient(app, raise_server_exceptions=False) as c:
+                resp = c.get("/_boom", headers={"Origin": "http://localhost:3005"})
+        finally:
+            app.router.routes[:] = [x for x in app.router.routes if getattr(x, "path", "") != "/_boom"]
+        assert resp.status_code == 500
+        assert resp.headers.get("access-control-allow-origin") == "http://localhost:3005"
+        assert "API log" in resp.json()["detail"]
+        assert "kaboom" not in resp.text  # the traceback stays in the log

@@ -5,6 +5,33 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Added — it can be deployed, and the guide is checked
+
+[DEPLOY.md](DEPLOY.md): MongoDB Atlas, a Hugging Face Space and Vercel,
+three free tiers, `$0`, with the environment checklist, what each
+variable prevents when it is set and what happens when it is not, and a
+verification pass to run before telling anyone the URL. It states what
+a hosted instance is not — jobs run inline, so no queue, no worker, no
+Prometheus or Grafana — instead of leaving that to be discovered.
+
+A deploy guide rots faster than anything else in a repository, so it is
+tested: every variable it sets must exist on `Settings`, the three that
+turn a safe instance into an open one must be named, the environment
+variable it tells you to export must be the one the CLI reads, and the
+health endpoint it suggests must be a real route.
+
+The image now takes its port from `$PORT` (8000 by default), so one
+Dockerfile serves compose, Spaces' 7860 and any platform that injects a
+port — rather than a second Dockerfile per host, which is the copy that
+goes stale. Verified both ways.
+
+### Changed — the Quick start runs something first
+
+It opened with a multi-gigabyte model pull. It now starts with
+`evalbench run suites/demo.yaml`: recorded answers through the real
+scoring path, every assertion type, no key and no model, about five
+seconds. Pointing it at a real model — local or hosted — comes after.
+
 ### Added — the instrument reflects the findings
 
 - Every judged benchmark carries a **judge floor** under its resolution:

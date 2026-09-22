@@ -70,24 +70,30 @@ flowchart LR
 
 ## Quick start
 
-**Prerequisites:** Docker + Docker Compose, and an Ollama model pulled inside the `ollama` container.
+**Prerequisites:** Docker + Docker Compose.
+
+The shortest path runs a real evaluation without a model, a key or a
+GPU. `suites/demo.yaml` replays recorded answers through the same
+scoring path everything else uses — every assertion type, the
+statistics, the report — so you see what the tool does before deciding
+whether to feed it a model:
 
 ```bash
-# 1. bring up the whole stack — API, worker, Mongo, Redis, Ollama,
-#    Prometheus, Grafana and the web app
-docker compose up -d
+docker compose up -d                        # the stack
+pip install -e ".[dev]"                     # the CLI, host side
+evalbench login -u admin -p <ADMIN_PASSWORD>
+evalbench run suites/demo.yaml              # no key, no model, ~5 seconds
+```
 
-# 2. pull a model into the Ollama container
+Then point it at an actual model — local or hosted:
+
+```bash
+# local, through the Ollama container (a few GB to pull)
 docker compose exec ollama ollama pull llama3.1
-
-# 3. install the CLI (host side)
-pip install -e ".[dev]"
-
-# 4. authenticate — default admin is created on first API start
-evalbench login -u admin           # password: prompted (see below)
-
-# 5. run a suite
 evalbench run suites/starter-suite.yaml --model llama3.1
+
+# or hosted: put GROQ_API_KEY (or GEMINI_/OPENROUTER_) in .env first
+evalbench run suites/groq-hosted.yaml
 ```
 
 Endpoints once the stack is up:
@@ -118,6 +124,17 @@ From the host, the stack's Mongo is on `localhost:27018` (loopback only);
 edit the wrong one by default. The
 command prints which database it is using and, on a miss, names the
 accounts that database holds.
+
+### Putting it on the internet
+
+[DEPLOY.md](DEPLOY.md) is the guide: MongoDB Atlas, a Hugging Face
+Space and Vercel, three free tiers, `$0`. One thing to know before
+reading it — a hosted instance runs jobs **inline**, inside the web
+process, so there is no Redis queue, no separate worker and no
+Prometheus or Grafana. Runs, scoring, statistics and the dashboard all
+work; the operations half of the architecture is what a free tier
+cannot hold, and the guide says so rather than leaving it to be
+discovered.
 
 Set real values in `.env` **before** the first `docker compose up`. If the DB already has a user, changing the env vars has no effect — rotate via `POST /auth/api-key/rotate` or drop the `users` collection.
 

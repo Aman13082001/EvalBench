@@ -34,8 +34,13 @@ COPY suites/ ./suites/
 RUN useradd -m -u 1000 evalbench && chown -R evalbench:evalbench /app
 USER evalbench
 
-# Expose port
+# The port is the platform's to choose. Compose publishes 8000, Hugging
+# Face Spaces serves 7860, Render and Railway inject $PORT and expect the
+# process to read it. One image, told which — rather than a second
+# Dockerfile per host, which is the copy that goes stale.
 EXPOSE 8000
+ENV PORT=8000
 
-# Run with uvicorn
-CMD ["uvicorn", "evalbench.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Shell form, so $PORT is expanded by the shell at start rather than
+# passed to uvicorn as the literal string.
+CMD uvicorn evalbench.api.main:app --host 0.0.0.0 --port ${PORT:-8000}

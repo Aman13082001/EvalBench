@@ -19,6 +19,7 @@ env var to set).
 from __future__ import annotations
 
 import os
+import time
 
 import httpx
 
@@ -197,3 +198,46 @@ __all__ = [
     "register_provider",
     "available_providers",
 ]
+
+
+# ── Is there actually an Ollama here? ────────────────────────────────
+#
+# Ollama needs no key, so it was always offered. On a hosted instance
+# there is no Ollama and never will be: the visitor picks the one option
+# that costs nothing, waits, and the run dies on a connection error —
+# the same dead end `configured_providers` was written to close for
+# keyed providers, entered from the other side.
+#
+# So the server asks. The answer is cached, because this is consulted on
+# every provider list and every run, and an instance does not gain or
+# lose a local model between two clicks.
+
+_LOCAL_TTL = 60.0
+_local_seen: tuple[float, bool] | None = None
+
+
+async def local_models_available(timeout: float = 1.5) -> bool:
+    """Whether an Ollama server answers at ``settings.ollama_base_url``.
+
+    One cheap GET, cached for a minute. A miss is not an error: it is
+    the honest answer that this instance serves hosted models only.
+    """
+    global _local_seen
+    now = time.monotonic()
+    if _local_seen and now - _local_seen[0] < _LOCAL_TTL:
+        return _local_seen[1]
+    url = settings.ollama_base_url.rstrip("/") + "/api/tags"
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            ok = (await client.get(url)).status_code == 200
+    except Exception:
+        # Refused, unresolvable, timed out — all the same answer.
+        ok = False
+    _local_seen = (now, ok)
+    return ok
+
+
+def forget_local_probe() -> None:
+    """Drop the cached answer. For tests, and for a restart mid-process."""
+    global _local_seen
+    _local_seen = None

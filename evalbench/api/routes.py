@@ -41,6 +41,7 @@ from evalbench.core.providers import (
     configured_providers,
     get_provider,
     is_chat_model,
+    local_models_available,
 )
 from evalbench.db.mongo import db
 from evalbench.db.schemas import TestRun, TestSuite
@@ -334,6 +335,10 @@ async def list_providers(user=Depends(get_current_user)):
     dead run minutes later.
     """
     configured = set(configured_providers())
+    # Ollama needs no key, so it used to be offered everywhere — including
+    # on a hosted instance that has no Ollama and never will. Ask before
+    # offering it; a dead end is worse than a shorter list.
+    local_ok = await local_models_available()
     # "custom" is keyless in the sense that matters to the picker: the
     # key is optional. What it needs instead is a URL.
     keyless = {"ollama", "mock", "demo", "custom"}
@@ -353,7 +358,7 @@ async def list_providers(user=Depends(get_current_user)):
             "needs_url": name == "custom",
         }
         for name in available_providers()
-        if name not in ("mock", "answers")
+        if name not in ("mock", "answers") and (name != "ollama" or local_ok)
     ]
 
 
@@ -659,6 +664,20 @@ async def run_suite(
     # accepted, queued, and then died inside the worker with "needs an
     # API key", which reads as a failed evaluation rather than a missing
     # credential.
+    # A local model is not a key problem, so the check above cannot see
+    # it: ollama is always "configured". What it needs is an Ollama
+    # actually running, and a hosted instance has none. Refuse with the
+    # reason rather than queue a run that dies on a connection error.
+    if answers is None and provider == "ollama" and not await local_models_available():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This EvalBench instance has no local model: there is no "
+                "Ollama it can reach. Pick a hosted provider, bring your "
+                "own endpoint, or upload answers you already have."
+            ),
+        )
+
     if (
         answers is None
         and provider != "custom"

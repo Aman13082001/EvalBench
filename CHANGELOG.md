@@ -5,6 +5,27 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Fixed — a local model is not offered where there is none
+
+The picker once hard-coded five hosted providers when only one had a
+key, and the failure surfaced as a dead run minutes later. That was
+fixed for keyed providers; Ollama went through the same hole from the
+other side. It needs no key, so it was always offered — including on a
+hosted instance where no Ollama exists and nothing will ever answer.
+Pick the obvious free option, wait, get a connection error.
+
+The server now asks, with one cheap request cached for a minute, and
+leaves Ollama out of `/providers` when nothing answers. A run that names
+it anyway is refused with the reason instead of being queued to die
+inside the worker.
+
+`suites/starter-suite.yaml` named no provider, so it inherited
+`TestSuite.provider`, which defaults to `ollama` — correct when this was
+an Ollama-only tool, a trap now. The web form's own fallback to Groq
+hid it; the CLI and the API did not. It now names `groq` and a model
+that exists there, and a test asserts no bundled benchmark relies on
+that default again.
+
 ### Changed — the image lost eight gigabytes it never used
 
 The deploy image was 9.94 GB. `pip install torch` fetches the wheel

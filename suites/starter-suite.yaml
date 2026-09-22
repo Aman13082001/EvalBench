@@ -18,7 +18,13 @@ description: >-
   reasoning, definitions, instruction-following, calibration and safety,
   reported per category so you can see where a model is weak rather than
   one blended score.
-model: llama3.1
+# Named rather than inherited: TestSuite.provider defaults to ollama,
+# which was right when this was an Ollama-only tool and is a trap now
+# — a hosted instance has no local model, and the run would die on a
+# connection error. Override both on the command line or in the
+# workbench to run this against anything else.
+provider: groq
+model: openai/gpt-oss-20b
 evaluator: semantic
 temperature: 0.0
 samples: 3

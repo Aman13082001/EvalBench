@@ -5,6 +5,7 @@ import Link from "next/link";
 import { listRecentRuns, RecentRun } from "@/lib/api";
 import Results from "@/components/Results";
 import { Panel, Rule } from "@/components/ui";
+import { whenLocal } from "@/lib/time";
 import {
   BenchmarkChoice,
   BenchmarkPicker,
@@ -62,6 +63,11 @@ export default function RunEvaluation({
   const inFlightHere =
     (state.phase === "starting" || state.phase === "running") && !resumed;
   const inFlightElsewhere = state.phase === "running" && resumed;
+  /* A finished run picked up on load is the last thing this account ran,
+     not something this visit produced. Worth showing — coming back to
+     your own report is the point — but it has to say so, or the page
+     reads as if the form had just been pressed. */
+  const earlierRun = state.phase === "done" && resumed;
   const shownName = [meta.suiteName, meta.model].filter(Boolean).join(" on ");
 
   /* Follow the benchmark's own model until the user picks one. */
@@ -282,6 +288,14 @@ export default function RunEvaluation({
       {state.phase === "done" && (
         <div className="space-y-5">
           <Rule label="§2 · Result" />
+          {earlierRun && (
+            <p className="text-sm text-muted">
+              Your most recent run
+              {meta.finishedAt ? `, from ${whenLocal(meta.finishedAt)}` : ""} —
+              nothing has been run on this page yet. Start one above and this is
+              replaced.
+            </p>
+          )}
           <ResultHeader
             model={state.summary.model}
             suite={suiteName || meta.suiteName || bench?.label || ""}

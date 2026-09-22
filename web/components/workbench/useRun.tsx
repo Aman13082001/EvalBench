@@ -41,7 +41,14 @@ export type RunState =
 
 /* What the page needs to show a resumed run that its form no longer
    knows about: the benchmark's name, the model. */
-export type RunMeta = { suiteName?: string; model?: string; provider?: string };
+export type RunMeta = {
+  suiteName?: string;
+  model?: string;
+  provider?: string;
+  /* When it ended, for a run that was already over when it was picked
+     up: the page says how old the report on screen is. */
+  finishedAt?: string;
+};
 
 const POLL_MS = 1500;
 const STORE = "eb-run:";
@@ -204,8 +211,14 @@ export function useRun(slot?: string, opts: { latest?: boolean } = {}) {
           /* the run still shows; the header falls back to the model */
         }
         if (cancelled) return;
-        remember(slot, newest._id, { suiteName, model: newest.model, provider: newest.provider });
-        resume(newest._id, { suiteName, model: newest.model, provider: newest.provider });
+        const m: RunMeta = {
+          suiteName,
+          model: newest.model,
+          provider: newest.provider,
+          finishedAt: newest.finished_at || newest.created_at,
+        };
+        remember(slot, newest._id, m);
+        resume(newest._id, m);
       } catch {
         if (!cancelled) fromTab();
       }

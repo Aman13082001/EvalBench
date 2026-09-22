@@ -21,6 +21,13 @@ RUN mkdir evalbench \
     # The base image ships a pip and setuptools with known advisories;
     # the audit that runs in CI would flag the image as shipped.
     && pip install --no-cache-dir --upgrade pip setuptools \
+    # torch first, from the index that serves it without the NVIDIA
+    # CUDA libraries. pip's default wheel carries them: about eight
+    # gigabytes of GPU driver for a container that has no GPU, calls
+    # hosted providers over HTTP, and runs one 90 MB embedding model
+    # on the CPU. Installed before the package, so the dependency is
+    # already satisfied when sentence-transformers asks for it.
+    && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
     && pip install --no-cache-dir -e . \
     && rm -rf evalbench
 
@@ -29,6 +36,15 @@ RUN mkdir evalbench \
 COPY README.md ./
 COPY evalbench/ ./evalbench/
 COPY suites/ ./suites/
+
+# Bake the embedding model into the image. Without this the first
+# semantic check on a cold instance downloads 90 MB from the Hugging
+# Face hub before it can score anything — slow on a free tier that
+# sleeps, and a failure mode when the hub is unreachable or rate
+# limits. HF_HOME lives under /app so the unprivileged user below
+# inherits it with the chown.
+ENV HF_HOME=/app/.cache/huggingface
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
 # Run as an unprivileged user
 RUN useradd -m -u 1000 evalbench && chown -R evalbench:evalbench /app

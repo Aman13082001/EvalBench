@@ -5,6 +5,35 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Changed — the image lost eight gigabytes it never used
+
+The deploy image was 9.94 GB. `pip install torch` fetches the wheel
+bundled with the NVIDIA CUDA libraries, and the container has no GPU: it
+calls hosted providers over HTTP and runs one 90 MB embedding model on
+the CPU. Installing torch from `download.pytorch.org/whl/cpu` first,
+before the package that depends on it, drops the image to 2.7 GB.
+
+`sentence_transformers` is now imported inside `_get_model()` rather
+than at the top of `semantic.py`. Importing it imports torch, which
+costs about 120 MB of resident memory the moment it loads — before a
+single test has run, on every instance, whether or not anything scores a
+semantic check. Idle memory halved.
+
+The embedding model is baked into the image, so a cold instance does not
+download 90 MB from the Hugging Face hub before it can score anything.
+
+Measured under a hard `--memory=512m` cap, which is what a free tier
+gives: idle 143 MB, peak through a full cold run 451 MB, peak with
+twelve semantic checks scoring at once 428 MB, no OOM kills, and the
+same pass rate and mean score as the same suite run locally.
+`tests/test_image_weight.py` asserts the CPU index and the lazy import,
+so neither can be undone by a tidy-up.
+
+The deployment target moved from Hugging Face Spaces to Render: Docker
+Spaces now require a PRO subscription, and only Static Spaces remain
+free. DEPLOY.md says so, and says to check current pricing — this
+changed once already.
+
 ### Added — it can be deployed, and the guide is checked
 
 [DEPLOY.md](DEPLOY.md): MongoDB Atlas, a Hugging Face Space and Vercel,

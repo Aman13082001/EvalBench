@@ -26,6 +26,11 @@ NOT_SETTINGS = {
     "EVALBENCH_ALLOW_INSECURE",
     # Read by the CLI, not by Settings. Checked by its own test below.
     "EVALBENCH_API_URL",
+    # Read by torch and tokenizers, not by us. They are in the checklist
+    # because they are part of why the image fits in 512 MB.
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "TOKENIZERS_PARALLELISM",
 }
 
 

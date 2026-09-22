@@ -38,6 +38,29 @@ app.dependency_overrides[get_current_user] = (
 )
 
 
+# ── What this instance is configured for ──
+@pytest.fixture(autouse=True)
+def instance_has_a_hosted_key(monkeypatch):
+    """State the server's credentials instead of inheriting them.
+
+    `configured_providers()` reads the process's environment, so the
+    suite quietly asked the machine it ran on. A developer with
+    GROQ_API_KEY in `.env` ran one test suite and CI, which has no
+    `.env`, ran another: ten run-endpoint tests passed locally and
+    failed there with 400 "this instance has no key for 'groq'" — a
+    red build that no local run could reproduce.
+
+    Every test now runs against an instance that has one hosted key, a
+    placeholder that never leaves the process. The tests that are about
+    configuration clear or patch it themselves, and still do.
+    """
+    monkeypatch.setattr(
+        "evalbench.core.providers.settings.groq_api_key", "gsk_test_placeholder",
+        raising=False,
+    )
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test_placeholder")
+
+
 # ── Mock MongoDB ──
 @pytest.fixture
 def mock_db():

@@ -48,6 +48,29 @@ points at the Workbench — and the Grafana operations view second, for
 the admin only, and only where a Grafana exists
 (`NEXT_PUBLIC_GRAFANA_URL` unset means none: the hosted deployment).
 
+### Changed — the ceilings let the biggest benchmark through
+
+A budget nobody can spend is a closed door. The largest bundled
+benchmark — General capability, 51 tests at three samples — costs 228
+calls, over both the per-run ceiling (100) and one person's day (150),
+so the first thing a visitor clicks was refused before it started, and
+the only way through was to bring a key. Both ceilings are now 250:
+one full-sized run fits, and fits in a day. Everyone together is still
+800, under Groq's 1,000 a day per model, which leaves three such runs
+before the instance is done for the day. Tests assert the relation
+rather than the numbers — the biggest benchmark must fit both
+ceilings, and one person must not be able to close the day.
+
+### Fixed — the report you land on says which run it is
+
+The workbench opens on the account's newest run. When that run had
+already finished, its report appeared under §2 exactly as if the form
+had just produced it: land on the page having run nothing, and a result
+is sitting there, apparently yours, apparently now. It is still shown —
+coming back to your own last report is the point — but labelled, with
+the time it finished in the viewer's zone. A run started by the form
+carries no such line.
+
 ### Changed — an account is an email address
 
 Sign-ups took any string. A username is now an email address — any

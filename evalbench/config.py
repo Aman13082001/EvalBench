@@ -60,14 +60,19 @@ class Settings(BaseSettings):
     # from 7 to 228 of them. See evalbench/budget.py. Runs made with a
     # caller's own key spend none of this. 0 switches a ceiling off.
     #
-    # Per user per day: one person can take at most ~15% of the key's day.
-    daily_call_cap: int = 150
+    # Per user per day. Wide enough for one run of the biggest bundled
+    # benchmark (228) — a ceiling under it would mean the flagship
+    # benchmark is a dead button for every visitor without their own key,
+    # which is the first thing anyone here clicks.
+    daily_call_cap: int = 250
     # Per instance per day, everyone together: under Groq's 1,000, with
-    # headroom for the admin, who is not counted.
+    # headroom for the admin, who is not counted. Three full-sized runs
+    # fit, so one visitor cannot close the day for the next.
     daily_call_cap_total: int = 800
-    # Per run: anything bigger wants the caller's own key — which is the
-    # right answer for a research-sized run anyway.
-    max_calls_per_run: int = 100
+    # Per run: the starter suite at three samples is 228, and that is the
+    # largest thing on offer. Anything bigger is a research-sized run and
+    # wants the caller's own key.
+    max_calls_per_run: int = 250
     # The most a request body may be. The largest honest upload — the
     # starter suite's answers at a few KB each — is well under a
     # megabyte; anything bigger is a mistake or a memory attack, and it

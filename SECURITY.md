@@ -176,9 +176,11 @@ gone from Redis afterwards.
   in runs let one person spend the key's whole day before lunch. Every
   run declares its cost, `samples × (tests + judged tests)`, before it
   is accepted (`evalbench/budget.py`), and three ceilings apply:
-  `MAX_CALLS_PER_RUN` (100; bigger runs want the caller's own key),
-  `DAILY_CALL_CAP` (150 per user — at most ~15% of the key's day) and
-  `DAILY_CALL_CAP_TOTAL` (800, everyone together, under Groq's 1,000).
+  `MAX_CALLS_PER_RUN` (250 — one run of the largest bundled benchmark,
+  228; anything bigger wants the caller's own key), `DAILY_CALL_CAP`
+  (250 per user, so that run fits in a day too) and
+  `DAILY_CALL_CAP_TOTAL` (800, everyone together, under Groq's 1,000 —
+  three full-sized runs, so the first visitor cannot close the day).
   The workbench shows the cost and the tighter limit before the click
   (`tests/test_public_deploy.py::TestTheCallBudget`, `tests/test_budget.py`).
 - **The settings object never prints a key.** Its `repr` redacts every

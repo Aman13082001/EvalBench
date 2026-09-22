@@ -454,7 +454,10 @@ class TestSettingsNeverPrintAKey:
             for leak in ("gsk_live", "AQ.secret", "sk-or-", "sk-proj", "ghp_", "jwt-secret", "pw-secret", "eb_secret"):
                 assert leak not in text, f"{leak!r} in the settings repr"
         assert "groq_api_key='***'" in repr(s)
-        assert "daily_call_cap=150" in repr(s)  # the rest still prints
+        # The rest still prints. Named, not valued: a ceiling is a
+        # tunable, and a redaction test should not fail when one moves.
+        assert "daily_call_cap=" in repr(s)
+        assert "mongodb_db='evalbench'" in repr(s)
 
     def test_an_empty_secret_shows_as_empty_not_starred(self):
         """So "is the key set?" can still be answered from a log line."""

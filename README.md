@@ -1,5 +1,11 @@
 # EvalBench
 
+**[Try it → eval-bench-nine.vercel.app](https://eval-bench-nine.vercel.app)**  ·  sign up with an email address and run a benchmark in the browser.
+The hosted instance runs jobs in-process on a free tier, so there is no
+queue, no worker and no Grafana — see [DEPLOY.md](DEPLOY.md) for what that
+leaves out and why. First request after a quiet spell takes ~50 seconds
+while the instance wakes.
+
 **A platform for evaluating LLMs, catching quality regressions, and monitoring safety — with real statistics, cost tracking, a production monitoring stack, and a web app you can hand to someone who has never opened a terminal.**
 
 EvalBench runs versioned test suites against a model — local via [Ollama](https://ollama.com), hosted (Groq, Gemini, OpenAI, GitHub Models, OpenRouter), **any OpenAI-compatible endpoint you name**, or **answers you already have** in a file — checks every response against one or more **composable assertions**, aggregates results **per capability category**, estimates the **USD cost** of the run, and tells you — with a paired statistical test against a promoted **baseline** — whether a prompt or model change actually made things *worse*. Runs execute **concurrently** as **async jobs**; every run emits Prometheus metrics and lands on a Grafana dashboard.

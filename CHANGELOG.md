@@ -156,6 +156,21 @@ points at the Workbench — and the Grafana operations view second, for
 the admin only, and only where a Grafana exists
 (`NEXT_PUBLIC_GRAFANA_URL` unset means none: the hosted deployment).
 
+### Added — a licence that exists, and a link to the running thing
+
+`pyproject.toml` and the README both said MIT with no LICENSE file to
+grant it. A bare mention grants nothing: the licence requires its own
+text and a copyright line to travel with the code, and GitHub shows no
+licence badge without the file. It is now shipped, and tested — the file
+must exist, match what the metadata claims, carry a copyright holder,
+and contain both the permission and the warranty disclaimer, because
+half an MIT licence is not one.
+
+The README opens with a link to the deployed instance, and says in the
+same breath what a free tier leaves out. Someone landing on the
+repository is now one click from seeing it work rather than from a
+screenshot of it working.
+
 ### Changed — the ceilings let the biggest benchmark through
 
 A budget nobody can spend is a closed door. The largest bundled

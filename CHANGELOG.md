@@ -5,6 +5,37 @@ All notable changes to EvalBench. Versions follow the shape of
 
 ## [Unreleased]
 
+### Fixed — a run has a deadline, and the deadline is kept
+
+`suite_run_timeout` was handed to RQ as `job_timeout` and otherwise
+trusted. It was not kept: one run held the only worker for 660 minutes
+against a declared limit of 15, restarting from zero each time the queue
+retried it, while the next run waited eleven and a half hours to begin.
+A rate-limited free tier is where this shows — every 429 is a wait, and
+a 228-call suite can spend the night making no visible progress.
+
+The deadline is now enforced on the loop that runs the work, and an
+overrun is a failed run with a reason a person can act on — fewer
+samples, a smaller benchmark, or your own key — rather than a run that
+says "running" into the morning and a worker nobody can have. Because
+the timeout is handled rather than raised, the queue no longer retries
+a run that simply took too long, which is what turned one overrun into
+three.
+
+The limit itself moved from 15 minutes to 30. A run may cost up to 250
+calls and a free tier answers a few a minute: fifteen minutes was a
+limit no full-sized run could meet, so it was ignored rather than met.
+
+### Fixed — adopted copies follow the benchmark they copy
+
+Naming a provider in `starter-suite.yaml` fixed the file, not the
+copies. Every account that had adopted it held a document still saying
+`ollama / llama3.1`, which on an instance with no Ollama cannot run at
+all, under a benchmark meant to run anywhere. A startup migration brings
+those copies back in line with the bundled definition — only documents
+carrying `bundled_slug`, and only where the definition disagrees, so a
+suite somebody wrote themselves is never rewritten.
+
 ### Fixed — a local model is not offered where there is none
 
 The picker once hard-coded five hosted providers when only one had a

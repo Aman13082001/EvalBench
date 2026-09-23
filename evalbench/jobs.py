@@ -8,6 +8,7 @@ worker, selected by ``settings.job_backend``.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -163,7 +164,15 @@ async def execute_run_job(
         )
 
     try:
-        run = await runner.run_suite(suite, suite_id, progress_cb=_report)
+        # The deadline is kept here rather than handed to the queue and
+        # trusted. It was handed to RQ as `job_timeout` and not kept: one
+        # run held the only worker for 660 minutes against a declared
+        # limit of 15, and the next run waited eleven hours behind it. A
+        # limit nothing enforces is a comment.
+        run = await asyncio.wait_for(
+            runner.run_suite(suite, suite_id, progress_cb=_report),
+            timeout=settings.suite_run_timeout,
+        )
         await db.test_runs.update_one(
             oid,
             {"$set": {
@@ -180,6 +189,27 @@ async def execute_run_job(
         # New evidence about this benchmark's spread — recompute what it
         # can detect while we are the ones who know it changed.
         await record_resolution(suite_id)
+    except TimeoutError:
+        # Not "TimeoutError": the person reading this needs to know what
+        # to do differently, and the honest answer is that a run this
+        # size does not fit in what a shared instance will give it.
+        minutes = max(1, round(settings.suite_run_timeout / 60))
+        logger.warning("Run %s passed its %s-minute limit", run_id, minutes)
+        await db.test_runs.update_one(
+            oid,
+            {"$set": {
+                "status": "failed",
+                "error": (
+                    f"This run passed its {minutes}-minute limit and was "
+                    "stopped, so the worker is free for the next one. A "
+                    "rate-limited free tier answers a few calls a minute, "
+                    "and every refusal is a wait — try fewer samples, a "
+                    "smaller benchmark, or your own key."
+                ),
+                "finished_at": datetime.now(timezone.utc),
+            }},
+        )
+        run_status_total.labels(status="failed").inc()
     except Exception as e:  # noqa: BLE001 - record failure, don't crash the worker
         logger.exception("Run %s failed", run_id)
         await db.test_runs.update_one(

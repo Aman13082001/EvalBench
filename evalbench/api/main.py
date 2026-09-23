@@ -28,6 +28,7 @@ from evalbench.api.deps import (
 )
 from evalbench.api.routes import router as suites_router
 from evalbench.api.summary import RUN_ROW_FIELDS, run_row, summarize_run
+from evalbench.benchmarks import load_benchmark
 from evalbench.config import settings
 from evalbench.core.regression import RegressionDetector
 from evalbench.db.mongo import client, db
@@ -124,6 +125,45 @@ async def _backfill_api_key_hashes() -> int:
         n += 1
     if n:
         logger.info("Hashed %d API key(s) that were stored in the clear", n)
+    return n
+
+
+async def _retarget_bundled_copies() -> int:
+    """Bring adopted copies back in line with the benchmark they copy.
+
+    `starter-suite.yaml` named no provider, so it inherited the schema
+    default — ollama — and every copy anyone adopted carries it. Fixing
+    the file does not reach them: they are documents now. On an instance
+    with no Ollama the copy cannot run at all, and the benchmark page
+    shows `ollama / llama3.1` under a benchmark meant to run anywhere.
+
+    Only copies are touched, and only where the bundled definition
+    actually disagrees. A suite somebody wrote themselves may mean
+    ollama exactly, and is not ours to rewrite.
+    """
+    n = 0
+    cursor = db.suites.find(
+        {"provider": "ollama", "bundled_slug": {"$exists": True}},
+        {"bundled_slug": 1, "provider": 1, "model": 1},
+    )
+    async for doc in cursor:
+        # Defensive rather than trusting the filter: a suite with no slug
+        # is somebody's own, and the one thing this must never do is
+        # rewrite a suite that meant ollama.
+        slug = doc.get("bundled_slug")
+        bundled = load_benchmark(slug) if slug else None
+        if not bundled:
+            continue
+        provider = bundled.get("provider")
+        if not provider or provider == "ollama":
+            continue
+        await db.suites.update_one(
+            {"_id": doc["_id"]},
+            {"$set": {"provider": provider, "model": bundled.get("model", doc.get("model"))}},
+        )
+        n += 1
+    if n:
+        logger.info("Re-targeted %d adopted copy/copies away from a local model", n)
     return n
 
 
@@ -309,6 +349,7 @@ async def lifespan(app: FastAPI):
 
     await reap_abandoned_runs("startup")
     await _backfill_judged_tests()
+    await _retarget_bundled_copies()
     await _backfill_run_status()
 
     # Under rq, death is detected by silence rather than by a restart, so

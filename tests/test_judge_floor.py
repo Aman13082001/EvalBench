@@ -164,7 +164,11 @@ class TestOldSuitesGetTheCountOnStartup:
         }
 
         async def find(query, projection=None):
-            assert "judged_tests" in query  # only the ones lacking it
+            # Startup runs several migrations over this collection; this
+            # test is about one of them. The others get an empty result
+            # rather than this suite.
+            if "judged_tests" not in query:
+                return
             yield old
 
         mock_db.suites.find = find

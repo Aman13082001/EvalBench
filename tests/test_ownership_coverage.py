@@ -48,6 +48,12 @@ EXEMPT = {
     # Startup migration: gives pre-job-model runs (results, no status)
     # the status they earned, across every account, once.
     ("main.py", "_backfill_run_status"),
+    # Startup migration: adopted copies of a bundled benchmark that
+    # inherited the schema's old default provider (ollama) are brought
+    # back in line with the benchmark they copy, across every account,
+    # once. It touches only documents carrying `bundled_slug`, so a
+    # suite somebody wrote themselves is never rewritten.
+    ("main.py", "_retarget_bundled_copies"),
     # The call budget: what everyone together has spent of the server's
     # key today. A sum across every account by design — the key has one
     # quota, and it is shared. `_calls_spent` is the aggregate both the

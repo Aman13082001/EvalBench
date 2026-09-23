@@ -37,7 +37,13 @@ class Settings(BaseSettings):
 
     # Timeouts (seconds)
     default_request_timeout: int = 120
-    suite_run_timeout: int = 900
+    # A run may cost up to `max_calls_per_run` calls, and a free tier
+    # answers a few a minute with a wait after each refusal. Fifteen
+    # minutes was a limit no full-sized run could meet, so it was
+    # ignored rather than met. Thirty is enough for a 250-call run at
+    # a hosted provider's pace, and short enough that one stuck run
+    # does not hold the queue for a night. Enforced in evalbench/jobs.py.
+    suite_run_timeout: int = 1800
 
     # Redis + job queue
     redis_url: str = "redis://localhost:6379/0"

@@ -61,6 +61,24 @@ def instance_has_a_hosted_key(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "gsk_test_placeholder")
 
 
+# ── Is there a local model here? ──
+@pytest.fixture(autouse=True)
+def instance_has_a_local_model():
+    """State it, the way the hosted key above is stated.
+
+    `/providers` and the run gate ask whether an Ollama answers. On a
+    developer's machine one usually does; on CI none ever will. Two
+    tests about entirely different things — which providers need your
+    own key, and that local runs are not capped — passed here and failed
+    there for that reason alone.
+
+    So every test runs against an instance that has one. The tests that
+    are *about* the probe patch it themselves, both ways.
+    """
+    with patch.object(routes_module, "local_models_available", return_value=True):
+        yield
+
+
 # ── Mock MongoDB ──
 @pytest.fixture
 def mock_db():
